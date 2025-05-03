@@ -2,7 +2,7 @@
 name = "evid"
 version = "0.1.0"
 description = "document logger, adder of metadata"
-authors = ["Your Name <you@example.com>"]
+authors = ["evid <210122431+evidlabel@users.noreply.github.com>"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "evid", from = "src"}]
@@ -17,7 +17,8 @@ pyyaml = "^6.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"
-pytest-qt = "^4.2.0"  # Added for GUI testing
+pytest-qt = "^4.2.0"
+fitz = "^0.0.1.dev2"  # Ensure pymupdf's fitz is available for tests
 
 [build-system]
 requires = ["poetry-core"]

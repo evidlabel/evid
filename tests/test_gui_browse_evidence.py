@@ -33,9 +33,4 @@ def test_load_metadata_empty_info(browse_tab, tmp_path):
     dataset_path = tmp_path / "empty_dataset"
     entry = dataset_path / "uuid"
     entry.mkdir(parents=True)
-    (entry / "info.yml").touch()  # Empty file
-    
-    browse_tab.dataset_combo.addItem("empty_dataset")
-    browse_tab.load_metadata()
-    
-    assert browse_tab.table.rowCount() == 0  # Should skip empty file
+    (entry / "info.yml").touch

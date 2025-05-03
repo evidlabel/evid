@@ -19,6 +19,8 @@ import subprocess
 from evid.core.dateextract import extract_dates_from_pdf
 import requests
 from io import BytesIO
+import PyPDF2
+
 
 class AddEvidenceTab(QWidget):
     def __init__(self, directory: Path):
@@ -106,25 +108,56 @@ class AddEvidenceTab(QWidget):
     def view_file(self):
         file_path = self.file_input.text().strip()
         if not file_path:
-            QMessageBox.warning(self, "No File Selected", "Please select a PDF file to view.")
+            QMessageBox.warning(
+                self, "No File Selected", "Please select a PDF file to view."
+            )
             return
         file_path = Path(file_path)
         if not file_path.exists():
-            QMessageBox.warning(self, "File Not Found", f"The file {file_path} does not exist.")
+            QMessageBox.warning(
+                self, "File Not Found", f"The file {file_path} does not exist."
+            )
             return
         try:
             subprocess.run(["xdg-open", str(file_path)])
         except subprocess.SubprocessError as e:
-            QMessageBox.critical(self, "Error Opening File", f"Failed to open PDF: {str(e)}")
+            QMessageBox.critical(
+                self, "Error Opening File", f"Failed to open PDF: {str(e)}"
+            )
+
+    def _extract_pdf_date(self, meta):
+        """Extracts and formats the date from PDF metadata."""
+        date = meta.get("/CreationDate") or meta.get("/ModDate")
+        if date and date.startswith("D:"):
+            # Format: D:YYYYMMDDHHmmSS
+            date = date[2:10]  # YYYYMMDD
+            date = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
+        else:
+            date = ""
+        return date
+
+    def _extract_pdf_authors(self, meta):
+        """Extracts the author(s) from PDF metadata."""
+        author = meta.get("/Author")
+        if author:
+            return author
+        return ""
 
     def prefill_fields(self, file_path: Path):
         title = file_path.stem
-        dates = ", ".join(str(d) for d in extract_dates_from_pdf(file_path))
-
+        try:
+            with open(file_path, "rb") as f:
+                reader = PyPDF2.PdfReader(f)
+                meta = reader.metadata
+                date = self._extract_pdf_date(meta)
+                authors = self._extract_pdf_authors(meta)
+        except Exception:
+            date = ""
+            authors = ""
         self.title_input.setText(title)
-        self.authors_input.setText("")
+        self.authors_input.setText(authors)
         self.tags_input.setText("")
-        self.dates_input.setText(dates)
+        self.dates_input.setText(date)
         self.label_input.setText(title.replace(" ", "_").lower())
         self.update_preview()
 
@@ -149,15 +182,17 @@ class AddEvidenceTab(QWidget):
             "Title": self.title_input.text(),
             "Authors": self.authors_input.text(),
             "Dates": self.dates_input.text(),
-            "PDF File": self.file_input.text()
+            "PDF File": self.file_input.text(),
         }
-        
-        missing_fields = [field for field, value in required_fields.items() if not value.strip()]
+
+        missing_fields = [
+            field for field, value in required_fields.items() if not value.strip()
+        ]
         if missing_fields:
             QMessageBox.warning(
                 self,
                 "Missing Required Fields",
-                f"Please fill in the following required fields:\n- {', '.join(missing_fields)}"
+                f"Please fill in the following required fields:\n- {', '.join(missing_fields)}",
             )
             return
 
@@ -165,7 +200,11 @@ class AddEvidenceTab(QWidget):
         unique_dir.mkdir(parents=True)
 
         file_path = Path(self.file_input.text())
-        file_name = self.memory_file_name if hasattr(self, 'memory_file_name') else file_path.name
+        file_name = (
+            self.memory_file_name
+            if hasattr(self, "memory_file_name")
+            else file_path.name
+        )
 
         info = {
             "original_name": file_name,
@@ -187,7 +226,7 @@ class AddEvidenceTab(QWidget):
             del self.memory_file_name
         else:
             shutil.copy2(file_path, target_path)
-            
+
         with (unique_dir / "info.yml").open("w") as f:
             yaml.dump(info, f)
 
@@ -198,15 +237,17 @@ class AddEvidenceTab(QWidget):
         if not url:
             QMessageBox.warning(self, "No URL", "Please enter a URL to add.")
             return
-            
+
         try:
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             file_name = url.split("/")[-1]
             if not file_name.lower().endswith(".pdf"):
-                QMessageBox.warning(self, "Invalid File", "URL must point to a PDF file.")
+                QMessageBox.warning(
+                    self, "Invalid File", "URL must point to a PDF file."
+                )
                 return
-                
+
             pdf_file = BytesIO(response.content)
             self.prefill_fields_from_url(pdf_file, file_name)
             self.memory_pdf_file = pdf_file
@@ -217,11 +258,18 @@ class AddEvidenceTab(QWidget):
     def prefill_fields_from_url(self, pdf_file: BytesIO, file_name: str):
         self.file_input.setText(file_name)
         title = Path(file_name).stem
-        dates = ", ".join(str(d) for d in extract_dates_from_pdf(pdf_file))
-
+        try:
+            pdf_file.seek(0)
+            reader = PyPDF2.PdfReader(pdf_file)
+            meta = reader.metadata
+            date = self._extract_pdf_date(meta)
+            authors = self._extract_pdf_authors(meta)
+        except Exception:
+            date = ""
+            authors = ""
         self.title_input.setText(title)
-        self.authors_input.setText("")
+        self.authors_input.setText(authors)
         self.tags_input.setText("")
-        self.dates_input.setText(dates)
+        self.dates_input.setText(date)
         self.label_input.setText(title.replace(" ", "_").lower())
         self.update_preview()
