@@ -15,13 +15,14 @@ from pathlib import Path
 import yaml
 import subprocess
 import logging
-from evid.core.label_setup import textpdf_to_latex
+from evid.core.label_setup import textpdf_to_latex, csv_to_bib
 from evid.core.rebut_doc import rebut_doc
 import arrow
 
 # Set up logging with detailed output
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
 
 class BrowseEvidenceTab(QWidget):
     def __init__(self, directory: Path):
@@ -194,20 +195,51 @@ class BrowseEvidenceTab(QWidget):
 
     def create_label(self):
         row = self.table.currentRow()
-        if row >= 0:
-            dataset = self.dataset_combo.currentText()
-            uuid_item = self.table.item(row, 4)
-            if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-                QMessageBox.critical(self, "Invalid Entry", "Selected entry has no valid UUID.")
-                return
+        if row < 0:
+            QMessageBox.warning(self, "No Selection", "Please select an evidence entry.")
+            return
 
-            uuid = uuid_item.text()
-            file_name = self.table.item(row, 3).text()
-            file_path = self.directory / dataset / uuid / file_name
-            label_file = file_path.parent / "label.tex"
+        dataset = self.dataset_combo.currentText()
+        uuid_item = self.table.item(row, 4)
+        if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
+            QMessageBox.critical(self, "Invalid Entry", "Selected entry has no valid UUID.")
+            return
+
+        uuid = uuid_item.text()
+        file_name = self.table.item(row, 3).text()
+        file_path = self.directory / dataset / uuid / file_name
+        label_file = file_path.parent / "label.tex"
+        csv_file = file_path.parent / "label.csv"
+        bib_file = file_path.parent / "label_table.bib"
+
+        try:
             if not label_file.exists():
                 textpdf_to_latex(file_path, label_file)
-            subprocess.run(["xdg-open", str(label_file)])
+
+            # Open the labeller and wait for it to close
+            subprocess.run(["xdg-open", str(label_file)], check=True)
+
+            # After labeller closes, check for CSV and generate BibTeX
+            if csv_file.exists():
+                csv_to_bib(csv_file, bib_file, exclude_note=True)
+                logger.info(f"Generated BibTeX file: {bib_file}")
+            else:
+                logger.warning(f"CSV file {csv_file} not found after labelling")
+                QMessageBox.warning(
+                    self,
+                    "CSV Missing",
+                    f"No label.csv found in {file_path.parent}. BibTeX generation skipped."
+                )
+        except subprocess.SubprocessError as e:
+            logger.error(f"Error opening labeller: {str(e)}")
+            QMessageBox.critical(
+                self, "Error Opening Labeller", f"Failed to open labeller: {str(e)}"
+            )
+        except Exception as e:
+            logger.error(f"Error during label workflow: {str(e)}")
+            QMessageBox.critical(
+                self, "Label Workflow Error", f"An unexpected error occurred: {str(e)}"
+            )
 
     def run_rebut(self):
         row = self.table.currentRow()
@@ -242,7 +274,7 @@ class BrowseEvidenceTab(QWidget):
             QMessageBox.critical(
                 self,
                 "Rebuttal Failed",
-                f"Could not run rebuttal: {str(e)}. Ensure 'fct_csvbib' and required files are available.",
+                f"Could not run rebuttal: {str(e)}. Ensure required files are available.",
             )
         except Exception as e:
             logger.warning(f"Unexpected error during rebuttal: {str(e)}")

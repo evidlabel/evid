@@ -2,6 +2,9 @@ from pathlib import Path
 import fitz
 import re
 import yaml
+import pandas as pd
+import demoji
+from datetime import datetime
 
 
 LATEX_TEMPLATE = r"""
@@ -109,3 +112,85 @@ def textpdf_to_latex(pdfname: Path, outputfile: Path = None) -> str:
     if outputfile:
         outputfile.write_text(out)
     return out
+
+
+def replace_multiple_spaces(s):
+    try:
+        return re.sub(r" +", " ", s)
+    except TypeError:
+        print(s)
+        return ""
+
+
+def replace_underscores(s):
+    try:
+        return re.sub(r"_", " ", s)
+    except TypeError:
+        print(s)
+        return ""
+
+
+def remove_curly_brace_content(s):
+    try:
+        return re.sub(r"\{.*?\}", "", s).replace(".06em", "")
+    except TypeError:
+        print(s)
+        return ""
+
+
+def remove_backslash_substrings(s):
+    try:
+        return re.sub(r"\\[^ ]*", "", s)
+    except TypeError:
+        print(s)
+        return ""
+
+
+def emojis_to_text(s):
+    # Replace all emojis in the content
+    return demoji.replace(s, "(emoji)")
+
+
+def load_uuid_prefix(csv_file_path: Path) -> str:
+    info_file = csv_file_path.with_name("info.yml")
+    if info_file.exists():
+        with info_file.open("r") as info_file:
+            info_data = yaml.safe_load(info_file)
+            if "uuid" in info_data:
+                return info_data["uuid"][:4]
+    return ""
+
+
+def load_url(csv_file_path: Path) -> str:
+    info_file = csv_file_path.with_name("info.yml")
+    if info_file.exists():
+        with info_file.open("r") as info_file:
+            info_data = yaml.safe_load(info_file)
+            if "url" in info_data:
+                return info_data["url"]
+    return ""
+
+
+def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
+    df = pd.read_csv(csv_file, sep=" ; ", engine="python")
+    df["date"] = pd.to_datetime(df["date"], dayfirst=False, errors="coerce")
+    uuid_prefix = load_uuid_prefix(csv_file)
+
+    df["latex_label"] = [f"{uuid_prefix}:{label.strip()}" for label in df["label"]]
+
+    with open(output_file, "w") as bibtex_file:
+        for index, row in df.iterrows():
+            label_title = row["latex_label"]
+            bibtex_entry = f"""@article{{ {label_title}  ,
+    note = {{{row["note"]}}},
+    title = {{{replace_underscores(replace_multiple_spaces(remove_backslash_substrings(row["quote"])))}}},
+    journal = {{{replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row["section title"]))))}}},
+    date = {{{row["date"].strftime("%Y-%m-%d") if not pd.isnull(row["date"]) else ""}}},
+    pages = {{{int(row["opage"]) + 1 if "opage" in row and not pd.isnull(row["opage"]) else ""}}},
+    url = {{{load_url(csv_file)}}},
+    }}
+    """
+
+            if exclude_note:
+                bibtex_entry = bibtex_entry.replace("note =", "nonote =")
+            bibtex_file.write(emojis_to_text(bibtex_entry))
