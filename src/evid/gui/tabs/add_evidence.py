@@ -241,8 +241,10 @@ class AddEvidenceTab(QWidget):
         try:
             response = requests.get(url, timeout=10)
             response.raise_for_status()
-            file_name = url.split("/")[-1]
-            if not file_name.lower().endswith(".pdf"):
+            content_type = response.headers.get("Content-Type", "")
+            file_name = url.split("/")[-1] or "document.pdf"
+
+            if "application/pdf" not in content_type:
                 QMessageBox.warning(
                     self, "Invalid File", "URL must point to a PDF file."
                 )
