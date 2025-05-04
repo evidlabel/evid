@@ -31,10 +31,10 @@ REBUT_TEMPLATE = r"""\documentclass[12pt]{article}
 
 \begin{document}
 \noindent\begin{tabularx}{\textwidth}{l|X}
-      \textbf{Emne}   &       \\
-      \textbf{Sagsnr}&        \\
-      \textbf{Parter}&        \\
-      \textbf{Dato}  & \today \\
+      \textbf{Topic}   &       \\
+      \textbf{Reference}&        \\
+      \textbf{Author}&        \\
+      \textbf{Date}  & \today \\
 \end{tabularx}
 
 \begin{cenum}
