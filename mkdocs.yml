@@ -1,3 +1,14 @@
-site_name: Docs for evid
+site_name: evid Documentation
 theme:
   name: material
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Usage: usage.md
+  - Development: development.md
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
