@@ -15,3 +15,4 @@
 
 ## Usage
 Launch with `poetry run evid` to access the GUI for adding and browsing evidence.
+

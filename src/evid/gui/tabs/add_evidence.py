@@ -76,7 +76,7 @@ class AddEvidenceTab(QWidget):
 
         # Buttons
         button_layout = QHBoxLayout()
-        button_layout.addWidget(QPushButton("Add Evidence", clicked=self.add_evidence))
+        button_layout.addWidget(QPushButton("Add", clicked=self.add_evidence))
         button_layout.addWidget(
             QPushButton("Quick Add URL", clicked=self.quick_add_from_url)
         )
