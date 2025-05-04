@@ -216,8 +216,8 @@ class BrowseEvidenceTab(QWidget):
             if not label_file.exists():
                 textpdf_to_latex(file_path, label_file)
 
-            # Open the labeller and wait for it to close
-            subprocess.run(["xdg-open", str(label_file)], check=True)
+            # Open the labeller in VS Code and wait for it to close
+            subprocess.run(["code", "--wait", str(label_file)], check=True)
 
             # After labeller closes, check for CSV and generate BibTeX
             if csv_file.exists():
@@ -230,10 +230,17 @@ class BrowseEvidenceTab(QWidget):
                     "CSV Missing",
                     f"No label.csv found in {file_path.parent}. BibTeX generation skipped."
                 )
-        except subprocess.SubprocessError as e:
-            logger.error(f"Error opening labeller: {str(e)}")
+        except FileNotFoundError:
+            logger.error("VS Code not found. Please ensure 'code' is in your PATH.")
             QMessageBox.critical(
-                self, "Error Opening Labeller", f"Failed to open labeller: {str(e)}"
+                self,
+                "VS Code Not Found",
+                "Visual Studio Code is not installed or not in your PATH. Please install VS Code or ensure the 'code' command is available."
+            )
+        except subprocess.SubprocessError as e:
+            logger.error(f"Error opening VS Code: {str(e)}")
+            QMessageBox.critical(
+                self, "Error Opening VS Code", f"Failed to open VS Code: {str(e)}"
             )
         except Exception as e:
             logger.error(f"Error during label workflow: {str(e)}")

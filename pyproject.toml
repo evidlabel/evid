@@ -14,7 +14,8 @@ pymupdf = "^1.25.2"
 pypdf = "^3.0.1"
 pyqt6 = "^6.7.0"
 pyyaml = "^6.0"
-bibtexparser = "^2.0.0"
+bibtexparser = ">=1.4.3"
+demoji = "^1.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0"
