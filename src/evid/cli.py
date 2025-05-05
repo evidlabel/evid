@@ -8,8 +8,16 @@ import arrow
 import yaml
 import shutil
 import uuid
+import subprocess
+import logging
 from evid import DEFAULT_DIR
 from evid.core.dateextract import extract_dates_from_pdf
+from evid.core.label_setup import textpdf_to_latex, csv_to_bib
+from evid.gui.main import main as gui_main
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 def get_datasets(directory: Path) -> list[str]:
@@ -57,7 +65,9 @@ def select_dataset(directory: Path) -> str:
     sys.exit("Invalid selection.")
 
 
-def extract_pdf_metadata(pdf_source: Path | BytesIO) -> tuple[str, str, str]:
+def extract_pdf_metadata(
+    pdf_source: Path | BytesIO, file_name: str
+) -> tuple[str, str, str]:
     """Extract title, authors, and date from PDF."""
     try:
         if isinstance(pdf_source, Path):
@@ -69,10 +79,7 @@ def extract_pdf_metadata(pdf_source: Path | BytesIO) -> tuple[str, str, str]:
             reader = PyPDF2.PdfReader(pdf_source)
             meta = reader.metadata
 
-        title = meta.get(
-            "/Title",
-            Path(pdf_source.name).stem if isinstance(pdf_source, Path) else "document",
-        )
+        title = meta.get("/Title", Path(file_name).stem)
         authors = meta.get("/Author", "")
         date = meta.get("/CreationDate") or meta.get("/ModDate", "")
         if date and date.startswith("D:"):
@@ -80,18 +87,49 @@ def extract_pdf_metadata(pdf_source: Path | BytesIO) -> tuple[str, str, str]:
         else:
             date = ""
     except Exception:
-        title = (
-            Path(pdf_source.name).stem if isinstance(pdf_source, Path) else "document"
-        )
+        title = Path(file_name).stem
         authors = ""
         date = ""
     return title, authors, date
 
 
-def add_evidence(directory: Path, dataset: str, source: str, is_url: bool) -> None:
+def create_label(file_path: Path, dataset: str, uuid: str) -> None:
+    """Generate a LaTeX label file and open it in VS Code."""
+    label_file = file_path.parent / "label.tex"
+    csv_file = file_path.parent / "label.csv"
+    bib_file = file_path.parent / "label_table.bib"
+
+    try:
+        if not label_file.exists():
+            textpdf_to_latex(file_path, label_file)
+
+        # Open the labeller in VS Code and wait for it to close
+        subprocess.run(["code", "--wait", str(label_file)], check=True)
+
+        # After labeller closes, check for CSV and generate BibTeX
+        if csv_file.exists():
+            csv_to_bib(csv_file, bib_file, exclude_note=True)
+            logger.info(f"Generated BibTeX file: {bib_file}")
+        else:
+            logger.warning(f"CSV file {csv_file} not found after labelling")
+            print(f"No label.csv found in {file_path.parent}. BibTeX generation skipped.")
+    except FileNotFoundError:
+        logger.error("VS Code not found. Please ensure 'code' is in your PATH.")
+        print("Visual Studio Code is not installed or not in your PATH. Please install VS Code or ensure the 'code' command is available.")
+    except subprocess.SubprocessError as e:
+        logger.error(f"Error opening VS Code: {str(e)}")
+        print(f"Failed to open VS Code: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error during label workflow: {str(e)}")
+        print(f"An unexpected error occurred: {str(e)}")
+
+
+def add_evidence(directory: Path, dataset: str, source: str, label: bool = False) -> None:
     """Add a PDF to the specified dataset."""
     unique_dir = directory / dataset / str(uuid.uuid4())
     unique_dir.mkdir(parents=True)
+
+    is_url = source.startswith("http://") or source.startswith("https://")
 
     if is_url:
         try:
@@ -115,8 +153,8 @@ def add_evidence(directory: Path, dataset: str, source: str, is_url: bool) -> No
         pdf_file = file_path
 
     # Extract metadata
-    title, authors, date = extract_pdf_metadata(pdf_file)
-    label = title.replace(" ", "_").lower()
+    title, authors, date = extract_pdf_metadata(pdf_file, file_name)
+    label_str = title.replace(" ", "_").lower()
 
     # Save PDF
     target_path = unique_dir / file_name
@@ -136,43 +174,59 @@ def add_evidence(directory: Path, dataset: str, source: str, is_url: bool) -> No
         "title": title,
         "authors": authors,
         "tags": "",
-        "label": label,
+        "label": label_str,
         "url": source if is_url else "",
     }
 
-    with (unique_dir / "info.yml").open("w") as f:
+    info_yaml_path = unique_dir / "info.yml"
+    with info_yaml_path.open("w") as f:
         yaml.dump(info, f)
 
-    print(f"Added evidence to {unique_dir}")
+    # Print info.yml content to stdout
+    yaml.dump(info, sys.stdout, allow_unicode=True)
+
+    print(f"\nAdded evidence to {unique_dir}")
+
+    # Prompt to open info.yml in VS Code
+    open_vscode = input("\nWould you like to open info.yml in Visual Studio Code? (y/n): ").strip().lower()
+    if open_vscode == "y":
+        try:
+            subprocess.run(["code", str(info_yaml_path)], check=True)
+        except subprocess.SubprocessError as e:
+            print(f"Failed to open info.yml in VS Code: {str(e)}")
+
+    # Trigger labeling if --label flag is set
+    if label:
+        print(f"\nGenerating and opening label file for {file_name}...")
+        create_label(target_path, dataset, unique_dir.name)
 
 
 def main():
     parser = argparse.ArgumentParser(description="evid CLI for managing PDF documents")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # Add URL command
-    parser_url = subparsers.add_parser("add-url", help="Add a PDF from a URL")
-    parser_url.add_argument("url", help="URL of the PDF file")
-    parser_url.add_argument("--dataset", help="Target dataset name")
+    # Add command
+    parser_add = subparsers.add_parser("add", help="Add a PDF from a URL or local file")
+    parser_add.add_argument("source", help="URL or path to the PDF file")
+    parser_add.add_argument("--dataset", help="Target dataset name")
+    parser_add.add_argument("--label", action="store_true", help="Open the labeler after adding the PDF")
 
-    # Add local PDF command
-    parser_local = subparsers.add_parser("add-localpdf", help="Add a local PDF file")
-    parser_local.add_argument("path", help="Path to the local PDF file")
-    parser_local.add_argument("--dataset", help="Target dataset name")
+    # GUI command
+    parser_gui = subparsers.add_parser("gui", help="Launch the evid GUI")
+    parser_gui.add_argument("--directory", default=DEFAULT_DIR, help="Directory for storing datasets")
 
     args = parser.parse_args()
 
-    directory = DEFAULT_DIR
-    if args.dataset:
-        dataset = args.dataset
-        (directory / dataset).mkdir(parents=True, exist_ok=True)
-    else:
-        dataset = select_dataset(directory)
-
-    if args.command == "add-url":
-        add_evidence(directory, dataset, args.url, is_url=True)
-    elif args.command == "add-localpdf":
-        add_evidence(directory, dataset, args.path, is_url=False)
+    if args.command == "add":
+        directory = DEFAULT_DIR
+        if args.dataset:
+            dataset = args.dataset
+            (directory / dataset).mkdir(parents=True, exist_ok=True)
+        else:
+            dataset = select_dataset(directory)
+        add_evidence(directory, dataset, args.source, args.label)
+    elif args.command == "gui":
+        gui_main(args.directory)
 
 
 if __name__ == "__main__":
