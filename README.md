@@ -12,22 +12,18 @@ evid is a Python-based tool for managing PDF files with metadata extraction and 
 ## Installation
 1. Clone the repository: git clone <repository-url>
 2. Install dependencies: poetry install
-3. Run GUI: poetry run evid-gui or CLI: poetry run evid --help
+3. Run GUI: poetry run evid gui or CLI: poetry run evid --help
 
 ## Usage
-Launch the GUI with poetry run evid-gui to access the interface for adding and browsing documents.
+Launch the GUI with `poetry run evid gui` to access the interface for adding and browsing documents.
 
 Use the CLI to add PDFs:
-- Add from URL: 
-```bash 
-poetry run evid add-url <url> [--dataset <dataset>]
-```
-- Add local PDF: 
+- Add a PDF (from URL or local file):
 ```bash
-poetry run evid add-localpdf <path> [--dataset <dataset>]
+poetry run evid add <url_or_path> [--dataset <dataset>]
 ```
 
-If --dataset is not specified, the CLI prompts to select or create a dataset.
+If `--dataset` is not specified, the CLI prompts to select or create a dataset. The `add` command automatically detects whether the input is a URL (starting with `http://` or `https://`) or a local file path.
 
 ## GUI screenshots
 ![Document addition](https://github.com/user-attachments/assets/a268eb79-0d46-40d8-9112-1f963d900b5c)
