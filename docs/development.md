@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide is for developers looking to contribute to or extend `evid`.
+This guide is for developers looking to contribute to or extend `evid`, a tool for managing PDF documents with metadata and labels.
 
 ## Project Structure
 
