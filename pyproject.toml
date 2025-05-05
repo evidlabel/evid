@@ -28,4 +28,3 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 evid = "evid.cli:main"
-evid-gui = "evid.gui.main:main"

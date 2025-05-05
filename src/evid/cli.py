@@ -8,8 +8,10 @@ import arrow
 import yaml
 import shutil
 import uuid
+import subprocess
 from evid import DEFAULT_DIR
 from evid.core.dateextract import extract_dates_from_pdf
+from evid.gui.main import main as gui_main
 
 
 def get_datasets(directory: Path) -> list[str]:
@@ -85,10 +87,12 @@ def extract_pdf_metadata(
     return title, authors, date
 
 
-def add_evidence(directory: Path, dataset: str, source: str, is_url: bool) -> None:
+def add_evidence(directory: Path, dataset: str, source: str) -> None:
     """Add a PDF to the specified dataset."""
     unique_dir = directory / dataset / str(uuid.uuid4())
     unique_dir.mkdir(parents=True)
+
+    is_url = source.startswith("http://") or source.startswith("https://")
 
     if is_url:
         try:
@@ -137,7 +141,8 @@ def add_evidence(directory: Path, dataset: str, source: str, is_url: bool) -> No
         "url": source if is_url else "",
     }
 
-    with (unique_dir / "info.yml").open("w") as f:
+    info_yaml_path = unique_dir / "info.yml"
+    with info_yaml_path.open("w") as f:
         yaml.dump(info, f)
 
     # Print info.yml content to stdout
@@ -145,34 +150,40 @@ def add_evidence(directory: Path, dataset: str, source: str, is_url: bool) -> No
 
     print(f"\nAdded evidence to {unique_dir}")
 
+    # Prompt to open info.yml in VS Code
+    open_vscode = input("\nWould you like to open info.yml in Visual Studio Code? (y/n): ").strip().lower()
+    if open_vscode == "y":
+        try:
+            subprocess.run(["code", str(info_yaml_path)], check=True)
+        except subprocess.SubprocessError as e:
+            print(f"Failed to open info.yml in VS Code: {str(e)}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="evid CLI for managing PDF documents")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    # Add URL command
-    parser_url = subparsers.add_parser("add-url", help="Add a PDF from a URL")
-    parser_url.add_argument("url", help="URL of the PDF file")
-    parser_url.add_argument("--dataset", help="Target dataset name")
+    # Add command
+    parser_add = subparsers.add_parser("add", help="Add a PDF from a URL or local file")
+    parser_add.add_argument("source", help="URL or path to the PDF file")
+    parser_add.add_argument("--dataset", help="Target dataset name")
 
-    # Add local PDF command
-    parser_local = subparsers.add_parser("add-localpdf", help="Add a local PDF file")
-    parser_local.add_argument("path", help="Path to the local PDF file")
-    parser_local.add_argument("--dataset", help="Target dataset name")
+    # GUI command
+    parser_gui = subparsers.add_parser("gui", help="Launch the evid GUI")
+    parser_gui.add_argument("--directory", default=DEFAULT_DIR, help="Directory for storing datasets")
 
     args = parser.parse_args()
 
-    directory = DEFAULT_DIR
-    if args.dataset:
-        dataset = args.dataset
-        (directory / dataset).mkdir(parents=True, exist_ok=True)
-    else:
-        dataset = select_dataset(directory)
-
-    if args.command == "add-url":
-        add_evidence(directory, dataset, args.url, is_url=True)
-    elif args.command == "add-localpdf":
-        add_evidence(directory, dataset, args.path, is_url=False)
+    if args.command == "add":
+        directory = DEFAULT_DIR
+        if args.dataset:
+            dataset = args.dataset
+            (directory / dataset).mkdir(parents=True, exist_ok=True)
+        else:
+            dataset = select_dataset(directory)
+        add_evidence(directory, dataset, args.source)
+    elif args.command == "gui":
+        gui_main(args.directory)
 
 
 if __name__ == "__main__":
