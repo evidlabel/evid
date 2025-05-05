@@ -39,7 +39,3 @@ def main(directory=DEFAULT_DIR):
     window = EvidenceManagerApp(Path(directory))
     window.show()
     sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()

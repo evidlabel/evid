@@ -4,19 +4,18 @@ This guide explains how to use evid to manage PDF documents through its PyQt6-ba
 
 ## Launching the Application
 
-After , launch the GUI with:
+Launch the GUI with:
 
-```bash 
-poetry run evid-gui 
+```bash
+poetry run evid gui
 ```
 
 This opens the GUI with two tabs: Add and Browse.
 
-Alternatively, use the CLI:
+Alternatively, use the CLI to view available commands:
 
-
-```bash 
-poetry run evid --help 
+```bash
+poetry run evid --help
 ```
 
 ## Adding Documents
@@ -43,21 +42,15 @@ Use the Add tab to log PDFs with metadata.
 
 ### Via CLI
 
-Add PDFs using the CLI with the following commands:
+Add PDFs using the CLI with the following command:
 
-- Add from URL:
+- Add a PDF (from URL or local file):
 
-```bash 
-   poetry run evid add-url <url> [--dataset <dataset>] 
+```bash
+poetry run evid add <url_or_path> [--dataset <dataset>]
 ```
 
-- Add local PDF:
-
-```bash 
-poetry run evid add-localpdf <path> [--dataset <dataset>] 
-```  
-
-If --dataset is not provided, the CLI prompts you to select an existing dataset or create a new one. The CLI extracts metadata (title, authors, dates) from the PDF and stores it in info.yml alongside the PDF.
+If `--dataset` is not provided, the CLI prompts you to select an existing dataset or create a new one. The `add` command automatically detects whether the input is a URL (starting with `http://` or `https://`) or a local file path. After adding, it prints the metadata to stdout and prompts to open the `info.yml` file in Visual Studio Code.
 
 ## Browsing Documents
 

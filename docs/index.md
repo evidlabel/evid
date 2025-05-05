@@ -22,7 +22,7 @@
 git clone <repository-url>
 cd evid
 poetry install
-poetry run evid
+poetry run evid gui
 ```
 
 Launch the GUI and start managing your PDF documents!
