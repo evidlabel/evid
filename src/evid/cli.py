@@ -9,9 +9,15 @@ import yaml
 import shutil
 import uuid
 import subprocess
+import logging
 from evid import DEFAULT_DIR
 from evid.core.dateextract import extract_dates_from_pdf
+from evid.core.label_setup import textpdf_to_latex, csv_to_bib
 from evid.gui.main import main as gui_main
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 def get_datasets(directory: Path) -> list[str]:
@@ -87,7 +93,38 @@ def extract_pdf_metadata(
     return title, authors, date
 
 
-def add_evidence(directory: Path, dataset: str, source: str) -> None:
+def create_label(file_path: Path, dataset: str, uuid: str) -> None:
+    """Generate a LaTeX label file and open it in VS Code."""
+    label_file = file_path.parent / "label.tex"
+    csv_file = file_path.parent / "label.csv"
+    bib_file = file_path.parent / "label_table.bib"
+
+    try:
+        if not label_file.exists():
+            textpdf_to_latex(file_path, label_file)
+
+        # Open the labeller in VS Code and wait for it to close
+        subprocess.run(["code", "--wait", str(label_file)], check=True)
+
+        # After labeller closes, check for CSV and generate BibTeX
+        if csv_file.exists():
+            csv_to_bib(csv_file, bib_file, exclude_note=True)
+            logger.info(f"Generated BibTeX file: {bib_file}")
+        else:
+            logger.warning(f"CSV file {csv_file} not found after labelling")
+            print(f"No label.csv found in {file_path.parent}. BibTeX generation skipped.")
+    except FileNotFoundError:
+        logger.error("VS Code not found. Please ensure 'code' is in your PATH.")
+        print("Visual Studio Code is not installed or not in your PATH. Please install VS Code or ensure the 'code' command is available.")
+    except subprocess.SubprocessError as e:
+        logger.error(f"Error opening VS Code: {str(e)}")
+        print(f"Failed to open VS Code: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error during label workflow: {str(e)}")
+        print(f"An unexpected error occurred: {str(e)}")
+
+
+def add_evidence(directory: Path, dataset: str, source: str, label: bool = False) -> None:
     """Add a PDF to the specified dataset."""
     unique_dir = directory / dataset / str(uuid.uuid4())
     unique_dir.mkdir(parents=True)
@@ -117,7 +154,7 @@ def add_evidence(directory: Path, dataset: str, source: str) -> None:
 
     # Extract metadata
     title, authors, date = extract_pdf_metadata(pdf_file, file_name)
-    label = title.replace(" ", "_").lower()
+    label_str = title.replace(" ", "_").lower()
 
     # Save PDF
     target_path = unique_dir / file_name
@@ -137,7 +174,7 @@ def add_evidence(directory: Path, dataset: str, source: str) -> None:
         "title": title,
         "authors": authors,
         "tags": "",
-        "label": label,
+        "label": label_str,
         "url": source if is_url else "",
     }
 
@@ -158,6 +195,11 @@ def add_evidence(directory: Path, dataset: str, source: str) -> None:
         except subprocess.SubprocessError as e:
             print(f"Failed to open info.yml in VS Code: {str(e)}")
 
+    # Trigger labeling if --label flag is set
+    if label:
+        print(f"\nGenerating and opening label file for {file_name}...")
+        create_label(target_path, dataset, unique_dir.name)
+
 
 def main():
     parser = argparse.ArgumentParser(description="evid CLI for managing PDF documents")
@@ -167,6 +209,7 @@ def main():
     parser_add = subparsers.add_parser("add", help="Add a PDF from a URL or local file")
     parser_add.add_argument("source", help="URL or path to the PDF file")
     parser_add.add_argument("--dataset", help="Target dataset name")
+    parser_add.add_argument("--label", action="store_true", help="Open the labeler after adding the PDF")
 
     # GUI command
     parser_gui = subparsers.add_parser("gui", help="Launch the evid GUI")
@@ -181,7 +224,7 @@ def main():
             (directory / dataset).mkdir(parents=True, exist_ok=True)
         else:
             dataset = select_dataset(directory)
-        add_evidence(directory, dataset, args.source)
+        add_evidence(directory, dataset, args.source, args.label)
     elif args.command == "gui":
         gui_main(args.directory)
 
