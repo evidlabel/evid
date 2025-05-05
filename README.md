@@ -16,3 +16,5 @@
 ## Usage
 Launch with `poetry run evid` to access the GUI for adding and browsing documents.
 
+![Document addition](https://github.com/user-attachments/assets/a268eb79-0d46-40d8-9112-1f963d900b5c)
+![Document browsing](https://github.com/user-attachments/assets/0e723c4c-9e79-4108-8ee2-a62750e3fcd0)
