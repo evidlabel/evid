@@ -2,7 +2,7 @@
 name = "evid"
 version = "0.1.0"
 description = "document logger, adder of metadata"
-authors = ["evid <210122431+evidlabel@users.noreply.github.com>"]
+authors = ["evid 210122431+evidlabel@users.noreply.github.com"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "evid", from = "src"}]
@@ -27,4 +27,5 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-evid = "evid.gui.main:main"
+evid = "evid.cli:main"
+evid-gui = "evid.gui.main:main"
