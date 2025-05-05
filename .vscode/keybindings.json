@@ -1,0 +1,10 @@
+[
+    {
+        "key": "ctrl+l",
+        "command": "editor.action.insertSnippet",
+        "when": "editorTextFocus && editorLangId == 'latex'",
+        "args": {
+            "snippet": "\\lb{$1}{${TM_SELECTED_TEXT}}{$2}"
+        }
+    }
+]
