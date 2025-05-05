@@ -57,7 +57,9 @@ def select_dataset(directory: Path) -> str:
     sys.exit("Invalid selection.")
 
 
-def extract_pdf_metadata(pdf_source: Path | BytesIO) -> tuple[str, str, str]:
+def extract_pdf_metadata(
+    pdf_source: Path | BytesIO, file_name: str
+) -> tuple[str, str, str]:
     """Extract title, authors, and date from PDF."""
     try:
         if isinstance(pdf_source, Path):
@@ -69,10 +71,7 @@ def extract_pdf_metadata(pdf_source: Path | BytesIO) -> tuple[str, str, str]:
             reader = PyPDF2.PdfReader(pdf_source)
             meta = reader.metadata
 
-        title = meta.get(
-            "/Title",
-            Path(pdf_source.name).stem if isinstance(pdf_source, Path) else "document",
-        )
+        title = meta.get("/Title", Path(file_name).stem)
         authors = meta.get("/Author", "")
         date = meta.get("/CreationDate") or meta.get("/ModDate", "")
         if date and date.startswith("D:"):
@@ -80,9 +79,7 @@ def extract_pdf_metadata(pdf_source: Path | BytesIO) -> tuple[str, str, str]:
         else:
             date = ""
     except Exception:
-        title = (
-            Path(pdf_source.name).stem if isinstance(pdf_source, Path) else "document"
-        )
+        title = Path(file_name).stem
         authors = ""
         date = ""
     return title, authors, date
@@ -115,7 +112,7 @@ def add_evidence(directory: Path, dataset: str, source: str, is_url: bool) -> No
         pdf_file = file_path
 
     # Extract metadata
-    title, authors, date = extract_pdf_metadata(pdf_file)
+    title, authors, date = extract_pdf_metadata(pdf_file, file_name)
     label = title.replace(" ", "_").lower()
 
     # Save PDF
@@ -143,7 +140,10 @@ def add_evidence(directory: Path, dataset: str, source: str, is_url: bool) -> No
     with (unique_dir / "info.yml").open("w") as f:
         yaml.dump(info, f)
 
-    print(f"Added evidence to {unique_dir}")
+    # Print info.yml content to stdout
+    yaml.dump(info, sys.stdout, allow_unicode=True)
+
+    print(f"\nAdded evidence to {unique_dir}")
 
 
 def main():
