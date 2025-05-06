@@ -1,4 +1,4 @@
-# evid - PDF Labeler
+# evid - pdf labeler
 
 evid is a Python-based tool for managing PDF files with metadata extraction and organization capabilities. It features a PyQt6-based GUI and a command-line interface (CLI).
 
