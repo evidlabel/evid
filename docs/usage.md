@@ -1,6 +1,6 @@
 # Usage Guide
 
-This guide explains how to use evid to manage PDF documents through its PyQt6-based GUI or command-line interface (CLI).
+This guide explains how to use evid to manage PDF documents through its Py morpheme-based GUI or command-line interface (CLI).
 
 ## Launching the Application
 
@@ -72,10 +72,34 @@ Use the Browse tab in the GUI to view and manage existing documents.
    - Select an entry and click Rebut to create a response document (rebut.tex) using the BibTeX file.
    - The response lists citations with notes, formatted in LaTeX, suitable for LLM integration.
 
+## Labelling
+- When selecting a document and pressing the "Label" button, a LaTeX document is generated that contains the extracted text from the PDF. 
+The LaTeX document is saved in the same folder as the PDF. 
+
+- The user can now label using their text editor inside the LaTeX document, for vscode, the following keybinding will allow labelling by selecting text and pressing `ctrl+l`:
+```json 
+[
+    {
+        "key": "ctrl+l",
+        "command": "editor.action.insertSnippet",
+        "when": "editorTextFocus && editorLangId == 'latex'",
+        "args": {
+            "snippet": "\\lb{$1}{${TM_SELECTED_TEXT}}{$2}"
+        }
+    }
+]
+```
+The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).
+
+- The header in the LaTeX document causes LaTeX compilation to write the labels to `label.csv`. 
+- The csv file is translated to `label_table.bib` upon exiting the label editor (i.e. closing `vscode`).  
+- The `label_table.bib` files for each pdf can be concatenated, and used to formulate a rebuttal. 
+  - Note that the first 4 characters of the pdf's uuid are used as a prefix for the bibtex label, this means that the labels only have to have a unique ID for the same pdf, not across all pdfs in the dataset. 
+
 ## Tips
 
 - Date Extraction: evid automatically extracts dates from PDFs in various formats (e.g., "12/01/2023", "15. januar 2024").
 - LaTeX Setup: Ensure a LaTeX distribution is installed for label and response generation.
 - VS Code Integration: Use the provided .vscode/keybindings.json for a Ctrl+L shortcut in LaTeX files.
 
-For development details, see the  section.
+For development details, see the Development section.
