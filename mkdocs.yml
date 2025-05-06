@@ -1,4 +1,5 @@
 site_name: evid Documentation
+repo_url: https://github.com/evidlabel/evid
 theme:
   name: material
 nav:
