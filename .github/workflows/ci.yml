@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - cli
   pull_request:
     branches:
       - master
@@ -24,7 +25,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libegl1 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-xinput0 libfontconfig1 libx11-xcb1 libgl1-mesa-glx xvfb
+          sudo apt-get install -y libegl1 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-xinput0 libfontconfig1 libx11-xcb1 libgl1 libglu1-mesa libopengl0 libxcb-glx0 xvfb
 
       - name: Install Poetry
         run: |
@@ -37,7 +38,7 @@ jobs:
 
       - name: Run tests
         run: |
-          xvfb-run poetry run pytest
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" poetry run pytest --verbose
 
       - name: Check exit code
         run: |
