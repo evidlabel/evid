@@ -19,7 +19,7 @@ import subprocess
 from evid.core.dateextract import extract_dates_from_pdf
 import requests
 from io import BytesIO
-import PyPDF2
+import pypdf
 
 
 class AddEvidenceTab(QWidget):
@@ -147,7 +147,7 @@ class AddEvidenceTab(QWidget):
         title = file_path.stem
         try:
             with open(file_path, "rb") as f:
-                reader = PyPDF2.PdfReader(f)
+                reader = pypdf.PdfReader(f)
                 meta = reader.metadata
                 date = self._extract_pdf_date(meta)
                 authors = self._extract_pdf_authors(meta)
@@ -264,7 +264,7 @@ class AddEvidenceTab(QWidget):
         title = Path(file_name).stem
         try:
             pdf_file.seek(0)
-            reader = PyPDF2.PdfReader(pdf_file)
+            reader = pypdf.PdfReader(pdf_file)
             meta = reader.metadata
             date = self._extract_pdf_date(meta)
             authors = self._extract_pdf_authors(meta)
