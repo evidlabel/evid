@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 import requests
 from io import BytesIO
-import PyPDF2
+import pypdf
 import arrow
 import yaml
 import shutil
@@ -72,11 +72,11 @@ def extract_pdf_metadata(
     try:
         if isinstance(pdf_source, Path):
             with open(pdf_source, "rb") as f:
-                reader = PyPDF2.PdfReader(f)
+                reader = pypdf.PdfReader(f)
                 meta = reader.metadata
         else:
             pdf_source.seek(0)
-            reader = PyPDF2.PdfReader(pdf_source)
+            reader = pypdf.PdfReader(pdf_source)
             meta = reader.metadata
 
         title = meta.get("/Title", Path(file_name).stem)
