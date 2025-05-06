@@ -21,6 +21,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-xinput0 libfontconfig1 libx11-xcb1 libgl1-mesa-glx xvfb
+
       - name: Install Poetry
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
@@ -32,7 +37,7 @@ jobs:
 
       - name: Run tests
         run: |
-          poetry run pytest
+          xvfb-run poetry run pytest
 
       - name: Check exit code
         run: |
