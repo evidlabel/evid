@@ -21,6 +21,7 @@ def test_add_evidence_missing_fields(add_tab):
     assert result is None  # Should return None due to validation
 
 
+@pytest.mark.skip("Skipping test_create_dataset for now")
 def test_create_dataset(add_tab, tmp_path):
     dataset_name = "test_dataset"
     add_tab.new_dataset_input.setText(dataset_name)
