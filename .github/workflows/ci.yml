@@ -25,7 +25,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libegl1 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-xinput0 libfontconfig1 libx11-xcb1 libgl1-mesa-glx xvfb
+          sudo apt-get install -y libegl1 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-xinput0 libfontconfig1 libx11-xcb1  xvfb
 
       - name: Install Poetry
         run: |
