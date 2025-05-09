@@ -1,6 +1,16 @@
 # Usage Guide
 
-This guide explains how to use evid to manage PDF documents through its Py morpheme-based GUI or command-line interface (CLI).
+This guide explains how to use evid to manage PDF documents through its PyQt6-based GUI or command-line interface (CLI).
+
+## Configuration
+
+You can configure the default database location by creating a `~/.evidrc` file in YAML format. Example:
+
+```yaml
+default_dir: ~/my_custom_evid_db
+```
+
+If no `.evidrc` file is found, the default database location is `~/Documents/evid`.
 
 ## Launching the Application
 
@@ -18,6 +28,22 @@ Alternatively, use the CLI to view available commands:
 poetry run evid --help
 ```
 
+## Creating Datasets
+
+### Via GUI
+
+In the Add tab, enter a new dataset name in the "New Dataset" field and click Create.
+
+### Via CLI
+
+Create a new dataset with:
+
+```bash
+poetry run evid create-dataset <dataset_name>
+```
+
+This creates a new dataset directory in the default database location.
+
 ## Adding Documents
 
 ### Via GUI
@@ -26,7 +52,7 @@ Use the Add tab to log PDFs with metadata.
 
 1. Select or Create a Dataset:
    - Choose an existing dataset from the dropdown or enter a new dataset name and click Create.
-   - Datasets are folders in ~/Documents/evid where documents are stored.
+   - Datasets are folders in the default database directory where documents are stored.
 
 2. Add a PDF:
    - Click Browse to select a local PDF or enter a URL and click Quick Add URL.

@@ -55,7 +55,7 @@ def base_rebuttal(bibfile: Path) -> str:
         latex_body += (
             f"\t% prompt: {row['nonote'] if 'nonote' in row else row['note']}\n"
         )
-        latex_body += f"\t\\item Angående citat: \\bcite{{{row['ID']}}} \n"
+        latex_body += f"\t\\item Regarding: \\bcite{{{row['ID']}}} \n"
 
     rebuttal_body = REBUT_TEMPLATE.replace("POINTS", latex_body).replace(
         "BIBPATH", str(bibfile.absolute())

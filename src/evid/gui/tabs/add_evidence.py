@@ -16,14 +16,14 @@ import arrow
 import yaml
 import shutil
 import subprocess
-from evid.core.dateextract import extract_dates_from_pdf
 import requests
 from io import BytesIO
 import pypdf
+from evid import DEFAULT_DIR
 
 
 class AddEvidenceTab(QWidget):
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path = DEFAULT_DIR):
         super().__init__()
         self.directory = directory
         self.init_ui()
