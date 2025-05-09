@@ -1,10 +1,17 @@
 import yaml
 from pathlib import Path
 from typing import Dict, List
+from evid import DEFAULT_DIR
 
 class Database:
-    def __init__(self, db_path: Path, datasets: List[str]):
+    def __init__(self, db_path: Path = DEFAULT_DIR, datasets: List[str] = None):
         self.db: Dict[str, Dict] = {}
+        if datasets is None:
+            datasets = [
+                d.name
+                for d in db_path.iterdir()
+                if d.is_dir() and not d.name.startswith(".")
+            ]
         for dataset in datasets:
             self.db[dataset] = {}
             for info_file in db_path.glob(f"{dataset}/**/info.yml"):
