@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch
 from pathlib import Path
-from evid.cli import get_datasets, select_dataset, add_evidence
+from evid.cli import get_datasets, select_dataset, add_evidence, create_dataset
 import yaml
 
 
@@ -30,6 +30,12 @@ def test_select_dataset_create_new(mock_input, temp_dir):
     dataset = select_dataset(temp_dir)
     assert dataset == "new_dataset"
     assert (temp_dir / "new_dataset").exists()
+
+
+def test_create_dataset(temp_dir):
+    dataset_name = "new_dataset"
+    create_dataset(temp_dir, dataset_name)
+    assert (temp_dir / dataset_name).exists()
 
 
 @pytest.mark.skip(reason="Visual inspection required, no automated check implemented")

@@ -18,6 +18,7 @@ import logging
 from evid.core.label_setup import textpdf_to_latex, csv_to_bib
 from evid.core.rebut_doc import rebut_doc
 import arrow
+from evid import DEFAULT_DIR
 
 # Set up logging with detailed output
 logging.basicConfig(level=logging.DEBUG)
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class BrowseEvidenceTab(QWidget):
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path = DEFAULT_DIR):
         super().__init__()
         self.directory = directory
         self.init_ui()
