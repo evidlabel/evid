@@ -4,8 +4,7 @@ from PyQt6.QtGui import QPalette, QColor
 from pathlib import Path
 from .tabs.add_evidence import AddEvidenceTab
 from .tabs.browse_evidence import BrowseEvidenceTab
-
-DEFAULT_DIR = Path("~/Documents/evid").expanduser()
+from evid import DEFAULT_DIR
 
 
 class EvidenceManagerApp(QMainWindow):

@@ -11,7 +11,7 @@ import uuid
 import subprocess
 import logging
 from evid import DEFAULT_DIR
-from evid.core.dateextract import extract_dates_from_pdf
+
 from evid.core.label_setup import textpdf_to_latex, csv_to_bib
 from evid.gui.main import main as gui_main
 
@@ -65,6 +65,13 @@ def select_dataset(directory: Path) -> str:
     sys.exit("Invalid selection.")
 
 
+def create_dataset(directory: Path, dataset: str) -> None:
+    """Create a new dataset directory."""
+    dataset_path = directory / dataset
+    dataset_path.mkdir(parents=True, exist_ok=True)
+    print(f"Created dataset: {dataset_path}")
+
+
 def extract_pdf_metadata(
     pdf_source: Path | BytesIO, file_name: str
 ) -> tuple[str, str, str]:
@@ -112,10 +119,14 @@ def create_label(file_path: Path, dataset: str, uuid: str) -> None:
             logger.info(f"Generated BibTeX file: {bib_file}")
         else:
             logger.warning(f"CSV file {csv_file} not found after labelling")
-            print(f"No label.csv found in {file_path.parent}. BibTeX generation skipped.")
+            print(
+                f"No label.csv found in {file_path.parent}. BibTeX generation skipped."
+            )
     except FileNotFoundError:
         logger.error("VS Code not found. Please ensure 'code' is in your PATH.")
-        print("Visual Studio Code is not installed or not in your PATH. Please install VS Code or ensure the 'code' command is available.")
+        print(
+            "Visual Studio Code is not installed or not in your PATH. Please install VS Code or ensure the 'code' command is available."
+        )
     except subprocess.SubprocessError as e:
         logger.error(f"Error opening VS Code: {str(e)}")
         print(f"Failed to open VS Code: {str(e)}")
@@ -124,7 +135,9 @@ def create_label(file_path: Path, dataset: str, uuid: str) -> None:
         print(f"An unexpected error occurred: {str(e)}")
 
 
-def add_evidence(directory: Path, dataset: str, source: str, label: bool = False) -> None:
+def add_evidence(
+    directory: Path, dataset: str, source: str, label: bool = False
+) -> None:
     """Add a PDF to the specified dataset."""
     unique_dir = directory / dataset / str(uuid.uuid4())
     unique_dir.mkdir(parents=True)
@@ -188,7 +201,11 @@ def add_evidence(directory: Path, dataset: str, source: str, label: bool = False
     print(f"\nAdded evidence to {unique_dir}")
 
     # Prompt to open info.yml in VS Code
-    open_vscode = input("\nWould you like to open info.yml in Visual Studio Code? (y/n): ").strip().lower()
+    open_vscode = (
+        input("\nWould you like to open info.yml in Visual Studio Code? (y/n): ")
+        .strip()
+        .lower()
+    )
     if open_vscode == "y":
         try:
             subprocess.run(["code", str(info_yaml_path)], check=True)
@@ -209,11 +226,19 @@ def main():
     parser_add = subparsers.add_parser("add", help="Add a PDF from a URL or local file")
     parser_add.add_argument("source", help="URL or path to the PDF file")
     parser_add.add_argument("--dataset", help="Target dataset name")
-    parser_add.add_argument("--label", action="store_true", help="Open the labeler after adding the PDF")
+    parser_add.add_argument(
+        "--label", action="store_true", help="Open the labeler after adding the PDF"
+    )
+
+    # Create dataset command
+    parser_create = subparsers.add_parser("create-dataset", help="Create a new dataset")
+    parser_create.add_argument("dataset", help="Name of the dataset to create")
 
     # GUI command
     parser_gui = subparsers.add_parser("gui", help="Launch the evid GUI")
-    parser_gui.add_argument("--directory", default=DEFAULT_DIR, help="Directory for storing datasets")
+    parser_gui.add_argument(
+        "--directory", default=DEFAULT_DIR, help="Directory for storing datasets"
+    )
 
     args = parser.parse_args()
 
@@ -225,6 +250,8 @@ def main():
         else:
             dataset = select_dataset(directory)
         add_evidence(directory, dataset, args.source, args.label)
+    elif args.command == "create-dataset":
+        create_dataset(DEFAULT_DIR, args.dataset)
     elif args.command == "gui":
         gui_main(args.directory)
 
