@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QMessageBox,
     QHeaderView,
+    QLineEdit,  # Added for search field
 )
 from PyQt6.QtCore import Qt
 from pathlib import Path
@@ -29,6 +30,7 @@ class BrowseEvidenceTab(QWidget):
     def __init__(self, directory: Path = DEFAULT_DIR):
         super().__init__()
         self.directory = directory
+        self.metadata_entries = []  # Store all metadata for filtering
         self.init_ui()
 
     def init_ui(self):
@@ -46,27 +48,36 @@ class BrowseEvidenceTab(QWidget):
         dataset_layout.addWidget(QPushButton("Open Dir", clicked=self.open_directory))
         layout.addLayout(dataset_layout)
 
+        # Search field
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel("Search:"))
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search metadata...")
+        self.search_input.textChanged.connect(self.filter_metadata)
+        search_layout.addWidget(self.search_input)
+        layout.addLayout(search_layout)
+
         # Table
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
             ["Author", "Title", "Date", "File Name", "UUID"]
         )
         self.table.setSortingEnabled(True)  # Enable sorting
-        self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)  # Default sort by Date (latest first)
+        self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)  # Default sort by Date
 
         # Set default column widths
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)  # Allow manual resizing
-        self.table.setColumnWidth(0, 200)  # Author: wider default
-        self.table.setColumnWidth(1, 250)  # Title: wider default
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.table.setColumnWidth(0, 200)  # Author
+        self.table.setColumnWidth(1, 250)  # Title
         self.table.setColumnWidth(2, 100)  # Date
         self.table.setColumnWidth(3, 150)  # File Name
         self.table.setColumnWidth(4, 150)  # UUID
 
         # Make columns stretch when window resizes
         header.setStretchLastSection(True)
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # Author stretches
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)  # Title stretches
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # Author
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)  # Title
         layout.addWidget(self.table)
 
         # Buttons
@@ -94,13 +105,13 @@ class BrowseEvidenceTab(QWidget):
             QMessageBox.warning(self, "No Dataset", "Please select a dataset to load.")
             return
 
-        # Fully reset table
-        self.table.setSortingEnabled(False)  # Disable sorting during population
+        # Fully reset table and metadata
+        self.table.setSortingEnabled(False)
         self.table.clearContents()
         self.table.setRowCount(0)
+        self.metadata_entries = []
         logger.debug(f"Loading metadata for dataset: {dataset}")
 
-        entries = []
         for info_file in self.directory.glob(f"{dataset}/**/info.yml"):
             try:
                 # Read raw content for debugging
@@ -135,7 +146,7 @@ class BrowseEvidenceTab(QWidget):
                 except arrow.parser.ParserError:
                     date = arrow.get("1970-01-01")  # Fallback for invalid dates
 
-                entries.append((date, metadata))
+                self.metadata_entries.append((date, metadata))
             except yaml.YAMLError as e:
                 logger.error(f"YAML parsing error in {info_file}: {str(e)}")
                 continue
@@ -144,30 +155,42 @@ class BrowseEvidenceTab(QWidget):
                 continue
 
         # Sort entries by date (latest first)
-        entries.sort(key=lambda x: x[0], reverse=True)
-        logger.debug(f"Found {len(entries)} valid entries")
+        self.metadata_entries.sort(key=lambda x: x[0], reverse=True)
+        logger.debug(f"Found {len(self.metadata_entries)} valid entries")
 
-        # Populate table
-        for _, metadata in entries:
-            row = self.table.rowCount()
-            self.table.insertRow(row)
+        # Populate table with all entries initially
+        self.filter_metadata()
 
-            # Set table items with fallbacks
-            authors = str(metadata.get("authors", "Unknown"))
-            label = str(metadata.get("label", "Unknown"))
-            time_added = str(metadata.get("time_added", "Unknown"))
-            original_name = str(metadata.get("original_name", "Unknown"))
-            uuid_value = str(metadata.get("uuid", "Unknown"))
+    def filter_metadata(self):
+        search_text = self.search_input.text().strip().lower()
+        self.table.setSortingEnabled(False)
+        self.table.clearContents()
+        self.table.setRowCount(0)
 
-            self.table.setItem(row, 0, QTableWidgetItem(authors))
-            self.table.setItem(row, 1, QTableWidgetItem(label))
-            self.table.setItem(row, 2, QTableWidgetItem(time_added))
-            self.table.setItem(row, 3, QTableWidgetItem(original_name))
-            self.table.setItem(row, 4, QTableWidgetItem(uuid_value))
+        for date, metadata in self.metadata_entries:
+            # Convert all metadata values to strings and check for search text
+            metadata_str = " ".join(
+                str(value).lower() for value in metadata.values()
+            )
+            if not search_text or search_text in metadata_str:
+                row = self.table.rowCount()
+                self.table.insertRow(row)
 
-            logger.debug(f"Added row {row}: Authors={authors}, Label={label}, UUID={uuid_value}")
+                # Set table items with fallbacks
+                authors = str(metadata.get("authors", "Unknown"))
+                label = str(metadata.get("label", "Unknown"))
+                time_added = str(metadata.get("time_added", "Unknown"))
+                original_name = str(metadata.get("original_name", "Unknown"))
+                uuid_value = str(metadata.get("uuid", "Unknown"))
 
-        # Re-enable sorting after population
+                self.table.setItem(row, 0, QTableWidgetItem(authors))
+                self.table.setItem(row, 1, QTableWidgetItem(label))
+                self.table.setItem(row, 2, QTableWidgetItem(time_added))
+                self.table.setItem(row, 3, QTableWidgetItem(original_name))
+                self.table.setItem(row, 4, QTableWidgetItem(uuid_value))
+
+                logger.debug(f"Added row {row}: Authors={authors}, Label={label}, UUID={uuid_value}")
+
         self.table.setSortingEnabled(True)
         self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)
 
@@ -271,7 +294,7 @@ class BrowseEvidenceTab(QWidget):
             QMessageBox.critical(
                 self,
                 "Directory Missing",
-                f"The evidence directory {workdir} does not exist. It may have been moved or deleted.",
+                f"The evidence directory {workdir} does not exist. It may have been moved or deleted."
             )
             return
 
@@ -282,7 +305,7 @@ class BrowseEvidenceTab(QWidget):
             QMessageBox.critical(
                 self,
                 "Rebuttal Failed",
-                f"Could not run rebuttal: {str(e)}. Ensure required files are available.",
+                f"Could not run rebuttal: {str(e)}. Ensure required files are available."
             )
         except Exception as e:
             logger.warning(f"Unexpected error during rebuttal: {str(e)}")
