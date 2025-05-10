@@ -11,6 +11,7 @@ import uuid
 import subprocess
 import logging
 from evid import DEFAULT_DIR
+from evid.utils.text import normalize_text
 
 from evid.core.label_setup import textpdf_to_latex, csv_to_bib
 from evid.gui.main import main as gui_main
@@ -75,7 +76,7 @@ def create_dataset(directory: Path, dataset: str) -> None:
 def extract_pdf_metadata(
     pdf_source: Path | BytesIO, file_name: str
 ) -> tuple[str, str, str]:
-    """Extract title, authors, and date from PDF."""
+    """Extract title, authors, and date from PDF as plain strings, preserving Danish characters."""
     try:
         if isinstance(pdf_source, Path):
             with open(pdf_source, "rb") as f:
@@ -86,15 +87,15 @@ def extract_pdf_metadata(
             reader = pypdf.PdfReader(pdf_source)
             meta = reader.metadata
 
-        title = meta.get("/Title", Path(file_name).stem)
-        authors = meta.get("/Author", "")
-        date = meta.get("/CreationDate") or meta.get("/ModDate", "")
+        title = normalize_text(meta.get("/Title", Path(file_name).stem))
+        authors = normalize_text(meta.get("/Author", ""))
+        date = normalize_text(meta.get("/CreationDate") or meta.get("/ModDate", ""))
         if date and date.startswith("D:"):
             date = f"{date[2:6]}-{date[6:8]}-{date[8:10]}"  # YYYY-MM-DD
         else:
             date = ""
     except Exception:
-        title = Path(file_name).stem
+        title = normalize_text(Path(file_name).stem)
         authors = ""
         date = ""
     return title, authors, date
@@ -192,8 +193,8 @@ def add_evidence(
     }
 
     info_yaml_path = unique_dir / "info.yml"
-    with info_yaml_path.open("w") as f:
-        yaml.dump(info, f)
+    with info_yaml_path.open("w", encoding="utf-8") as f:
+        yaml.dump(info, f, allow_unicode=True)
 
     # Print info.yml content to stdout
     yaml.dump(info, sys.stdout, allow_unicode=True)

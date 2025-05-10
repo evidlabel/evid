@@ -20,6 +20,7 @@ import requests
 from io import BytesIO
 import pypdf
 from evid import DEFAULT_DIR
+from evid.utils.text import normalize_text
 
 
 class AddEvidenceTab(QWidget):
@@ -126,25 +127,24 @@ class AddEvidenceTab(QWidget):
             )
 
     def _extract_pdf_date(self, meta):
-        """Extracts and formats the date from PDF metadata."""
+        """Extracts and formats the date from PDF metadata as a plain string."""
         date = meta.get("/CreationDate") or meta.get("/ModDate")
+        date = normalize_text(date)
         if date and date.startswith("D:"):
             # Format: D:YYYYMMDDHHmmSS
             date = date[2:10]  # YYYYMMDD
             date = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
         else:
             date = ""
-        return date
+        return str(date)
 
     def _extract_pdf_authors(self, meta):
-        """Extracts the author(s) from PDF metadata."""
+        """Extracts the author(s) from PDF metadata as a plain string."""
         author = meta.get("/Author")
-        if author:
-            return author
-        return ""
+        return normalize_text(author)
 
     def prefill_fields(self, file_path: Path):
-        title = file_path.stem
+        title = normalize_text(file_path.stem)
         try:
             with open(file_path, "rb") as f:
                 reader = pypdf.PdfReader(f)
@@ -227,8 +227,8 @@ class AddEvidenceTab(QWidget):
         else:
             shutil.copy2(file_path, target_path)
 
-        with (unique_dir / "info.yml").open("w") as f:
-            yaml.dump(info, f)
+        with (unique_dir / "info.yml").open("w", encoding="utf-8") as f:
+            yaml.dump(info, f, allow_unicode=True)
 
         print(f"Added evidence to {unique_dir}")
 
@@ -261,7 +261,7 @@ class AddEvidenceTab(QWidget):
 
     def prefill_fields_from_url(self, pdf_file: BytesIO, file_name: str):
         self.file_input.setText(file_name)
-        title = Path(file_name).stem
+        title = normalize_text(Path(file_name).stem)
         try:
             pdf_file.seek(0)
             reader = pypdf.PdfReader(pdf_file)

@@ -61,6 +61,7 @@ Use the Add tab to log PDFs with metadata.
 3. Fill Metadata:
    - Edit fields like Title, Authors, Tags, Dates, Label, and URL.
    - Preview the metadata in the preview pane.
+   - Note: Metadata fields like title and authors are stored as plain text in `info.yml` for readability, with Danish characters (æ, ø, å) preserved.
 
 4. Save Document:
    - Click Add to save the PDF and metadata to a unique folder in the selected dataset.
