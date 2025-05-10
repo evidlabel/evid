@@ -26,7 +26,11 @@ poetry run evid add <url_or_path> [--dataset <dataset>]
 If `--dataset` is not specified, the CLI prompts you to select or create a dataset. The `add` command automatically detects whether the input is a URL (starting with `http://` or `https://`) or a local file path. Each PDF is stored in a unique folder (named with a UUID) alongside an `info.yml` file containing metadata.
 
 ## Documentation 
-![Github pages](https://evidlabel.github.io/evid/)
+
+For more detailed information, visit the [documentation page](https://evidlabel.github.io/evid/).
+
+
+
 
 ## Labelling
 - When selecting a document and pressing the "Label" button, a LaTeX document is generated that contains the extracted text from the PDF. 
