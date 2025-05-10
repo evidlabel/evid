@@ -1,3 +1,4 @@
+![Deploy](https://github.com/evidlabel/evid/actions/workflows/ci.yml/badge.svg)![Version](https://img.shields.io/github/v/release/evidlabel/evid)
 # evid - pdf labeler
 
 evid is a Python-based tool for managing PDF files with metadata extraction and organization capabilities. It features a PyQt6-based GUI and a command-line interface (CLI).
