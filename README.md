@@ -29,9 +29,6 @@ If `--dataset` is not specified, the CLI prompts you to select or create a datas
 
 For more detailed information, visit the [documentation page](https://evidlabel.github.io/evid/).
 
-
-
-
 ## Labelling
 - When selecting a document and pressing the "Label" button, a LaTeX document is generated that contains the extracted text from the PDF. 
 The LaTeX document is saved in the same folder as the PDF. 
