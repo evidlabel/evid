@@ -25,5 +25,4 @@ poetry install
 poetry run evid gui
 ```
 
-Launch the GUI and start managing your PDF documents!
 
