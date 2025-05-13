@@ -221,7 +221,7 @@ def add_evidence(
 
 def main():
     parser = argparse.ArgumentParser(description="evid CLI for managing PDF documents")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command")
 
     # Add command
     parser_add = subparsers.add_parser("add", help="Add a PDF from a URL or local file")
@@ -232,7 +232,7 @@ def main():
     )
 
     # Create dataset command
-    parser_create = subparsers.add_parser("create-dataset", help="Create a new dataset")
+    parser_create = subparsers.add_parser("create", help="Create a new dataset")
     parser_create.add_argument("dataset", help="Name of the dataset to create")
 
     # GUI command
@@ -243,7 +243,9 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "add":
+    if args.command is None:
+        gui_main(DEFAULT_DIR)
+    elif args.command == "add":
         directory = DEFAULT_DIR
         if args.dataset:
             dataset = args.dataset
