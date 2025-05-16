@@ -34,6 +34,17 @@ def get_datasets(directory: Path) -> list[str]:
     )
 
 
+def list_datasets(directory: Path) -> None:
+    """List all available datasets."""
+    datasets = get_datasets(directory)
+    if not datasets:
+        print("No datasets found.")
+        return
+    print("Available datasets:")
+    for i, dataset in enumerate(datasets, 1):
+        print(f"{i}. {dataset}")
+
+
 def select_dataset(directory: Path) -> str:
     """Prompt user to select or create a dataset."""
     datasets = get_datasets(directory)
@@ -221,7 +232,7 @@ def add_evidence(
 
 def main():
     parser = argparse.ArgumentParser(description="evid CLI for managing PDF documents")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command")
 
     # Add command
     parser_add = subparsers.add_parser("add", help="Add a PDF from a URL or local file")
@@ -232,8 +243,11 @@ def main():
     )
 
     # Create dataset command
-    parser_create = subparsers.add_parser("create-dataset", help="Create a new dataset")
+    parser_create = subparsers.add_parser("create", help="Create a new dataset")
     parser_create.add_argument("dataset", help="Name of the dataset to create")
+
+    # List datasets command
+    parser_list = subparsers.add_parser("list", help="List all available datasets")
 
     # GUI command
     parser_gui = subparsers.add_parser("gui", help="Launch the evid GUI")
@@ -243,7 +257,9 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "add":
+    if args.command is None:
+        gui_main(DEFAULT_DIR)
+    elif args.command == "add":
         directory = DEFAULT_DIR
         if args.dataset:
             dataset = args.dataset
@@ -251,8 +267,10 @@ def main():
         else:
             dataset = select_dataset(directory)
         add_evidence(directory, dataset, args.source, args.label)
-    elif args.command == "create-dataset":
+    elif args.command == "create":
         create_dataset(DEFAULT_DIR, args.dataset)
+    elif args.command == "list":
+        list_datasets(DEFAULT_DIR)
     elif args.command == "gui":
         gui_main(args.directory)
 
