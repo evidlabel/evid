@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QMessageBox,
     QHeaderView,
-    QLineEdit,  # Added for search field
+    QLineEdit,
 )
 from PyQt6.QtCore import Qt
 from pathlib import Path
@@ -64,6 +64,7 @@ class BrowseEvidenceTab(QWidget):
         )
         self.table.setSortingEnabled(True)  # Enable sorting
         self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)  # Default sort by Date
+        self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)  # Enable multi-selection
 
         # Set default column widths
         header = self.table.horizontalHeader()
@@ -82,7 +83,8 @@ class BrowseEvidenceTab(QWidget):
 
         # Buttons
         button_layout = QHBoxLayout()
-        button_layout.addWidget(QPushButton("Label", clicked=self.create_label))
+        button_layout.addWidget(QPushButton("Label Selected", clicked=self.create_labels))
+        button_layout.addWidget(QPushButton("Generate BibTeX", clicked=self.generate_bibtex))
         button_layout.addWidget(QPushButton("Rebut", clicked=self.run_rebut))
         layout.addLayout(button_layout)
 
@@ -213,64 +215,115 @@ class BrowseEvidenceTab(QWidget):
             return
 
         try:
-            subprocess.run(["xdg-open", str(path)])
+            subprocess.run(["code", str(path)], check=True)
         except subprocess.SubprocessError as e:
-            QMessageBox.critical(self, "Error Opening Directory", f"Failed to open directory: {str(e)}")
+            QMessageBox.critical(self, "Error Opening VS Code", f"Failed to open directory in VS Code: {str(e)}")
 
-    def create_label(self):
+    def create_labels(self):
+        selected_rows = sorted(set(index.row() for index in self.table.selectedIndexes()))
+        if not selected_rows:
+            QMessageBox.warning(self, "No Selection", "Please select at least one evidence entry.")
+            return
+
+        dataset = self.dataset_combo.currentText()
+        for row in selected_rows:
+            uuid_item = self.table.item(row, 4)
+            if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
+                QMessageBox.critical(self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID.")
+                continue
+
+            uuid = uuid_item.text()
+            file_name = self.table.item(row, 3).text()
+            file_path = self.directory / dataset / uuid / file_name
+            label_file = file_path.parent / "label.tex"
+            csv_file = file_path.parent / "label.csv"
+            bib_file = file_path.parent / "label_table.bib"
+
+            try:
+                if not label_file.exists():
+                    textpdf_to_latex(file_path, label_file)
+
+                # Open the labeller in VS Code without waiting
+                subprocess.run(["code", str(label_file)], check=True)
+
+                # Monitor for CSV file changes in a separate process if needed
+                # For simplicity, skip automatic BibTeX generation here
+                logger.info(f"Opened label file in VS Code: {label_file}")
+            except FileNotFoundError:
+                logger.error("VS Code not found. Please ensure 'code' is in your PATH.")
+                QMessageBox.critical(
+                    self,
+                    "VS Code Not Found",
+                    "Visual Studio Code is not installed or not in your PATH. Please install VS Code or ensure the 'code' command is available."
+                )
+                continue
+            except subprocess.SubprocessError as e:
+                logger.error(f"Error opening VS Code: {str(e)}")
+                QMessageBox.critical(
+                    self, "Error Opening VS Code", f"Failed to open VS Code for row {row + 1}: {str(e)}"
+                )
+                continue
+            except Exception as e:
+                logger.error(f"Error during label workflow: {str(e)}")
+                QMessageBox.critical(
+                    self, "Label Workflow Error", f"An unexpected error occurred for row {row + 1}: {str(e)}"
+                )
+                continue
+
+    def generate_bibtex(self):
+        selected_rows = sorted(set(index.row() for index in self.table.selectedIndexes()))
+        if not selected_rows:
+            QMessageBox.warning(self, "No Selection", "Please select at least one evidence entry.")
+            return
+
+        dataset = self.dataset_combo.currentText()
+        success_count = 0
+        for row in selected_rows:
+            uuid_item = self.table.item(row, 4)
+            if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
+                QMessageBox.critical(self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID.")
+                continue
+
+            uuid = uuid_item.text()
+            file_name = self.table.item(row, 3).text()
+            file_path = self.directory / dataset / uuid / file_name
+            csv_file = file_path.parent / "label.csv"
+            bib_file = file_path.parent / "label_table.bib"
+
+            try:
+                if csv_file.exists():
+                    csv_to_bib(csv_file, bib_file, exclude_note=True)
+                    logger.info(f"Generated BibTeX file: {bib_file}")
+                    success_count += 1
+                else:
+                    logger.warning(f"CSV file {csv_file} not found")
+                    QMessageBox.warning(
+                        self,
+                        "CSV Missing",
+                        f"No label.csv found for entry in row {row + 1}. BibTeX generation skipped."
+                    )
+            except Exception as e:
+                logger.error(f"Error generating BibTeX for row {row + 1}: {str(e)}")
+                QMessageBox.critical(
+                    self,
+                    "BibTeX Generation Error",
+                    f"Failed to generate BibTeX for row {row + 1}: {str(e)}"
+                )
+                continue
+
+        if success_count > 0:
+            QMessageBox.information(
+                self,
+                "BibTeX Generation Complete",
+                f"Successfully generated BibTeX files for {success_count} entries."
+            )
+
+    def create_label(self):  # Keep original method for backward compatibility
         row = self.table.currentRow()
         if row < 0:
             QMessageBox.warning(self, "No Selection", "Please select an evidence entry.")
             return
-
-        dataset = self.dataset_combo.currentText()
-        uuid_item = self.table.item(row, 4)
-        if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-            QMessageBox.critical(self, "Invalid Entry", "Selected entry has no valid UUID.")
-            return
-
-        uuid = uuid_item.text()
-        file_name = self.table.item(row, 3).text()
-        file_path = self.directory / dataset / uuid / file_name
-        label_file = file_path.parent / "label.tex"
-        csv_file = file_path.parent / "label.csv"
-        bib_file = file_path.parent / "label_table.bib"
-
-        try:
-            if not label_file.exists():
-                textpdf_to_latex(file_path, label_file)
-
-            # Open the labeller in VS Code and wait for it to close
-            subprocess.run(["code", "--wait", str(label_file)], check=True)
-
-            # After labeller closes, check for CSV and generate BibTeX
-            if csv_file.exists():
-                csv_to_bib(csv_file, bib_file, exclude_note=True)
-                logger.info(f"Generated BibTeX file: {bib_file}")
-            else:
-                logger.warning(f"CSV file {csv_file} not found after labelling")
-                QMessageBox.warning(
-                    self,
-                    "CSV Missing",
-                    f"No label.csv found in {file_path.parent}. BibTeX generation skipped."
-                )
-        except FileNotFoundError:
-            logger.error("VS Code not found. Please ensure 'code' is in your PATH.")
-            QMessageBox.critical(
-                self,
-                "VS Code Not Found",
-                "Visual Studio Code is not installed or not in your PATH. Please install VS Code or ensure the 'code' command is available."
-            )
-        except subprocess.SubprocessError as e:
-            logger.error(f"Error opening VS Code: {str(e)}")
-            QMessageBox.critical(
-                self, "Error Opening VS Code", f"Failed to open VS Code: {str(e)}"
-            )
-        except Exception as e:
-            logger.error(f"Error during label workflow: {str(e)}")
-            QMessageBox.critical(
-                self, "Label Workflow Error", f"An unexpected error occurred: {str(e)}"
-            )
+        self.create_labels()  # Delegate to multi-selection method
 
     def run_rebut(self):
         row = self.table.currentRow()

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "evid"
-version = "0.1.1"
+version = "0.1.2"
 description = "document logger, adder of metadata"
 authors = ["evid 210122431+evidlabel@users.noreply.github.com"]
 license = "MIT"

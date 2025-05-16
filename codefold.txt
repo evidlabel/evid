@@ -1,0 +1,2132 @@
+# Instructions for LLM:
+# This file uses the cfold format to manage a Python project codebase.
+# - Folding: 'cfold fold <files> -o <output.txt>' captures specified files into this .txt.
+# - Unfolding: 'cfold unfold <modified.txt>' applies changes from this .txt to the directory.
+# Rules:
+# - To modify a file: Keep its '# --- File: path ---' header and provide the full updated content below.
+# - To delete a file: Replace its content with '# DELETE'.
+# - To add a file: Add a new '# --- File: path ---' section with the full content.
+# - To move/rename a file: Delete the old file with '# DELETE' under its original '# --- File: old_path ---' and add a new '# --- File: new_path ---' section with the full content.
+# - Only include modified, new, or deleted files here; unchanged files are preserved from the original directory (if provided with -i).
+# - For Markdown (e.g., .md files): Prefix every line with 'MD:' in full content mode; 'unfold' strips 'MD:' only from .md files.
+# - Always preserve '# --- File: path ---' format for file sections.
+# - Supports .foldignore file with gitignore-style patterns to exclude files during folding (directory mode).
+# - Paths are relative to the current working directory (CWD) by default.
+# - Can you preped 'CFOLD: ' to every line in the output? So for markdown a line starts 'CFOLD: MD: '  
+# Refactoring Guidelines:
+# - Prefer organizing code into subdirectories based on functionality (e.g., 'src/utils/', 'src/core/', 'src/cli/').
+# - Split functionality into small, focused files (e.g., one function or class per file where practical, typically 50-200 lines).
+# - To refactor (e.g., move/rename):
+# - Delete the original file with '# DELETE' under its '# --- File: old_path ---'.
+# - Add the new file with '# --- File: new_path ---' and its full content.
+# - Example: To split a large 'main.py' into smaller files:
+# - '# --- File: main.py ---' with '# DELETE'.
+# - '# --- File: src/core/main.py ---' with reduced content.
+# - '# --- File: src/utils/helper.py ---' with extracted functions.
+# - Aim for modularity: Each file should have a single responsibility, making it easier to modify or replace individually.
+# - Reply using a single plain text code block for implementing changes to multiple files using 'cfold unfold <singlefile.txt>'.
+# - No need to include LLM instructions in the output.
+# Please return the cfold formatted output directly in the chat without opening Grok Studio or the canvas panel.# --- File: mkdocs.yml ---
+site_name: evid Documentation
+repo_url: https://github.com/evidlabel/evid
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Usage: usage.md
+  - Development: development.md
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+
+
+# --- File: pyproject.toml ---
+[tool.poetry]
+name = "evid"
+version = "0.1.1rc1"
+description = "document logger, adder of metadata"
+authors = ["evid 210122431+evidlabel@users.noreply.github.com"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "evid", from = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<4.0"
+arrow = "^1.3.0"
+pymupdf = "^1.25.2"
+pypdf = "^5.0.1"
+pyqt6 = "^6.7.0"
+pyyaml = "^6.0"
+bibtexparser = ">=1.4.3"
+demoji = "^1.1.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.0"
+pytest-qt = "^4.2.0"
+fitz = "^0.0.1.dev2"  # Ensure pymupdf's fitz is available for tests
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+evid = "evid.cli:main"
+
+
+# --- File: README.md ---
+MD:![Deploy](https://github.com/evidlabel/evid/actions/workflows/ci.yml/badge.svg)![Version](https://img.shields.io/github/v/release/evidlabel/evid)
+MD:# evid - pdf labeler
+MD:
+MD:evid is a Python-based tool for managing PDF files with metadata extraction and organization capabilities. It features a PyQt6-based GUI and a command-line interface (CLI).
+MD:
+MD:## Features
+MD:- PDF logging with metadata (title, authors, tags, dates)
+MD:- Automatic date extraction from PDFs
+MD:- PyQt6 GUI with tabs for adding and browsing documents
+MD:- CLI for adding PDFs via URL or local file
+MD:- LaTeX document generation for labels and rebuttals
+MD:
+MD:## Installation
+MD:1. Clone the repository: `git clone <repository-url>`
+MD:2. Install dependencies: `poetry install`
+MD:3. Run the GUI: `poetry run evid gui` or CLI: `poetry run evid --help`
+MD:
+MD:## Usage
+MD:Launch the GUI with `poetry run evid gui` to access the interface for adding and browsing documents.
+MD:
+MD:Use the CLI to add PDFs:
+MD:- Add a PDF (from URL or local file):
+MD:```bash
+MD:poetry run evid add <url_or_path> [--dataset <dataset>]
+MD:```
+MD:
+MD:If `--dataset` is not specified, the CLI prompts you to select or create a dataset. The `add` command automatically detects whether the input is a URL (starting with `http://` or `https://`) or a local file path. Each PDF is stored in a unique folder (named with a UUID) alongside an `info.yml` file containing metadata.
+MD:
+MD:## Documentation 
+MD:
+MD:For more detailed information, visit the [documentation page](https://evidlabel.github.io/evid/).
+MD:
+MD:## Labelling
+MD:- When selecting a document and pressing the "Label" button, a LaTeX document is generated that contains the extracted text from the PDF. 
+MD:The LaTeX document is saved in the same folder as the PDF. 
+MD:
+MD:- The user can now label using their text editor inside the LaTeX document, for vscode, the following keybinding will allow labelling by selecting text and pressing `ctrl+l`:
+MD:```json 
+MD:[
+MD:    {
+MD:        "key": "ctrl+l",
+MD:        "command": "editor.action.insertSnippet",
+MD:        "when": "editorTextFocus && editorLangId == 'latex'",
+MD:        "args": {
+MD:            "snippet": "\\lb{$1}{${TM_SELECTED_TEXT}}{$2}"
+MD:        }
+MD:    }
+MD:]
+MD:```
+MD:The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).
+MD:
+MD:- The header in the LaTeX document causes LaTeX compilation to write the labels to `label.csv`. 
+MD:- The csv file is translated to `label_table.bib` upon exiting the label editor (i.e. closing `vscode`).  
+MD:- The `label_table.bib` files for each pdf can be concatenated, and used to formulate a rebuttal. 
+MD:  - Note that the first 4 characters of the pdf's uuid are used as a prefix for the bibtex label, this means that the labels only have to have a unique ID for the same pdf, not across all pdfs in the dataset. 
+MD:
+MD:## GUI Screenshots
+MD:![Document addition](https://github.com/user-attachments/assets/a268eb79-0d46-40d8-9112-1f963d900b5c)
+MD:![Document browsing](https://github.com/user-attachments/assets/0e723c4c-9e79-4108-8ee2-a62750e3fcd0)
+
+# --- File: src/evid/__init__.py ---
+import importlib.metadata
+from pathlib import Path
+import yaml
+
+NAME = "evid"
+try:
+    __version__ = importlib.metadata.version(NAME)
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "0.0.0"
+
+def load_config() -> dict:
+    """Load configuration from ~/.evidrc or return default."""
+    config_path = Path.home() / ".evidrc"
+    default_config = {"default_dir": str(Path("~/Documents/evid").expanduser())}
+    if config_path.exists():
+        try:
+            with config_path.open("r") as f:
+                config = yaml.safe_load(f) or {}
+                return {**default_config, **config}
+        except yaml.YAMLError:
+            return default_config
+    return default_config
+
+CONFIG = load_config()
+DEFAULT_DIR = Path(CONFIG["default_dir"]).expanduser()
+
+
+# --- File: src/evid/cli.py ---
+import argparse
+import sys
+from pathlib import Path
+import requests
+from io import BytesIO
+import pypdf
+import arrow
+import yaml
+import shutil
+import uuid
+import subprocess
+import logging
+from evid import DEFAULT_DIR
+from evid.utils.text import normalize_text
+
+from evid.core.label_setup import textpdf_to_latex, csv_to_bib
+from evid.gui.main import main as gui_main
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+
+def get_datasets(directory: Path) -> list[str]:
+    """Return a list of dataset names in the directory."""
+    return (
+        [
+            d.name
+            for d in directory.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        ]
+        if directory.exists()
+        else []
+    )
+
+
+def select_dataset(directory: Path) -> str:
+    """Prompt user to select or create a dataset."""
+    datasets = get_datasets(directory)
+    if not datasets:
+        print("No datasets found.")
+        dataset = input("Enter new dataset name: ").strip()
+        if dataset:
+            (directory / dataset).mkdir(parents=True, exist_ok=True)
+            return dataset
+        sys.exit("Dataset name required.")
+
+    print("Available datasets:")
+    for i, dataset in enumerate(datasets, 1):
+        print(f"{i}. {dataset}")
+    print(f"{len(datasets) + 1}. Create new dataset")
+
+    choice = input("Select dataset (number): ").strip()
+    try:
+        choice = int(choice)
+        if choice == len(datasets) + 1:
+            dataset = input("Enter new dataset name: ").strip()
+            if dataset:
+                (directory / dataset).mkdir(parents=True, exist_ok=True)
+                return dataset
+            sys.exit("Dataset name required.")
+        if 1 <= choice <= len(datasets):
+            return datasets[choice - 1]
+    except ValueError:
+        pass
+    sys.exit("Invalid selection.")
+
+
+def create_dataset(directory: Path, dataset: str) -> None:
+    """Create a new dataset directory."""
+    dataset_path = directory / dataset
+    dataset_path.mkdir(parents=True, exist_ok=True)
+    print(f"Created dataset: {dataset_path}")
+
+
+def extract_pdf_metadata(
+    pdf_source: Path | BytesIO, file_name: str
+) -> tuple[str, str, str]:
+    """Extract title, authors, and date from PDF as plain strings, preserving Danish characters."""
+    try:
+        if isinstance(pdf_source, Path):
+            with open(pdf_source, "rb") as f:
+                reader = pypdf.PdfReader(f)
+                meta = reader.metadata
+        else:
+            pdf_source.seek(0)
+            reader = pypdf.PdfReader(pdf_source)
+            meta = reader.metadata
+
+        title = normalize_text(meta.get("/Title", Path(file_name).stem))
+        authors = normalize_text(meta.get("/Author", ""))
+        date = normalize_text(meta.get("/CreationDate") or meta.get("/ModDate", ""))
+        if date and date.startswith("D:"):
+            date = f"{date[2:6]}-{date[6:8]}-{date[8:10]}"  # YYYY-MM-DD
+        else:
+            date = ""
+    except Exception:
+        title = normalize_text(Path(file_name).stem)
+        authors = ""
+        date = ""
+    return title, authors, date
+
+
+def create_label(file_path: Path, dataset: str, uuid: str) -> None:
+    """Generate a LaTeX label file and open it in VS Code."""
+    label_file = file_path.parent / "label.tex"
+    csv_file = file_path.parent / "label.csv"
+    bib_file = file_path.parent / "label_table.bib"
+
+    try:
+        if not label_file.exists():
+            textpdf_to_latex(file_path, label_file)
+
+        # Open the labeller in VS Code and wait for it to close
+        subprocess.run(["code", "--wait", str(label_file)], check=True)
+
+        # After labeller closes, check for CSV and generate BibTeX
+        if csv_file.exists():
+            csv_to_bib(csv_file, bib_file, exclude_note=True)
+            logger.info(f"Generated BibTeX file: {bib_file}")
+        else:
+            logger.warning(f"CSV file {csv_file} not found after labelling")
+            print(
+                f"No label.csv found in {file_path.parent}. BibTeX generation skipped."
+            )
+    except FileNotFoundError:
+        logger.error("VS Code not found. Please ensure 'code' is in your PATH.")
+        print(
+            "Visual Studio Code is not installed or not in your PATH. Please install VS Code or ensure the 'code' command is available."
+        )
+    except subprocess.SubprocessError as e:
+        logger.error(f"Error opening VS Code: {str(e)}")
+        print(f"Failed to open VS Code: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error during label workflow: {str(e)}")
+        print(f"An unexpected error occurred: {str(e)}")
+
+
+def add_evidence(
+    directory: Path, dataset: str, source: str, label: bool = False
+) -> None:
+    """Add a PDF to the specified dataset."""
+    unique_dir = directory / dataset / str(uuid.uuid4())
+    unique_dir.mkdir(parents=True)
+
+    is_url = source.startswith("http://") or source.startswith("https://")
+
+    if is_url:
+        try:
+            response = requests.get(source, timeout=10)
+            response.raise_for_status()
+            if "application/pdf" not in response.headers.get("Content-Type", ""):
+                sys.exit("URL must point to a PDF file.")
+            pdf_file = BytesIO(response.content)
+            file_name = source.split("/")[-1] or "document"
+            # Ensure the file has a .pdf suffix
+            file_name = Path(file_name).stem + ".pdf"
+        except requests.RequestException as e:
+            sys.exit(f"Failed to download PDF: {str(e)}")
+    else:
+        file_path = Path(source)
+        if not file_path.exists():
+            sys.exit(f"File {file_path} does not exist.")
+        if file_path.suffix.lower() != ".pdf":
+            sys.exit("File must be a PDF.")
+        file_name = file_path.name
+        pdf_file = file_path
+
+    # Extract metadata
+    title, authors, date = extract_pdf_metadata(pdf_file, file_name)
+    label_str = title.replace(" ", "_").lower()
+
+    # Save PDF
+    target_path = unique_dir / file_name
+    if is_url:
+        with target_path.open("wb") as f:
+            pdf_file.seek(0)
+            f.write(pdf_file.getvalue())
+    else:
+        shutil.copy2(pdf_file, target_path)
+
+    # Save metadata
+    info = {
+        "original_name": file_name,
+        "uuid": unique_dir.name,
+        "time_added": arrow.now().format("YYYY-MM-DD"),
+        "dates": date,
+        "title": title,
+        "authors": authors,
+        "tags": "",
+        "label": label_str,
+        "url": source if is_url else "",
+    }
+
+    info_yaml_path = unique_dir / "info.yml"
+    with info_yaml_path.open("w", encoding="utf-8") as f:
+        yaml.dump(info, f, allow_unicode=True)
+
+    # Print info.yml content to stdout
+    yaml.dump(info, sys.stdout, allow_unicode=True)
+
+    print(f"\nAdded evidence to {unique_dir}")
+
+    # Prompt to open info.yml in VS Code
+    open_vscode = (
+        input("\nWould you like to open info.yml in Visual Studio Code? (y/n): ")
+        .strip()
+        .lower()
+    )
+    if open_vscode == "y":
+        try:
+            subprocess.run(["code", str(info_yaml_path)], check=True)
+        except subprocess.SubprocessError as e:
+            print(f"Failed to open info.yml in VS Code: {str(e)}")
+
+    # Trigger labeling if --label flag is set
+    if label:
+        print(f"\nGenerating and opening label file for {file_name}...")
+        create_label(target_path, dataset, unique_dir.name)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="evid CLI for managing PDF documents")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Add command
+    parser_add = subparsers.add_parser("add", help="Add a PDF from a URL or local file")
+    parser_add.add_argument("source", help="URL or path to the PDF file")
+    parser_add.add_argument("--dataset", help="Target dataset name")
+    parser_add.add_argument(
+        "--label", action="store_true", help="Open the labeler after adding the PDF"
+    )
+
+    # Create dataset command
+    parser_create = subparsers.add_parser("create", help="Create a new dataset")
+    parser_create.add_argument("dataset", help="Name of the dataset to create")
+
+    # GUI command
+    parser_gui = subparsers.add_parser("gui", help="Launch the evid GUI")
+    parser_gui.add_argument(
+        "--directory", default=DEFAULT_DIR, help="Directory for storing datasets"
+    )
+
+    args = parser.parse_args()
+
+    if args.command is None:
+        gui_main(DEFAULT_DIR)
+    elif args.command == "add":
+        directory = DEFAULT_DIR
+        if args.dataset:
+            dataset = args.dataset
+            (directory / dataset).mkdir(parents=True, exist_ok=True)
+        else:
+            dataset = select_dataset(directory)
+        add_evidence(directory, dataset, args.source, args.label)
+    elif args.command == "create":
+        create_dataset(DEFAULT_DIR, args.dataset)
+    elif args.command == "gui":
+        gui_main(args.directory)
+
+
+if __name__ == "__main__":
+    main()
+
+
+# --- File: src/evid/gui/main.py ---
+import sys
+from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget
+from PyQt6.QtGui import QPalette, QColor
+from pathlib import Path
+from .tabs.add_evidence import AddEvidenceTab
+from .tabs.browse_evidence import BrowseEvidenceTab
+from evid import DEFAULT_DIR
+
+
+class EvidenceManagerApp(QMainWindow):
+    def __init__(self, directory: Path):
+        super().__init__()
+        self.directory = directory
+        self.setWindowTitle("evid")
+        self.resize(800, 600)
+
+        # Set dark theme
+        palette = QPalette()
+        palette.setColor(QPalette.ColorRole.Window, QColor("#2e2e2e"))
+        palette.setColor(QPalette.ColorRole.WindowText, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.Base, QColor("#3e3e3e"))
+        palette.setColor(QPalette.ColorRole.Text, QColor("#ffffff"))
+        self.setPalette(palette)
+
+        # Setup tabs
+        self.tabs = QTabWidget()
+        self.setCentralWidget(self.tabs)
+
+        self.add_tab = AddEvidenceTab(self.directory)
+        self.browse_tab = BrowseEvidenceTab(self.directory)
+
+        self.tabs.addTab(self.add_tab, "Add")
+        self.tabs.addTab(self.browse_tab, "Browse")
+
+
+def main(directory=DEFAULT_DIR):
+    app = QApplication(sys.argv)
+    window = EvidenceManagerApp(Path(directory))
+    window.show()
+    sys.exit(app.exec())
+
+
+# --- File: src/evid/gui/tabs/add_evidence.py ---
+from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QComboBox,
+    QTextEdit,
+    QMessageBox,
+)
+from PyQt6.QtCore import Qt
+from pathlib import Path
+import uuid
+import arrow
+import yaml
+import shutil
+import subprocess
+import requests
+from io import BytesIO
+import pypdf
+from evid import DEFAULT_DIR
+from evid.utils.text import normalize_text
+
+
+class AddEvidenceTab(QWidget):
+    def __init__(self, directory: Path = DEFAULT_DIR):
+        super().__init__()
+        self.directory = directory
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        # Dataset selection
+        dataset_layout = QHBoxLayout()
+        dataset_layout.addWidget(QLabel("Dataset:"))
+        self.dataset_combo = QComboBox()
+        self.dataset_combo.addItems(self.get_datasets())
+        if self.dataset_combo.count() > 0:
+            self.dataset_combo.setCurrentIndex(0)
+        dataset_layout.addWidget(self.dataset_combo)
+        layout.addLayout(dataset_layout)
+
+        # New dataset
+        new_dataset_layout = QHBoxLayout()
+        new_dataset_layout.addWidget(QLabel("New Dataset:"))
+        self.new_dataset_input = QLineEdit()
+        new_dataset_layout.addWidget(self.new_dataset_input)
+        new_dataset_layout.addWidget(QPushButton("Create", clicked=self.create_dataset))
+        layout.addLayout(new_dataset_layout)
+
+        # File selection
+        file_layout = QHBoxLayout()
+        file_layout.addWidget(QLabel("PDF File:"))
+        self.file_input = QLineEdit()
+        file_layout.addWidget(self.file_input)
+        file_layout.addWidget(QPushButton("Browse", clicked=self.browse_file))
+        file_layout.addWidget(QPushButton("View", clicked=self.view_file))
+        layout.addLayout(file_layout)
+
+        # Metadata fields
+        for label in ["Title:", "Authors:", "Tags:", "Dates:", "Label:", "URL:"]:
+            field_layout = QHBoxLayout()
+            field_layout.addWidget(QLabel(label))
+            input_field = QLineEdit()
+            field_layout.addWidget(input_field)
+            layout.addLayout(field_layout)
+            setattr(self, f"{label.lower()[:-1]}_input", input_field)
+            input_field.textChanged.connect(self.update_preview)
+
+        # Preview
+        layout.addWidget(QLabel("Preview:"))
+        self.preview_text = QTextEdit()
+        self.preview_text.setReadOnly(True)
+        layout.addWidget(self.preview_text)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(QPushButton("Add", clicked=self.add_evidence))
+        button_layout.addWidget(
+            QPushButton("Quick Add URL", clicked=self.quick_add_from_url)
+        )
+        layout.addLayout(button_layout)
+
+        self.setLayout(layout)
+
+    def get_datasets(self):
+        return (
+            [
+                d.name
+                for d in self.directory.iterdir()
+                if d.is_dir() and not d.name.startswith(".")
+            ]
+            if self.directory.exists()
+            else []
+        )
+
+    def browse_file(self):
+        from PyQt6.QtWidgets import QFileDialog
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Select PDF", str(Path.home() / "Downloads"), "PDF Files (*.pdf)"
+        )
+        if file_path:
+            self.file_input.setText(file_path)
+            self.prefill_fields(Path(file_path))
+
+    def view_file(self):
+        file_path = self.file_input.text().strip()
+        if not file_path:
+            QMessageBox.warning(
+                self, "No File Selected", "Please select a PDF file to view."
+            )
+            return
+        file_path = Path(file_path)
+        if not file_path.exists():
+            QMessageBox.warning(
+                self, "File Not Found", f"The file {file_path} does not exist."
+            )
+            return
+        try:
+            subprocess.run(["xdg-open", str(file_path)])
+        except subprocess.SubprocessError as e:
+            QMessageBox.critical(
+                self, "Error Opening File", f"Failed to open PDF: {str(e)}"
+            )
+
+    def _extract_pdf_date(self, meta):
+        """Extracts and formats the date from PDF metadata as a plain string."""
+        date = meta.get("/CreationDate") or meta.get("/ModDate")
+        date = normalize_text(date)
+        if date and date.startswith("D:"):
+            # Format: D:YYYYMMDDHHmmSS
+            date = date[2:10]  # YYYYMMDD
+            date = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
+        else:
+            date = ""
+        return str(date)
+
+    def _extract_pdf_authors(self, meta):
+        """Extracts the author(s) from PDF metadata as a plain string."""
+        author = meta.get("/Author")
+        return normalize_text(author)
+
+    def prefill_fields(self, file_path: Path):
+        title = normalize_text(file_path.stem)
+        try:
+            with open(file_path, "rb") as f:
+                reader = pypdf.PdfReader(f)
+                meta = reader.metadata
+                date = self._extract_pdf_date(meta)
+                authors = self._extract_pdf_authors(meta)
+        except Exception:
+            date = ""
+            authors = ""
+        self.title_input.setText(title)
+        self.authors_input.setText(authors)
+        self.tags_input.setText("")
+        self.dates_input.setText(date)
+        self.label_input.setText(title.replace(" ", "_").lower())
+        self.update_preview()
+
+    def update_preview(self):
+        preview = "\n".join(
+            f"{label[:-1]}: {getattr(self, f'{label.lower()[:-1]}_input').text()}"
+            for label in ["Title:", "Authors:", "Tags:", "Dates:", "Label:", "URL:"]
+        )
+        self.preview_text.setText(preview)
+
+    def create_dataset(self):
+        dataset_name = self.new_dataset_input.text().strip()
+        if dataset_name:
+            (self.directory / dataset_name).mkdir(parents=True, exist_ok=True)
+            self.dataset_combo.addItem(dataset_name)
+            self.dataset_combo.setCurrentText(dataset_name)
+
+    def add_evidence(self):
+        dataset = self.dataset_combo.currentText()
+        required_fields = {
+            "Dataset": dataset,
+            "Title": self.title_input.text(),
+            "Authors": self.authors_input.text(),
+            "Dates": self.dates_input.text(),
+            "PDF File": self.file_input.text(),
+        }
+
+        missing_fields = [
+            field for field, value in required_fields.items() if not value.strip()
+        ]
+        if missing_fields:
+            QMessageBox.warning(
+                self,
+                "Missing Required Fields",
+                f"Please fill in the following required fields:\n- {', '.join(missing_fields)}",
+            )
+            return
+
+        unique_dir = self.directory / dataset / str(uuid.uuid4())
+        unique_dir.mkdir(parents=True)
+
+        file_path = Path(self.file_input.text())
+        file_name = (
+            self.memory_file_name
+            if hasattr(self, "memory_file_name")
+            else file_path.name
+        )
+
+        info = {
+            "original_name": file_name,
+            "uuid": unique_dir.name,
+            "time_added": arrow.now().format("YYYY-MM-DD"),
+            "dates": self.dates_input.text(),
+            "title": self.title_input.text(),
+            "authors": self.authors_input.text(),
+            "tags": self.tags_input.text(),
+            "label": self.label_input.text(),
+            "url": self.url_input.text(),
+        }
+
+        target_path = unique_dir / file_name
+        if hasattr(self, "memory_pdf_file") and self.memory_pdf_file:
+            with target_path.open("wb") as f:
+                f.write(self.memory_pdf_file.getvalue())
+            del self.memory_pdf_file
+            del self.memory_file_name
+        else:
+            shutil.copy2(file_path, target_path)
+
+        with (unique_dir / "info.yml").open("w", encoding="utf-8") as f:
+            yaml.dump(info, f, allow_unicode=True)
+
+        print(f"Added evidence to {unique_dir}")
+
+    def quick_add_from_url(self):
+        url = self.url_input.text()
+        if not url:
+            QMessageBox.warning(self, "No URL", "Please enter a URL to add.")
+            return
+
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            content_type = response.headers.get("Content-Type", "")
+            file_name = url.split("/")[-1] or "document"
+            # Ensure the file has a .pdf suffix
+            file_name = Path(file_name).stem + ".pdf"
+
+            if "application/pdf" not in content_type:
+                QMessageBox.warning(
+                    self, "Invalid File", "URL must point to a PDF file."
+                )
+                return
+
+            pdf_file = BytesIO(response.content)
+            self.prefill_fields_from_url(pdf_file, file_name)
+            self.memory_pdf_file = pdf_file
+            self.memory_file_name = file_name
+        except requests.RequestException as e:
+            QMessageBox.critical(self, "URL Error", f"Failed to download PDF: {str(e)}")
+
+    def prefill_fields_from_url(self, pdf_file: BytesIO, file_name: str):
+        self.file_input.setText(file_name)
+        title = normalize_text(Path(file_name).stem)
+        try:
+            pdf_file.seek(0)
+            reader = pypdf.PdfReader(pdf_file)
+            meta = reader.metadata
+            date = self._extract_pdf_date(meta)
+            authors = self._extract_pdf_authors(meta)
+        except Exception:
+            date = ""
+            authors = ""
+        self.title_input.setText(title)
+        self.authors_input.setText(authors)
+        self.tags_input.setText("")
+        self.dates_input.setText(date)
+        self.label_input.setText(title.replace(" ", "_").lower())
+        self.update_preview()
+
+
+# --- File: src/evid/gui/tabs/browse_evidence.py ---
+from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QComboBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QMessageBox,
+    QHeaderView,
+    QLineEdit,  # Added for search field
+)
+from PyQt6.QtCore import Qt
+from pathlib import Path
+import yaml
+import subprocess
+import logging
+from evid.core.label_setup import textpdf_to_latex, csv_to_bib
+from evid.core.rebut_doc import rebut_doc
+import arrow
+from evid import DEFAULT_DIR
+
+# Set up logging with detailed output
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+
+class BrowseEvidenceTab(QWidget):
+    def __init__(self, directory: Path = DEFAULT_DIR):
+        super().__init__()
+        self.directory = directory
+        self.metadata_entries = []  # Store all metadata for filtering
+        self.init_ui()
+
+    def init_ui(self):
+        layout = QVBoxLayout()
+
+        # Dataset selection
+        dataset_layout = QHBoxLayout()
+        dataset_layout.addWidget(QLabel("Dataset:"))
+        self.dataset_combo = QComboBox()
+        self.dataset_combo.addItems(self.get_datasets())
+        if self.dataset_combo.count() > 0:
+            self.dataset_combo.setCurrentIndex(0)
+        dataset_layout.addWidget(self.dataset_combo)
+        dataset_layout.addWidget(QPushButton("Load", clicked=self.load_metadata))
+        dataset_layout.addWidget(QPushButton("Open Dir", clicked=self.open_directory))
+        layout.addLayout(dataset_layout)
+
+        # Search field
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel("Search:"))
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search metadata...")
+        self.search_input.textChanged.connect(self.filter_metadata)
+        search_layout.addWidget(self.search_input)
+        layout.addLayout(search_layout)
+
+        # Table
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(
+            ["Author", "Title", "Date", "File Name", "UUID"]
+        )
+        self.table.setSortingEnabled(True)  # Enable sorting
+        self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)  # Default sort by Date
+
+        # Set default column widths
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.table.setColumnWidth(0, 200)  # Author
+        self.table.setColumnWidth(1, 250)  # Title
+        self.table.setColumnWidth(2, 100)  # Date
+        self.table.setColumnWidth(3, 150)  # File Name
+        self.table.setColumnWidth(4, 150)  # UUID
+
+        # Make columns stretch when window resizes
+        header.setStretchLastSection(True)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # Author
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)  # Title
+        layout.addWidget(self.table)
+
+        # Buttons
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(QPushButton("Label", clicked=self.create_label))
+        button_layout.addWidget(QPushButton("Rebut", clicked=self.run_rebut))
+        layout.addLayout(button_layout)
+
+        self.setLayout(layout)
+
+    def get_datasets(self):
+        return (
+            [
+                d.name
+                for d in self.directory.iterdir()
+                if d.is_dir() and not d.name.startswith(".")
+            ]
+            if self.directory.exists()
+            else []
+        )
+
+    def load_metadata(self):
+        dataset = self.dataset_combo.currentText()
+        if not dataset:
+            QMessageBox.warning(self, "No Dataset", "Please select a dataset to load.")
+            return
+
+        # Fully reset table and metadata
+        self.table.setSortingEnabled(False)
+        self.table.clearContents()
+        self.table.setRowCount(0)
+        self.metadata_entries = []
+        logger.debug(f"Loading metadata for dataset: {dataset}")
+
+        for info_file in self.directory.glob(f"{dataset}/**/info.yml"):
+            try:
+                # Read raw content for debugging
+                with info_file.open("r", encoding="utf-8") as f:
+                    raw_content = f.read()
+                    logger.debug(f"Raw YAML for {info_file}: {raw_content}")
+
+                # Parse YAML
+                with info_file.open("r", encoding="utf-8") as f:
+                    metadata = yaml.safe_load(f)
+
+                # Validate metadata
+                if metadata is None:
+                    logger.warning(f"Skipping {info_file}: Empty or malformed YAML")
+                    continue
+                if not isinstance(metadata, dict):
+                    logger.warning(f"Skipping {info_file}: Expected dict, got {type(metadata).__name__}")
+                    continue
+
+                # Log parsed metadata
+                logger.debug(f"Parsed metadata for {info_file}: {metadata}")
+
+                # Check for uuid presence
+                if "uuid" not in metadata:
+                    logger.warning(f"Skipping {info_file}: Missing UUID field")
+                    continue
+
+                # Parse date for sorting
+                date_str = str(metadata.get("time_added", "1970-01-01"))
+                try:
+                    date = arrow.get(date_str, "YYYY-MM-DD")
+                except arrow.parser.ParserError:
+                    date = arrow.get("1970-01-01")  # Fallback for invalid dates
+
+                self.metadata_entries.append((date, metadata))
+            except yaml.YAMLError as e:
+                logger.error(f"YAML parsing error in {info_file}: {str(e)}")
+                continue
+            except Exception as e:
+                logger.error(f"Failed to load {info_file}: {str(e)}")
+                continue
+
+        # Sort entries by date (latest first)
+        self.metadata_entries.sort(key=lambda x: x[0], reverse=True)
+        logger.debug(f"Found {len(self.metadata_entries)} valid entries")
+
+        # Populate table with all entries initially
+        self.filter_metadata()
+
+    def filter_metadata(self):
+        search_text = self.search_input.text().strip().lower()
+        self.table.setSortingEnabled(False)
+        self.table.clearContents()
+        self.table.setRowCount(0)
+
+        for date, metadata in self.metadata_entries:
+            # Convert all metadata values to strings and check for search text
+            metadata_str = " ".join(
+                str(value).lower() for value in metadata.values()
+            )
+            if not search_text or search_text in metadata_str:
+                row = self.table.rowCount()
+                self.table.insertRow(row)
+
+                # Set table items with fallbacks
+                authors = str(metadata.get("authors", "Unknown"))
+                label = str(metadata.get("label", "Unknown"))
+                time_added = str(metadata.get("time_added", "Unknown"))
+                original_name = str(metadata.get("original_name", "Unknown"))
+                uuid_value = str(metadata.get("uuid", "Unknown"))
+
+                self.table.setItem(row, 0, QTableWidgetItem(authors))
+                self.table.setItem(row, 1, QTableWidgetItem(label))
+                self.table.setItem(row, 2, QTableWidgetItem(time_added))
+                self.table.setItem(row, 3, QTableWidgetItem(original_name))
+                self.table.setItem(row, 4, QTableWidgetItem(uuid_value))
+
+                logger.debug(f"Added row {row}: Authors={authors}, Label={label}, UUID={uuid_value}")
+
+        self.table.setSortingEnabled(True)
+        self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)
+
+    def open_directory(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "No Selection", "Please select an evidence entry.")
+            return
+
+        dataset = self.dataset_combo.currentText()
+        uuid_item = self.table.item(row, 4)
+        if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
+            QMessageBox.critical(self, "Invalid Entry", "Selected entry has no valid UUID.")
+            return
+
+        uuid = uuid_item.text()
+        path = self.directory / dataset / uuid
+        if not path.exists():
+            QMessageBox.critical(self, "Directory Missing", f"The directory {path} does not exist.")
+            return
+
+        try:
+            subprocess.run(["xdg-open", str(path)])
+        except subprocess.SubprocessError as e:
+            QMessageBox.critical(self, "Error Opening Directory", f"Failed to open directory: {str(e)}")
+
+    def create_label(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "No Selection", "Please select an evidence entry.")
+            return
+
+        dataset = self.dataset_combo.currentText()
+        uuid_item = self.table.item(row, 4)
+        if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
+            QMessageBox.critical(self, "Invalid Entry", "Selected entry has no valid UUID.")
+            return
+
+        uuid = uuid_item.text()
+        file_name = self.table.item(row, 3).text()
+        file_path = self.directory / dataset / uuid / file_name
+        label_file = file_path.parent / "label.tex"
+        csv_file = file_path.parent / "label.csv"
+        bib_file = file_path.parent / "label_table.bib"
+
+        try:
+            if not label_file.exists():
+                textpdf_to_latex(file_path, label_file)
+
+            # Open the labeller in VS Code and wait for it to close
+            subprocess.run(["code", "--wait", str(label_file)], check=True)
+
+            # After labeller closes, check for CSV and generate BibTeX
+            if csv_file.exists():
+                csv_to_bib(csv_file, bib_file, exclude_note=True)
+                logger.info(f"Generated BibTeX file: {bib_file}")
+            else:
+                logger.warning(f"CSV file {csv_file} not found after labelling")
+                QMessageBox.warning(
+                    self,
+                    "CSV Missing",
+                    f"No label.csv found in {file_path.parent}. BibTeX generation skipped."
+                )
+        except FileNotFoundError:
+            logger.error("VS Code not found. Please ensure 'code' is in your PATH.")
+            QMessageBox.critical(
+                self,
+                "VS Code Not Found",
+                "Visual Studio Code is not installed or not in your PATH. Please install VS Code or ensure the 'code' command is available."
+            )
+        except subprocess.SubprocessError as e:
+            logger.error(f"Error opening VS Code: {str(e)}")
+            QMessageBox.critical(
+                self, "Error Opening VS Code", f"Failed to open VS Code: {str(e)}"
+            )
+        except Exception as e:
+            logger.error(f"Error during label workflow: {str(e)}")
+            QMessageBox.critical(
+                self, "Label Workflow Error", f"An unexpected error occurred: {str(e)}"
+            )
+
+    def run_rebut(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.warning(
+                self, "No Selection", "Please select an evidence entry to rebut."
+            )
+            return
+
+        dataset = self.dataset_combo.currentText()
+        uuid_item = self.table.item(row, 4)
+        if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
+            QMessageBox.critical(self, "Invalid Entry", "Selected entry has no valid UUID.")
+            return
+
+        uuid = uuid_item.text()
+        workdir = self.directory / dataset / uuid
+
+        if not workdir.exists():
+            logger.warning(f"Working directory {workdir} does not exist for rebuttal")
+            QMessageBox.critical(
+                self,
+                "Directory Missing",
+                f"The evidence directory {workdir} does not exist. It may have been moved or deleted."
+            )
+            return
+
+        try:
+            rebut_doc(workdir)
+        except FileNotFoundError as e:
+            logger.warning(f"Rebuttal failed: {str(e)}")
+            QMessageBox.critical(
+                self,
+                "Rebuttal Failed",
+                f"Could not run rebuttal: {str(e)}. Ensure required files are available."
+            )
+        except Exception as e:
+            logger.warning(f"Unexpected error during rebuttal: {str(e)}")
+            QMessageBox.critical(
+                self, "Rebuttal Error", f"An unexpected error occurred: {str(e)}"
+            )
+
+
+# --- File: src/evid/core/rebut_doc.py ---
+from pathlib import Path
+import logging
+import bibtexparser as bib
+import subprocess
+
+logger = logging.getLogger(__name__)
+
+REBUT_TEMPLATE = r"""\documentclass[12pt]{article}
+    \usepackage{tabularx}
+    \usepackage{hyperref}
+    \usepackage[backend=biber,style=numeric,sorting=none]{biblatex}
+    \addbibresource{BIBPATH}
+    \usepackage[breakable]{tcolorbox}
+    \usepackage[danish]{babel}
+    \newcommand{\bcite}[1]{\begin{tcolorbox}[left skip=0cm,   size=fbox, arc=1mm, boxsep=0mm,left=1mm, right=1mm, top=1mm, bottom=1mm, colframe=black, colback=white,box align=base, breakable]
+    {\small \cite{#1}: \fullcite{#1}}
+    \end{tcolorbox}}
+    \usepackage{enumitem}
+    \newcounter{globalenumi}
+    
+    % Custom enumerate environment using the global counter
+    \newenvironment{cenum}
+    {
+        \begin{enumerate}
+            \setcounter{enumi}{\value{globalenumi}} % Set enumi to the global counter
+            }
+            {
+            \setcounter{globalenumi}{\value{enumi}} % Save enumi back to the global counter
+        \end{enumerate}
+    }
+
+\begin{document}
+\noindent\begin{tabularx}{\textwidth}{l|X}
+      \textbf{Topic}   &       \\
+      \textbf{Reference}&        \\
+      \textbf{Author}&        \\
+      \textbf{Date}  & \today \\
+\end{tabularx}
+
+\begin{cenum}
+POINTS
+\end{cenum}
+
+\printbibliography[title={Referencer}]
+
+\end{document}
+"""
+
+
+def base_rebuttal(bibfile: Path) -> str:
+    bibdb = bib.load(open(bibfile))
+
+    latex_body = ""
+    for row in bibdb.entries:
+        latex_body += (
+            f"\t% prompt: {row['nonote'] if 'nonote' in row else row['note']}\n"
+        )
+        latex_body += f"\t\\item Regarding: \\bcite{{{row['ID']}}} \n"
+
+    rebuttal_body = REBUT_TEMPLATE.replace("POINTS", latex_body).replace(
+        "BIBPATH", str(bibfile.absolute())
+    )
+    return rebuttal_body
+
+
+def write_rebuttal(body: str, output_file: Path):
+    if not output_file.exists():
+        with open(output_file, "w") as rebuttal_file:
+            rebuttal_file.write(body)
+            logger.info(f"Written a new {output_file}")
+    else:
+        logger.info(f"{output_file} already exists. Not overwriting.")
+
+
+def rebut_doc(workdir: Path):
+    """Generate rebuttal document from evidence directory."""
+    from .label_setup import csv_to_bib
+
+    csv_file = workdir / "label.csv"
+    bib_file = workdir / "label_table.bib"
+    rebut_file = workdir / "rebut.tex"
+
+    try:
+        if csv_file.exists():
+            csv_to_bib(csv_file, bib_file, exclude_note=True)
+        else:
+            raise FileNotFoundError(f"CSV file {csv_file} not found")
+
+        rebut_body = base_rebuttal(bib_file)
+        write_rebuttal(rebut_body, rebut_file)
+
+        if rebut_file.exists():
+            subprocess.run(["xdg-open", str(rebut_file)])
+        else:
+            logger.warning(f"Rebuttal file {rebut_file} was not generated")
+    except Exception as e:
+        logger.error(f"Failed to generate rebuttal: {str(e)}")
+        raise
+
+
+# --- File: src/evid/core/label_setup.py ---
+from pathlib import Path
+import fitz
+import re
+import yaml
+import pandas as pd
+import demoji
+from datetime import datetime
+
+
+LATEX_TEMPLATE = r"""
+\documentclass[parskip=full]{article}
+\nonstopmode
+
+%% HEADER
+
+\usepackage{xargs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  anchorcolor=blue,
+  filecolor=magenta,
+  urlcolor=cyan,
+}
+
+\usepackage{todonotes}
+\usepackage{etoolbox}
+\makeatletter
+\pretocmd{\@startsection}{\gdef\thesectiontype{#1}}{}{}
+\pretocmd{\@sect}{\@namedef{the\thesectiontype title}{#8}}{}{}
+\pretocmd{\@ssect}{\@namedef{the\thesectiontype title}{#5}}{}{}
+\makeatother
+
+\newwrite\textfile
+\immediate\openout\textfile=\jobname.csv
+\immediate\write\textfile{label ; quote ; note ; section title ; section no ; page ; date ; opage}
+
+
+\newcommandx{\lb}[3]{\immediate\write\textfile{#1 \space; #2 \space; #3 \space; \thesectiontitle \space;  \thesection  \space;  \thepage  \space;  \pdate \space; \thesubsectiontitle}%
+  \csdef{#1}{#2}%
+  \hypertarget{#1}{\textcolor{blue}{#2}}\todo[color=blue!10!white,caption={\small#1; #3; #2}]{#1: #3}%
+}
+
+\newcommandx{\cc}[1]{
+  \hyperlink{#1}{\csuse{#1}}
+}
+
+
+\newcommand{\sdate}[1]{%
+  \def\localdate{#1}%
+}
+
+\newcommand{\pdate}{%
+  \localdate%
+}
+
+\usepackage{scrextend}
+%% HEADER
+
+% \title{}
+
+\begin{document}
+\maketitle
+
+\tableofcontents
+\listoftodos[Labels]
+
+\sdate{DATE}
+
+\section{NAME}
+BODY
+
+\end{document}
+"""
+
+
+def clean_text_for_latex(text: str) -> str:
+    # Only escape specific LaTeX special characters as per test expectation
+    text = re.sub(r"([#%&])", r"\\\1", text)
+    text = re.sub(r"(\n\s*\n)+", r"\n\n", text)
+    return text
+
+
+def textpdf_to_latex(pdfname: Path, outputfile: Path = None) -> str:
+    info_file = pdfname.with_name("info.yml")
+    if info_file.exists():
+        with info_file.open() as f:
+            info = yaml.safe_load(f)
+            date = info.get("dates", "DATE")
+            if isinstance(date, list):
+                date = date[0] if date else "DATE"
+            # Ensure date is a string
+            date = str(date)
+            name = info.get("label", "label")
+    else:
+        date, name = "DATE", "NAME"
+
+    pdf = fitz.open(pdfname)
+    text = "".join(
+        f"\\subsection{{{i.number}}}\n\n{clean_text_for_latex(i.get_text())}"
+        for i in pdf
+    )
+    pdf.close()
+
+    out = (
+        LATEX_TEMPLATE.replace("BODY", text)
+        .replace("DATE", date)
+        .replace("NAME", name.replace("_", " "))
+    )
+
+    if outputfile:
+        outputfile.write_text(out)
+    return out
+
+
+def replace_multiple_spaces(s):
+    try:
+        return re.sub(r" +", " ", s)
+    except TypeError:
+        print(s)
+        return ""
+
+
+def replace_underscores(s):
+    try:
+        return re.sub(r"_", " ", s)
+    except TypeError:
+        print(s)
+        return ""
+
+
+def remove_curly_brace_content(s):
+    try:
+        return re.sub(r"\{.*?\}", "", s).replace(".06em", "")
+    except TypeError:
+        print(s)
+        return ""
+
+
+def remove_backslash_substrings(s):
+    try:
+        return re.sub(r"\\[^ ]*", "", s)
+    except TypeError:
+        print(s)
+        return ""
+
+
+def emojis_to_text(s):
+    # Replace all emojis in the content
+    return demoji.replace(s, "(emoji)")
+
+
+def load_uuid_prefix(csv_file_path: Path) -> str:
+    info_file = csv_file_path.with_name("info.yml")
+    if info_file.exists():
+        with info_file.open("r") as info_file:
+            info_data = yaml.safe_load(info_file)
+            if "uuid" in info_data:
+                return info_data["uuid"][:4]
+    return ""
+
+
+def load_url(csv_file_path: Path) -> str:
+    info_file = csv_file_path.with_name("info.yml")
+    if info_file.exists():
+        with info_file.open("r") as info_file:
+            info_data = yaml.safe_load(info_file)
+            if "url" in info_data:
+                return info_data["url"]
+    return ""
+
+
+def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
+    df = pd.read_csv(csv_file, sep=" ; ", engine="python")
+    df["date"] = pd.to_datetime(df["date"], dayfirst=False, errors="coerce")
+    uuid_prefix = load_uuid_prefix(csv_file)
+
+    df["latex_label"] = [f"{uuid_prefix}:{label.strip()}" for label in df["label"]]
+
+    with open(output_file, "w") as bibtex_file:
+        for index, row in df.iterrows():
+            label_title = row["latex_label"]
+            bibtex_entry = f"""@article{{ {label_title}  ,
+    note = {{{row["note"]}}},
+    title = {{{replace_underscores(replace_multiple_spaces(remove_backslash_substrings(row["quote"])))}}},
+    journal = {{{replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row["section title"]))))}}},
+    date = {{{row["date"].strftime("%Y-%m-%d") if not pd.isnull(row["date"]) else ""}}},
+    pages = {{{int(row["opage"]) + 1 if "opage" in row and not pd.isnull(row["opage"]) else ""}}},
+    url = {{{load_url(csv_file)}}},
+    }}
+    """
+
+            if exclude_note:
+                bibtex_entry = bibtex_entry.replace("note =", "nonote =")
+            bibtex_file.write(emojis_to_text(bibtex_entry))
+
+
+# --- File: src/evid/core/database.py ---
+import yaml
+from pathlib import Path
+from typing import Dict, List
+from evid import DEFAULT_DIR
+
+class Database:
+    def __init__(self, db_path: Path = DEFAULT_DIR, datasets: List[str] = None):
+        self.db: Dict[str, Dict] = {}
+        if datasets is None:
+            datasets = [
+                d.name
+                for d in db_path.iterdir()
+                if d.is_dir() and not d.name.startswith(".")
+            ]
+        for dataset in datasets:
+            self.db[dataset] = {}
+            for info_file in db_path.glob(f"{dataset}/**/info.yml"):
+                try:
+                    with info_file.open() as f:
+                        entry = yaml.safe_load(f)
+                        key = f"{entry.get('title', '')} {entry['uuid']}"
+                        self.db[dataset][key] = entry
+                except Exception:
+                    continue
+
+    def get_filenames(self) -> List[str]:
+        return [entry["original_name"] for dataset in self.db.values() for entry in dataset.values() if "original_name" in entry]
+
+
+# --- File: src/evid/utils/text.py ---
+from pathlib import Path
+
+def normalize_text(text: str | bytes | None, default: str = "") -> str:
+    """Normalize text to UTF-8, preserving Danish characters (æ, ø, å)."""
+    if text is None:
+        return default
+    if isinstance(text, bytes):
+        try:
+            text = text.decode("utf-8")
+        except UnicodeDecodeError:
+            text = text.decode("latin-1", errors="replace")
+    text = str(text).strip()
+    return text
+
+
+# --- File: docs/index.md ---
+MD:# evid - PDF Document Manager
+MD:
+MD:`evid` is a Python-based tool designed for creating and managing datasets of PDF documents with associated metadata and labels. It enables easy citation of documents and supports generating responses using Large Language Models (LLMs) by organizing documents with metadata and LaTeX-based labelling. The tool features a user-friendly PyQt6 GUI for adding and browsing documents, making it ideal for researchers, professionals, and anyone needing to manage PDF-based datasets.
+MD:
+MD:## Key Features
+MD:
+MD:- **PDF Logging**: Add PDFs with metadata such as title, authors, tags, and dates.
+MD:- **Automatic Date Extraction**: Extract dates from PDFs using advanced text parsing.
+MD:- **PyQt6 GUI**: Intuitive interface with tabs for adding and browsing documents.
+MD:- **LaTeX Integration**: Generate LaTeX documents for labels and responses, with BibTeX support for citations.
+MD:- **Modular Database**: Organize documents into datasets with YAML-based metadata storage.
+MD:
+MD:## Getting Started
+MD:
+MD:- [Installation Guide](installation.md): Set up `evid` on your system.
+MD:- [Usage Guide](usage.md): Learn how to add, browse, and manage documents.
+MD:- [Development](development.md): Contribute to `evid` or extend its functionality.
+MD:
+MD:## Quick Start
+MD:
+MD:```bash
+MD:git clone <repository-url>
+MD:cd evid
+MD:poetry install
+MD:poetry run evid gui
+MD:```
+MD:
+MD:
+
+# --- File: docs/development.md ---
+MD:# Development Guide
+MD:
+MD:This guide is for developers looking to contribute to or extend `evid`, a tool for managing PDF documents with metadata and labels.
+MD:
+MD:## Project Structure
+MD:
+MD:```
+MD:evid/
+MD:├── src/
+MD:│   ├── evid/
+MD:│   │   ├── core/           # Core functionality (database, date extraction, LaTeX)
+MD:│   │   ├── gui/            # PyQt6 GUI components
+MD:│   │   └── __init__.py     # Package metadata
+MD:├── tests/                  # Unit tests
+MD:├── docs/                   # MkDocs documentation
+MD:├── .github/workflows/      # CI pipeline
+MD:├── pyproject.toml          # Poetry configuration
+MD:├── README.md               # Project overview
+MD:└── mkdocs.yml              # MkDocs configuration
+MD:```
+MD:
+MD:## Setting Up for Development
+MD:
+MD:1. **Clone and Install**:
+MD:
+MD:   ```bash
+MD:   git clone <repository-url>
+MD:   cd evid
+MD:   poetry install --with dev
+MD:   ```
+MD:
+MD:   The `--with dev` flag includes testing dependencies like `pytest` and `pytest-qt`.
+MD:
+MD:2. **Run Tests**:
+MD:
+MD:   ```bash
+MD:   poetry run pytest
+MD:   ```
+MD:
+MD:   Tests cover date extraction, GUI components, LaTeX generation, and database functionality.
+MD:
+MD:## Contributing
+MD:
+MD:1. **Fork and Branch**:
+MD:   - Fork the repository and create a feature branch: `git checkout -b feature/your-feature`.
+MD:
+MD:2. **Code Style**:
+MD:   - Follow PEP 8 for Python code.
+MD:   - Use type hints where applicable (see `src/evid/core/` for examples).
+MD:   - Add docstrings for public functions and classes.
+MD:
+MD:3. **Add Tests**:
+MD:   - Add unit tests in the `tests/` directory for new functionality.
+MD:   - Use `pytest` fixtures for setup (e.g., `temp_pdf` in `test_dateextract.py`).
+MD:
+MD:4. **Update Documentation**:
+MD:   - Modify `docs/` files for new features or changes.
+MD:   - Preview documentation locally:
+MD:
+MD:     ```bash
+MD:     poetry run mkdocs serve
+MD:     ```
+MD:
+MD:5. **Submit a Pull Request**:
+MD:   - Push your branch and create a PR against the `main` branch.
+MD:   - Ensure the CI pipeline passes (runs `pytest` on Ubuntu with Python 3.9).
+MD:
+MD:## Extending evid
+MD:
+MD:- **New GUI Tabs**: Add new classes in `src/evid/gui/tabs/` and register them in `src/evid/gui/main.py`.
+MD:- **Custom Metadata**: Extend `info.yml` fields in `src/evid/gui/tabs/add_evidence.py`.
+MD:- **LaTeX Templates**: Modify templates in `src/evid/core/label_setup.py` or `src/evid/core/rebut_doc.py`.
+MD:
+MD:For issues or feature requests, check the repository's issue tracker.
+MD:
+
+# --- File: docs/installation.md ---
+MD:# Installation
+MD:
+MD:This guide covers how to install `evid` on your system using Poetry, the project's dependency manager.
+MD:
+MD:## Prerequisites
+MD:
+MD:- **Python**: Version 3.9 or higher (but less than 4.0).
+MD:- **Poetry**: For dependency management and virtual environment setup.
+MD:- **Git**: To clone the repository.
+MD:- **Optional**: A LaTeX distribution (e.g., TeX Live) for generating LaTeX documents.
+MD:
+MD:## Step-by-Step Installation
+MD:
+MD:1. **Clone the Repository**
+MD:
+MD:   ```bash
+MD:   git clone <repository-url>
+MD:   cd evid
+MD:   ```
+MD:
+MD:2. **Install Poetry**
+MD:
+MD:   If you don't have Poetry installed, run:
+MD:
+MD:   ```bash
+MD:   curl -sSL https://install.python-poetry.org | python3 -
+MD:   ```
+MD:
+MD:   Ensure Poetry is in your PATH. On Linux/macOS, you may need to add:
+MD:
+MD:   ```bash
+MD:   export PATH="$HOME/.local/bin:$PATH"
+MD:   ```
+MD:
+MD:3. **Install Dependencies**
+MD:
+MD:   Use Poetry to install all required dependencies:
+MD:
+MD:   ```bash
+MD:   poetry install
+MD:   ```
+MD:
+MD:   This sets up a virtual environment and installs dependencies like `PyQt6`, `pymupdf`, and `pyyaml`.
+MD:
+MD:4. **Verify Installation**
+MD:
+MD:   Run the application to ensure it launches:
+MD:
+MD:   ```bash
+MD:   poetry run evid
+MD:   ```
+MD:
+MD:   This should open the `evid` GUI.
+MD:
+MD:## Troubleshooting
+MD:
+MD:- **Poetry errors**: Ensure Python 3.9+ is installed and Poetry is correctly configured. Try `poetry env use python3.9` if Poetry uses the wrong Python version.
+MD:- **Missing LaTeX**: If LaTeX documents fail to generate, install a LaTeX distribution like TeX Live.
+MD:- **GUI issues**: Verify that `PyQt6` is installed correctly. Check for Qt-related errors in the terminal output.
+MD:
+MD:For further help, check the [Development](development.md) section or file an issue on the repository.
+MD:
+
+# --- File: docs/usage.md ---
+MD:# Usage Guide
+MD:
+MD:This guide explains how to use evid to manage PDF documents through its PyQt6-based GUI or command-line interface (CLI).
+MD:
+MD:## Configuration
+MD:
+MD:You can configure the default database location by creating a `~/.evidrc` file in YAML format. Example:
+MD:
+MD:```yaml
+MD:default_dir: ~/my_custom_evid_db
+MD:```
+MD:
+MD:If no `.evidrc` file is found, the default database location is `~/Documents/evid`.
+MD:
+MD:## Launching the Application
+MD:
+MD:Launch the GUI with:
+MD:
+MD:```bash
+MD:poetry run evid gui
+MD:```
+MD:
+MD:This opens the GUI with two tabs: Add and Browse.
+MD:
+MD:Alternatively, use the CLI to view available commands:
+MD:
+MD:```bash
+MD:poetry run evid --help
+MD:```
+MD:
+MD:## Creating Datasets
+MD:
+MD:### Via GUI
+MD:
+MD:In the Add tab, enter a new dataset name in the "New Dataset" field and click Create.
+MD:
+MD:### Via CLI
+MD:
+MD:Create a new dataset with:
+MD:
+MD:```bash
+MD:poetry run evid create-dataset <dataset_name>
+MD:```
+MD:
+MD:This creates a new dataset directory in the default database location.
+MD:
+MD:## Adding Documents
+MD:
+MD:### Via GUI
+MD:
+MD:Use the Add tab to log PDFs with metadata.
+MD:
+MD:1. Select or Create a Dataset:
+MD:   - Choose an existing dataset from the dropdown or enter a new dataset name and click Create.
+MD:   - Datasets are folders in the default database directory where documents are stored.
+MD:
+MD:2. Add a PDF:
+MD:   - Click Browse to select a local PDF or enter a URL and click Quick Add URL.
+MD:   - The GUI auto-fills metadata (title, authors, dates) from the PDF if possible.
+MD:
+MD:3. Fill Metadata:
+MD:   - Edit fields like Title, Authors, Tags, Dates, Label, and URL.
+MD:   - Preview the metadata in the preview pane.
+MD:   - Note: Metadata fields like title and authors are stored as plain text in `info.yml` for readability, with Danish characters (æ, ø, å) preserved.
+MD:
+MD:4. Save Document:
+MD:   - Click Add to save the PDF and metadata to a unique folder in the selected dataset.
+MD:   - Metadata is stored in an info.yml file alongside the PDF.
+MD:
+MD:### Via CLI
+MD:
+MD:Add PDFs using the CLI with the following command:
+MD:
+MD:- Add a PDF (from URL or local file):
+MD:
+MD:```bash
+MD:poetry run evid add <url_or_path> [--dataset <dataset>]
+MD:```
+MD:
+MD:If `--dataset` is not provided, the CLI prompts you to select an existing dataset or create a new one. The `add` command automatically detects whether the input is a URL (starting with `http://` or `https://`) or a local file path. After adding, it prints the metadata to stdout and prompts to open the `info.yml` file in Visual Studio Code.
+MD:
+MD:## Browsing Documents
+MD:
+MD:Use the Browse tab in the GUI to view and manage existing documents.
+MD:
+MD:1. Load a Dataset:
+MD:   - Select a dataset from the dropdown and click Load.
+MD:   - The table displays metadata (Author, Title, Date, File Name, UUID) for each document entry.
+MD:
+MD:2. View Details:
+MD:   - Select a row and click Open Dir to view the document folder in your file explorer.
+MD:
+MD:3. Create Labels:
+MD:   - Select an entry and click Label to generate a LaTeX document (label.tex) from the PDF.
+MD:   - Edit the LaTeX file in Visual Studio Code (Ctrl+L inserts a \lb snippet) to add labels.
+MD:   - Save the file to generate a label.csv, which is then converted to label_table.bib.
+MD:
+MD:4. Generate Responses:
+MD:   - Select an entry and click Rebut to create a response document (rebut.tex) using the BibTeX file.
+MD:   - The response lists citations with notes, formatted in LaTeX, suitable for LLM integration.
+MD:
+MD:## Labelling
+MD:- When selecting a document and pressing the "Label" button, a LaTeX document is generated that contains the extracted text from the PDF. 
+MD:The LaTeX document is saved in the same folder as the PDF. 
+MD:
+MD:- The user can now label using their text editor inside the LaTeX document, for vscode, the following keybinding will allow labelling by selecting text and pressing `ctrl+l`:
+MD:```json 
+MD:[
+MD:    {
+MD:        "key": "ctrl+l",
+MD:        "command": "editor.action.insertSnippet",
+MD:        "when": "editorTextFocus && editorLangId == 'latex'",
+MD:        "args": {
+MD:            "snippet": "\\lb{$1}{${TM_SELECTED_TEXT}}{$2}"
+MD:        }
+MD:    }
+MD:]
+MD:```
+MD:The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).
+MD:
+MD:- The header in the LaTeX document causes LaTeX compilation to write the labels to `label.csv`. 
+MD:- The csv file is translated to `label_table.bib` upon exiting the label editor (i.e. closing `vscode`).  
+MD:- The `label_table.bib` files for each pdf can be concatenated, and used to formulate a rebuttal. 
+MD:  - Note that the first 4 characters of the pdf's uuid are used as a prefix for the bibtex label, this means that the labels only have to have a unique ID for the same pdf, not across all pdfs in the dataset. 
+MD:
+MD:## Tips
+MD:
+MD:- Date Extraction: evid automatically extracts dates from PDFs in various formats (e.g., "12/01/2023", "15. januar 2024").
+MD:- LaTeX Setup: Ensure a LaTeX distribution is installed for label and response generation.
+MD:- VS Code Integration: Use the provided .vscode/keybindings.json for a Ctrl+L shortcut in LaTeX files.
+MD:
+MD:For development details, see the Development section.
+
+# --- File: tests/test_cli.py ---
+import pytest
+from unittest.mock import patch
+from pathlib import Path
+from evid.cli import get_datasets, select_dataset, add_evidence, create_dataset
+import yaml
+
+
+@pytest.fixture
+def temp_dir(tmp_path):
+    dataset1 = tmp_path / "dataset1"
+    dataset2 = tmp_path / "dataset2"
+    dataset1.mkdir()
+    dataset2.mkdir()
+    return tmp_path
+
+
+def test_get_datasets(temp_dir):
+    datasets = get_datasets(temp_dir)
+    assert sorted(datasets) == ["dataset1", "dataset2"]
+
+
+@patch("builtins.input", side_effect=["1"])
+def test_select_dataset_existing(mock_input, temp_dir):
+    dataset = select_dataset(temp_dir)
+    assert dataset in ["dataset1", "dataset2"]
+
+
+@patch("builtins.input", side_effect=["3", "new_dataset"])
+def test_select_dataset_create_new(mock_input, temp_dir):
+    dataset = select_dataset(temp_dir)
+    assert dataset == "new_dataset"
+    assert (temp_dir / "new_dataset").exists()
+
+
+def test_create_dataset(temp_dir):
+    dataset_name = "new_dataset"
+    create_dataset(temp_dir, dataset_name)
+    assert (temp_dir / dataset_name).exists()
+
+
+@pytest.mark.skip(reason="Visual inspection required, no automated check implemented")
+@patch("subprocess.run")
+def test_add_evidence_local_pdf_with_label(mock_run, temp_dir, tmp_path):
+    pdf_path = tmp_path / "test.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")  # Minimal PDF
+    add_evidence(temp_dir, "dataset1", str(pdf_path), label=True)
+
+    dataset_path = temp_dir / "dataset1"
+    uuid_dirs = [d for d in dataset_path.iterdir() if d.is_dir()]
+    assert len(uuid_dirs) == 1
+    uuid_dir = uuid_dirs[0]
+    assert (uuid_dir / "test.pdf").exists()
+    assert (uuid_dir / "info.yml").exists()
+
+    with (uuid_dir / "info.yml").open("r") as f:
+        info = yaml.safe_load(f)
+        assert info["original_name"] == "test.pdf"
+        assert info["title"] == "test"
+        assert info["label"] == "test"
+
+    # Check that subprocess.run was called for labeling
+    mock_run.assert_called_once_with(
+        ["code", "--wait", str(uuid_dir / "label.tex")], check=True
+    )
+
+
+# --- File: tests/test_gui_add_evidence.py ---
+import pytest
+from PyQt6.QtWidgets import QApplication
+from evid.gui.tabs.add_evidence import AddEvidenceTab
+from pathlib import Path
+import sys
+
+
+@pytest.fixture
+def add_tab(tmp_path):
+    app = QApplication(sys.argv)  # Required for PyQt
+    tab = AddEvidenceTab(tmp_path)
+    yield tab
+    app.quit()
+
+
+@pytest.mark.skip("Skipping test_add_evidence for now")
+def test_add_evidence_missing_fields(add_tab):
+    # Simulate missing fields by not filling anything
+    add_tab.dataset_combo.clear()  # No dataset selected
+    result = add_tab.add_evidence()
+    assert result is None  # Should return None due to validation
+
+
+@pytest.mark.skip("Skipping test_create_dataset for now")
+def test_create_dataset(add_tab, tmp_path):
+    dataset_name = "test_dataset"
+    add_tab.new_dataset_input.setText(dataset_name)
+    add_tab.create_dataset()
+
+    assert dataset_name in add_tab.get_datasets()
+    assert (tmp_path / dataset_name).exists()
+
+
+# --- File: tests/test_label_setup.py ---
+import pytest
+from pathlib import Path
+import fitz
+from evid.core.label_setup import textpdf_to_latex, clean_text_for_latex
+
+@pytest.fixture
+def temp_pdf_with_info(tmp_path):
+    pdf_path = tmp_path / "test.pdf"
+    info_path = tmp_path / "info.yml"
+    
+    # Create a simple PDF
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "Sample text with #special chars")
+    doc.save(pdf_path)
+    
+    # Create info.yml
+    with info_path.open("w") as f:
+        f.write("dates: 2023-01-01\nlabel: test_label")
+    
+    yield pdf_path, info_path
+    doc.close()
+
+def test_clean_text_for_latex():
+    text = "Text with #special & chars\n\n\nExtra newlines"
+    cleaned = clean_text_for_latex(text)
+    assert cleaned == "Text with \\#special \\& chars\n\nExtra newlines"
+
+def test_textpdf_to_latex(temp_pdf_with_info):
+    pdf_path, _ = temp_pdf_with_info
+    latex = textpdf_to_latex(pdf_path)
+    
+    assert "\\sdate{2023-01-01}" in latex
+    assert "\\section{test label}" in latex
+    assert "\\subsection{0}" in latex
+    assert "Sample text with \\#special chars" in latex
+    assert "\\end{document}" in latex
+
+def test_textpdf_to_latex_no_info(tmp_path):
+    pdf_path = tmp_path / "test.pdf"
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "No info file")
+    doc.save(pdf_path)
+    
+    latex = textpdf_to_latex(pdf_path)
+    assert "\\sdate{DATE}" in latex
+    assert "\\section{NAME}" in latex
+    assert "No info file" in latex
+    
+    doc.close()
+
+
+# --- File: tests/test_gui_browse_evidence.py ---
+import pytest
+from PyQt6.QtWidgets import QApplication
+from evid.gui.tabs.browse_evidence import BrowseEvidenceTab
+from pathlib import Path
+import yaml
+import sys
+
+
+@pytest.fixture
+def browse_tab(tmp_path):
+    app = QApplication(sys.argv)
+    tab = BrowseEvidenceTab(tmp_path)
+    yield tab
+    app.quit()
+
+
+@pytest.fixture
+def setup_dataset(tmp_path):
+    dataset_path = tmp_path / "test_dataset"
+    entry = dataset_path / "uuid"
+    entry.mkdir(parents=True)
+    with (entry / "info.yml").open("w") as f:
+        yaml.dump(
+            {
+                "authors": "Author",
+                "label": "Test",
+                "time_added": "2023-01-01",
+                "original_name": "test.pdf",
+                "uuid": "uuid",
+            },
+            f,
+        )
+    return "test_dataset"
+
+
+@pytest.mark.skip("Skipping test_load_metadata for now")
+def test_load_metadata_valid(browse_tab, setup_dataset):
+    browse_tab.dataset_combo.addItem(setup_dataset)
+    browse_tab.load_metadata()
+
+    assert browse_tab.table.rowCount() == 1
+    assert browse_tab.table.item(0, 0).text() == "Author"
+    assert browse_tab.table.item(0, 1).text() == "Test"
+
+
+@pytest.mark.skip("Skipping test_load_metadata for now")
+def test_load_metadata_empty_info(browse_tab, tmp_path):
+    dataset_path = tmp_path / "empty_dataset"
+    entry = dataset_path / "uuid"
+    entry.mkdir(parents=True)
+    (entry / "info.yml").touch
+
+
+# --- File: tests/test_rebut_doc.py ---
+import pytest
+from pathlib import Path
+import subprocess
+from unittest.mock import patch
+from evid.core.rebut_doc import rebut_doc
+
+
+@pytest.fixture
+def temp_workdir(tmp_path):
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    (workdir / "label.csv").touch()  # Mock label.csv existence
+    yield workdir
+
+
+@pytest.mark.skip("Skipping test_rebut_doc_success")
+@patch("subprocess.run")
+def test_rebut_doc_success(mock_run, temp_workdir):
+    output_path = Path.home() / "Documents/fct_output"
+    rebut_tex = output_path / "rebut.tex"
+
+    # Mock subprocess.run to simulate successful execution
+    mock_run.side_effect = [
+        subprocess.CompletedProcess(args=["fct_csvbib"], returncode=0),
+        subprocess.CompletedProcess(args=["fct_rebut"], returncode=0),
+        subprocess.CompletedProcess(args=["xdg-open"], returncode=0),
+    ]
+
+    # Mock rebut.tex existence
+    with patch("pathlib.Path.exists", return_value=True):
+        rebut_doc(temp_workdir)
+
+    assert mock_run.call_count == 3
+    mock_run.assert_any_call(
+        ["fct_csvbib", "label.csv", "-n"], cwd=temp_workdir, check=True
+    )
+    mock_run.assert_any_call(
+        ["fct_rebut", str(temp_workdir / "label_table.bib")],
+        cwd=output_path,
+        check=True,
+    )
+    mock_run.assert_any_call(["xdg-open", str(rebut_tex)])
+
+
+@pytest.mark.skip("Skipping test_rebut_doc_no_label")
+@patch("subprocess.run")
+def test_rebut_doc_missing_file(mock_run, temp_workdir):
+    mock_run.side_effect = subprocess.CalledProcessError(1, ["fct_csvbib"])
+
+    with pytest.raises(FileNotFoundError) as exc_info:
+        rebut_doc(temp_workdir)
+
+    assert "Command failed: ['fct_csvbib'" in str(exc_info.value)
+
+
+# --- File: tests/test_database.py ---
+import pytest
+from pathlib import Path
+import yaml
+from evid.core.database import Database
+
+
+@pytest.fixture
+def temp_dataset(tmp_path):
+    dataset_path = tmp_path / "dataset"
+    entry1 = dataset_path / "uuid1"
+    entry2 = dataset_path / "uuid2"
+    entry1.mkdir(parents=True)
+    entry2.mkdir(parents=True)
+
+    with (entry1 / "info.yml").open("w") as f:
+        yaml.dump({"title": "Doc1", "uuid": "uuid1", "original_name": "doc1.pdf"}, f)
+    with (entry2 / "info.yml").open("w") as f:
+        yaml.dump({"title": "Doc2", "uuid": "uuid2", "original_name": "doc2.pdf"}, f)
+
+    yield tmp_path, ["dataset"]
+
+
+def test_database_init_and_filenames(temp_dataset):
+    db_path, datasets = temp_dataset
+    db = Database(db_path, datasets)
+
+    assert "dataset" in db.db
+    assert len(db.db["dataset"]) == 2
+    assert "Doc1 uuid1" in db.db["dataset"]
+    assert "Doc2 uuid2" in db.db["dataset"]
+
+    filenames = db.get_filenames()
+    assert sorted(filenames) == ["doc1.pdf", "doc2.pdf"]
+
+
+def test_database_with_invalid_entry(tmp_path):
+    dataset_path = tmp_path / "dataset"
+    entry = dataset_path / "uuid"
+    entry.mkdir(parents=True)
+
+    with (entry / "info.yml").open("w") as f:
+        f.write("invalid: yaml: here")  # Valid YAML but not a complete entry
+
+    db = Database(tmp_path, ["dataset"])
+    assert "dataset" in db.db
+    assert len(db.db["dataset"]) == 0  # Invalid entry skipped
+
+
+# --- File: .github/workflows/ci.yml ---
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - cli
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-xinput0 libfontconfig1 libx11-xcb1 libgl1 libglu1-mesa libopengl0 libxcb-glx0 xvfb
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          poetry install --with dev
+
+      - name: Run tests
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" poetry run pytest --verbose
+
+      - name: Check exit code
+        run: |
+          if [ $? -ne 0 ]; then
+            echo "Tests failed"
+            exit 1
+          fi
+
+  deploy-docs:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          poetry install
+          poetry run pip install mkdocs mkdocs-material
+
+      - name: Build MkDocs site
+        run: |
+          poetry run mkdocs build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          personal_token: ${{ secrets.DEPLOY_TOKEN }}
+          publish_dir: ./site
+          force_orphan: true
+
+
