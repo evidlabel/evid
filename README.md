@@ -54,6 +54,3 @@ The first field is the label attached (generally a short descriptive string), th
 - The `label_table.bib` files for each pdf can be concatenated, and used to formulate a rebuttal. 
   - Note that the first 4 characters of the pdf's uuid are used as a prefix for the bibtex label, this means that the labels only have to have a unique ID for the same pdf, not across all pdfs in the dataset. 
 
-## GUI Screenshots
-![Document addition](https://github.com/user-attachments/assets/a268eb79-0d46-40d8-9112-1f963d900b5c)
-![Document browsing](https://github.com/user-attachments/assets/0e723c4c-9e79-4108-8ee2-a62750e3fcd0)
