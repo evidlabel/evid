@@ -86,39 +86,42 @@ class EvidenceManagerApp(QMainWindow):
     def setup_shortcuts(self):
         """Setup keyboard shortcuts for tab navigation, app closing, labeling, and BibTeX generation."""
         # Ctrl+PageUp to switch to previous tab
-        QShortcut(
+        prev_tab_shortcut = QShortcut(
             QKeySequence("Ctrl+PageUp"),
             self,
-            lambda: self.tabs.setCurrentIndex(self.tabs.currentIndex() - 1)
+            lambda: self.tabs.setCurrentIndex(self.tabs.currentIndex() - 1),
         )
+        prev_tab_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
 
         # Ctrl+PageDown to switch to next tab
-        QShortcut(
+        next_tab_shortcut = QShortcut(
             QKeySequence("Ctrl+PageDown"),
             self,
-            lambda: self.tabs.setCurrentIndex(self.tabs.currentIndex() + 1)
+            lambda: self.tabs.setCurrentIndex(self.tabs.currentIndex() + 1),
         )
+        next_tab_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
 
         # Ctrl+W to close the application
-        QShortcut(
-            QKeySequence("Ctrl+W"),
-            self,
-            self.close
-        )
+        QShortcut(QKeySequence("Ctrl+W"), self, self.close)
 
         # Ctrl+L to trigger labeling in Browse tab
         QShortcut(
             QKeySequence("Ctrl+L"),
             self,
-            lambda: self.browse_tab.create_labels() if self.tabs.currentWidget() == self.browse_tab else None
+            lambda: self.browse_tab.create_labels()
+            if self.tabs.currentWidget() == self.browse_tab
+            else None,
         )
 
         # Ctrl+B to trigger BibTeX generation in Browse tab
         QShortcut(
             QKeySequence("Ctrl+B"),
             self,
-            lambda: self.browse_tab.generate_bibtex() if self.tabs.currentWidget() == self.browse_tab else None
+            lambda: self.browse_tab.generate_bibtex()
+            if self.tabs.currentWidget() == self.browse_tab
+            else None,
         )
+
 
 def main(directory=DEFAULT_DIR):
     app = QApplication(sys.argv)
