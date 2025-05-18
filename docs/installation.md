@@ -6,7 +6,7 @@ This guide covers how to install `evid` on your system using Poetry, the project
 
 - **Python**: Version 3.9 or higher (but less than 4.0).
 - **Poetry**: For dependency management and virtual environment setup.
-- **Git**: To clone the repository.
+- **Git**: To clone the repository and enable optional Git-based version control for datasets.
 - **Optional**: A LaTeX distribution (e.g., TeX Live) for generating LaTeX documents.
 - **For WSL2 (Windows)**: A Linux distribution (e.g., Ubuntu) installed via WSL2, plus additional system dependencies for GUI support.
 
@@ -44,7 +44,24 @@ These steps work for Linux, macOS, or Windows (if using native Python without WS
 
    On Windows (without WSL2), Poetry is typically added to your PATH automatically, but you can verify by running `poetry --version` in a Command Prompt.
 
-3. **Install Dependencies**
+3. **Install System Dependencies (Linux/macOS)**
+
+   For Linux, install the following dependencies to support the GUI and optional Git features:
+
+   ```bash
+   sudo apt update
+   sudo apt install -y git python3 python3-pip python3-dev qt6-base-dev libx11-xcb1 libxcb-cursor0 libegl1 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-xinput0 libfontconfig1 libgl1 libglu1-mesa libopengl0 libxcb-glx0
+   ```
+
+   For macOS, use Homebrew to install Git:
+
+   ```bash
+   brew install git
+   ```
+
+   Note: Some Qt6 dependencies may require additional setup on macOS; consult the [PyQt6 documentation](https://www.riverbankcomputing.com/static/Docs/PyQt6/installation.html) if issues arise.
+
+4. **Install Dependencies**
 
    Use Poetry to install all required dependencies:
 
@@ -52,9 +69,9 @@ These steps work for Linux, macOS, or Windows (if using native Python without WS
    poetry install
    ```
 
-   This sets up a virtual environment and installs dependencies like `PyQt6`, `pymupdf`, and `pyyaml`.
+   This sets up a virtual environment and installs dependencies like `PyQt6`, `pymupdf`, `pyyaml`, and `gitpython` (for optional Git support).
 
-4. **Verify Installation**
+5. **Verify Installation**
 
    Run the application to ensure it launches:
 
@@ -119,19 +136,13 @@ To display the `evid` GUI in WSL2, you need an X server on Windows to handle Lin
    - Enter your Ubuntu password when prompted.
 
 3. **Install Required Dependencies**:
-   - Install the system dependencies needed for `PyQt6` and GUI functionality:
+   - Install the system dependencies needed for `PyQt6` and GUI functionality, plus Git for version control:
       ```bash
-      sudo apt install -y python3 python3-pip python3-dev qt6-base-dev libx11-xcb1 libxcb-cursor0 libegl1 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-xinput0 libfontconfig1 libgl1 libglu1-mesa libopengl0 libxcb-glx0
+      sudo apt install -y git python3 python3-pip python3-dev qt6-base-dev libx11-xcb1 libxcb-cursor0 libegl1 libxkbcommon-x11-0 libxcb-xinerama0 libxcb-xinput0 libfontconfig1 libgl1 libglu1-mesa libopengl0 libxcb-glx0
       ```
    - These packages ensure that the GUI and graphical components work correctly in WSL2.
 
-4. **Install Git**:
-   - Install Git to clone the repository:
-      ```bash
-      sudo apt install -y git
-      ```
-
-5. **Optional: Install LaTeX**:
+4. **Optional: Install LaTeX**:
    - To generate LaTeX documents (e.g., for labels and rebuttals), install TeX Live:
       ```bash
       sudo apt install -y texlive-full
@@ -193,7 +204,7 @@ To display the `evid` GUI in WSL2, you need an X server on Windows to handle Lin
 ### Troubleshooting WSL2
 
 - **GUI Doesn't Appear**: Ensure XLaunch is running and the `DISPLAY` variable is set correctly. Try restarting XLaunch and running `export DISPLAY=:0` in the Ubuntu terminal.
-- **Dependency Errors**: If `poetry install` fails, ensure all system dependencies were installed (`qt6-base-dev`, etc.). Re-run `sudo apt install` for missing packages.
+- **Dependency Errors**: If `poetry install` fails, ensure all system dependencies were installed (`qt6-base-dev`, `git`, etc.). Re-run `sudo apt install` for missing packages.
 - **Slow Performance**: Ensure your WSL2 instance has enough memory (check via `wsl --list --verbose`). You can allocate more resources in a `.wslconfig` file (search online for WSL2 performance tuning).
 - **LaTeX Issues**: If LaTeX documents fail to generate, verify that `texlive-full` is installed or install specific LaTeX packages as needed.
 

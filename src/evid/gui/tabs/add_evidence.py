@@ -21,6 +21,9 @@ from io import BytesIO
 import pypdf
 from evid import DEFAULT_DIR
 from evid.utils.text import normalize_text
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class AddEvidenceTab(QWidget):
@@ -131,7 +134,7 @@ class AddEvidenceTab(QWidget):
         date = meta.get("/CreationDate") or meta.get("/ModDate")
         date = normalize_text(date)
         if date and date.startswith("D:"):
-            # Format: D:YYYYMMDDHHmmSS
+            # Format: D:YYYYMMDDHHmmSS{SD:16}HHmmSS
             date = date[2:10]  # YYYYMMDD
             date = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
         else:
@@ -171,9 +174,22 @@ class AddEvidenceTab(QWidget):
     def create_dataset(self):
         dataset_name = self.new_dataset_input.text().strip()
         if dataset_name:
-            (self.directory / dataset_name).mkdir(parents=True, exist_ok=True)
+            dataset_path = self.directory / dataset_name
+            if dataset_path.exists():
+                QMessageBox.warning(
+                    self,
+                    "Dataset Exists",
+                    f"Dataset '{dataset_name}' already exists. Please choose a different name.",
+                )
+                return
+            dataset_path.mkdir(parents=True, exist_ok=False)
             self.dataset_combo.addItem(dataset_name)
             self.dataset_combo.setCurrentText(dataset_name)
+            QMessageBox.information(
+                self,
+                "Dataset Created",
+                f"Dataset '{dataset_name}' created successfully.",
+            )
 
     def add_evidence(self):
         dataset = self.dataset_combo.currentText()
