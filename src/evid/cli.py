@@ -13,6 +13,11 @@ import logging
 from evid import DEFAULT_DIR
 from evid.utils.text import normalize_text
 
+try:
+    from git import Repo
+except ImportError:
+    Repo = None
+
 from evid.core.label_setup import textpdf_to_latex, csv_to_bib
 from evid.gui.main import main as gui_main
 
@@ -45,43 +50,94 @@ def list_datasets(directory: Path) -> None:
         print(f"{i}. {dataset}")
 
 
-def select_dataset(directory: Path) -> str:
-    """Prompt user to select or create a dataset."""
+def select_dataset(directory: Path, prompt_message: str = "Select dataset") -> str:
+    """Prompt user to select a dataset or create a new one."""
     datasets = get_datasets(directory)
     if not datasets:
-        print("No datasets found.")
-        dataset = input("Enter new dataset name: ").strip()
-        if dataset:
-            (directory / dataset).mkdir(parents=True, exist_ok=True)
-            return dataset
-        sys.exit("Dataset name required.")
+        dataset_name = input("No datasets found. Enter new dataset name: ").strip()
+        if dataset_name:
+            create_dataset(directory, dataset_name)
+            return dataset_name
+        sys.exit("No dataset name provided.")
 
-    print("Available datasets:")
+    print(f"{prompt_message}:")
     for i, dataset in enumerate(datasets, 1):
         print(f"{i}. {dataset}")
-    print(f"{len(datasets) + 1}. Create new dataset")
 
-    choice = input("Select dataset (number): ").strip()
+    choice = input("Select dataset (number) or enter a new dataset name: ").strip()
     try:
-        choice = int(choice)
-        if choice == len(datasets) + 1:
-            dataset = input("Enter new dataset name: ").strip()
-            if dataset:
-                (directory / dataset).mkdir(parents=True, exist_ok=True)
-                return dataset
-            sys.exit("Dataset name required.")
-        if 1 <= choice <= len(datasets):
-            return datasets[choice - 1]
+        choice_num = int(choice)
+        if 1 <= choice_num <= len(datasets):
+            return datasets[choice_num - 1]
+        else:
+            dataset_name = input("Invalid number. Enter new dataset name: ").strip()
+            if dataset_name:
+                create_dataset(directory, dataset_name)
+                return dataset_name
+            sys.exit("No dataset name provided.")
     except ValueError:
-        pass
-    sys.exit("Invalid selection.")
+        if choice:
+            create_dataset(directory, choice)
+            return choice
+        sys.exit("Invalid selection or no dataset name provided.")
 
 
 def create_dataset(directory: Path, dataset: str) -> None:
-    """Create a new dataset directory."""
+    """Create a new dataset directory, failing if it already exists."""
     dataset_path = directory / dataset
-    dataset_path.mkdir(parents=True, exist_ok=True)
+    if dataset_path.exists():
+        sys.exit(f"Dataset '{dataset}' already exists.")
+    dataset_path.mkdir(parents=True, exist_ok=False)
     print(f"Created dataset: {dataset_path}")
+
+
+def track_dataset(directory: Path, dataset: str = None) -> None:
+    """Initialize a Git repository in the specified dataset with a .gitignore."""
+    if not Repo:
+        logger.warning("GitPython not installed. Cannot track dataset.")
+        print("GitPython is not installed. Please install it to use Git tracking.")
+        return
+
+    if not dataset:
+        dataset = select_dataset(directory, "Select dataset to track")
+
+    dataset_path = directory / dataset
+    if not dataset_path.exists():
+        sys.exit(f"Dataset '{dataset}' does not exist.")
+
+    # Check if already a Git repository
+    try:
+        Repo(dataset_path)
+        sys.exit(f"Dataset '{dataset}' is already tracked as a Git repository.")
+    except:
+        pass  # Not a Git repository, proceed with initialization
+
+    try:
+        # Initialize Git repository
+        repo = Repo.init(dataset_path)
+        # Create .gitignore file
+        gitignore_content = """# Ignore everything by default
+*/*
+# Allow specific files
+!label.csv
+!label_table.bib
+!*.tex
+!info.yml
+!*.pdf
+*/label.pdf
+"""
+        with (dataset_path / ".gitignore").open("w") as f:
+            f.write(gitignore_content)
+        # Add .gitignore to the repository
+        repo.index.add([".gitignore"])
+        repo.index.commit("Initial commit: Add .gitignore")
+        logger.info(f"Initialized Git repository for dataset: {dataset_path}")
+        print(f"Initialized Git repository for dataset: {dataset_path}")
+    except Exception as e:
+        logger.error(
+            f"Failed to initialize Git repository for {dataset_path}: {str(e)}"
+        )
+        sys.exit(f"Failed to initialize Git repository: {str(e)}")
 
 
 def extract_pdf_metadata(
@@ -242,9 +298,21 @@ def main():
         "--label", action="store_true", help="Open the labeler after adding the PDF"
     )
 
-    # Create dataset command
-    parser_create = subparsers.add_parser("create", help="Create a new dataset")
-    parser_create.add_argument("dataset", help="Name of the dataset to create")
+    # Set submenu
+    parser_set = subparsers.add_parser("set", help="Manage datasets")
+    set_subparsers = parser_set.add_subparsers(dest="set_command")
+
+    # Set create command
+    parser_set_create = set_subparsers.add_parser("create", help="Create a new dataset")
+    parser_set_create.add_argument("dataset", help="Name of the dataset to create")
+
+    # Set track command
+    parser_set_track = subparsers.add_parser(
+        "track", help="Track a dataset with Git"
+    )
+    parser_set_track.add_argument(
+        "dataset", nargs="?", help="Name of the dataset to track"
+    )
 
     # List datasets command
     parser_list = subparsers.add_parser("list", help="List all available datasets")
@@ -263,12 +331,20 @@ def main():
         directory = DEFAULT_DIR
         if args.dataset:
             dataset = args.dataset
-            (directory / dataset).mkdir(parents=True, exist_ok=True)
+            if not (directory / dataset).exists():
+                sys.exit(
+                    f"Dataset '{dataset}' does not exist. Create it with 'evid set create'."
+                )
         else:
-            dataset = select_dataset(directory)
+            dataset = select_dataset(directory, "Select dataset for adding evidence")
         add_evidence(directory, dataset, args.source, args.label)
-    elif args.command == "create":
-        create_dataset(DEFAULT_DIR, args.dataset)
+    elif args.command == "set":
+        if args.set_command == "create":
+            create_dataset(DEFAULT_DIR, args.dataset)
+        elif args.set_command == "track":
+            track_dataset(DEFAULT_DIR, args.dataset)
+        else:
+            parser_set.print_help()
     elif args.command == "list":
         list_datasets(DEFAULT_DIR)
     elif args.command == "gui":
