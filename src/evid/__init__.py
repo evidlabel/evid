@@ -8,10 +8,13 @@ try:
 except importlib.metadata.PackageNotFoundError:
     __version__ = "0.0.0"
 
+
 def load_config() -> dict:
     """Load configuration from ~/.evidrc or return default."""
     config_path = Path.home() / ".evidrc"
-    default_config = {"default_dir": str(Path("~/Documents/evid").expanduser())}
+    default_config = {
+        "default_dir": str(Path("~/Documents/evid").expanduser()),
+    }
     if config_path.exists():
         try:
             with config_path.open("r") as f:
@@ -20,6 +23,7 @@ def load_config() -> dict:
         except yaml.YAMLError:
             return default_config
     return default_config
+
 
 CONFIG = load_config()
 DEFAULT_DIR = Path(CONFIG["default_dir"]).expanduser()

@@ -1,6 +1,8 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget
-from PyQt6.QtGui import QPalette, QColor
+from PyQt6.QtGui import QPalette, QColor, QKeySequence
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QShortcut
 from pathlib import Path
 from .tabs.add_evidence import AddEvidenceTab
 from .tabs.browse_evidence import BrowseEvidenceTab
@@ -26,6 +28,9 @@ class EvidenceManagerApp(QMainWindow):
 
         self.tabs.addTab(self.add_tab, "Add")
         self.tabs.addTab(self.browse_tab, "Browse")
+
+        # Setup keyboard shortcuts
+        self.setup_shortcuts()
 
     def set_dark_theme(self):
         """Apply a consistent dark theme to the application."""
@@ -78,6 +83,42 @@ class EvidenceManagerApp(QMainWindow):
             }
         """)
 
+    def setup_shortcuts(self):
+        """Setup keyboard shortcuts for tab navigation, app closing, labeling, and BibTeX generation."""
+        # Ctrl+PageUp to switch to previous tab
+        QShortcut(
+            QKeySequence("Ctrl+PageUp"),
+            self,
+            lambda: self.tabs.setCurrentIndex(self.tabs.currentIndex() - 1)
+        )
+
+        # Ctrl+PageDown to switch to next tab
+        QShortcut(
+            QKeySequence("Ctrl+PageDown"),
+            self,
+            lambda: self.tabs.setCurrentIndex(self.tabs.currentIndex() + 1)
+        )
+
+        # Ctrl+W to close the application
+        QShortcut(
+            QKeySequence("Ctrl+W"),
+            self,
+            self.close
+        )
+
+        # Ctrl+L to trigger labeling in Browse tab
+        QShortcut(
+            QKeySequence("Ctrl+L"),
+            self,
+            lambda: self.browse_tab.create_labels() if self.tabs.currentWidget() == self.browse_tab else None
+        )
+
+        # Ctrl+B to trigger BibTeX generation in Browse tab
+        QShortcut(
+            QKeySequence("Ctrl+B"),
+            self,
+            lambda: self.browse_tab.generate_bibtex() if self.tabs.currentWidget() == self.browse_tab else None
+        )
 
 def main(directory=DEFAULT_DIR):
     app = QApplication(sys.argv)
