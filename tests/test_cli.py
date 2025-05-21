@@ -1,8 +1,12 @@
 import pytest
 from unittest.mock import patch
 from pathlib import Path
-from evid.cli import get_datasets, select_dataset, add_evidence, create_dataset
+from evid.cli.dataset import get_datasets, select_dataset, create_dataset
+from evid.cli.evidence import add_evidence
+from evid.core.bibtex import generate_bibtex
 import yaml
+import pandas as pd
+from io import StringIO
 
 
 @pytest.fixture
@@ -62,3 +66,67 @@ def test_add_evidence_local_pdf_with_label(mock_run, temp_dir, tmp_path):
     mock_run.assert_called_once_with(
         ["code", "--wait", str(uuid_dir / "label.tex")], check=True
     )
+
+
+def test_add_evidence_custom_directory(tmp_path, tmp_path_factory):
+    custom_dir = tmp_path_factory.mktemp("custom_evid_db")
+    pdf_path = tmp_path / "test.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n")  # Minimal PDF
+
+    add_evidence(custom_dir, "dataset1", str(pdf_path))
+
+    dataset_path = custom_dir / "dataset1"
+    assert dataset_path.exists()
+    uuid_dirs = [d for d in dataset_path.iterdir() if d.is_dir()]
+    assert len(uuid_dirs) == 1
+    uuid_dir = uuid_dirs[0]
+    assert (uuid_dir / "test.pdf").exists()
+    assert (uuid_dir / "info.yml").exists()
+
+    with (uuid_dir / "info.yml").open("r") as f:
+        info = yaml.safe_load(f)
+        assert info["original_name"] == "test.pdf"
+        assert info["title"] == "test"
+        assert info["label"] == "test"
+
+
+@pytest.fixture
+def setup_bibtex_csv(tmp_path):
+    dataset_path = tmp_path / "test_dataset"
+    entry1 = dataset_path / "uuid1"
+    entry1.mkdir(parents=True)
+
+    # Create label.csv file
+    csv_data = "label ; quote ; note ; section title ; section no ; page ; date ; opage\n" \
+               "test_label ; Test quote ; Test note ; Section 1 ; 1 ; 1 ; 2023-01-01 ; 0"
+    csv_path = entry1 / "label.csv"
+    with csv_path.open("w") as f:
+        f.write(csv_data)
+
+    # Create info.yml file
+    info_data = {"uuid": "uuid1", "url": "http://example.com"}
+    with (entry1 / "info.yml").open("w") as f:
+        yaml.dump(info_data, f)
+
+    return csv_path
+
+
+def test_generate_bibtex_single_csv(setup_bibtex_csv):
+    csv_path = setup_bibtex_csv
+    generate_bibtex(csv_path)
+
+    bib_file = csv_path.parent / "label_table.bib"
+    assert bib_file.exists()
+    with bib_file.open("r") as f:
+        content = f.read()
+        assert "@article" in content
+        assert "nonote = {Test note}" in content
+        assert "title = {Test quote}" in content
+        assert "date = {2023-01-01}" in content
+
+
+def test_generate_bibtex_nonexistent_csv(tmp_path):
+    csv_path = tmp_path / "nonexistent.csv"
+    with pytest.raises(SystemExit) as exc_info:
+        generate_bibtex(csv_path)
+    assert f"CSV file '{csv_path}' does not exist." in str(exc_info.value)

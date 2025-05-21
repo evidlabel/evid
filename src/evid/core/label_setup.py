@@ -5,7 +5,10 @@ import yaml
 import pandas as pd
 import demoji
 from datetime import datetime
+from concurrent.futures import ProcessPoolExecutor
+import logging
 
+logger = logging.getLogger(__name__)
 
 LATEX_TEMPLATE = r"""
 \documentclass[parskip=full]{article}
@@ -194,3 +197,32 @@ def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
             if exclude_note:
                 bibtex_entry = bibtex_entry.replace("note =", "nonote =")
             bibtex_file.write(emojis_to_text(bibtex_entry))
+
+
+def parallel_csv_to_bib(csv_files: list[Path], exclude_note: bool = True) -> tuple[int, list[str]]:
+    """Process multiple CSV files to BibTeX in parallel using ProcessPoolExecutor."""
+    success_count = 0
+    errors = []
+
+    def process_csv(csv_file: Path) -> tuple[bool, str]:
+        """Helper function to process a single CSV file."""
+        bib_file = csv_file.parent / "label_table.bib"
+        try:
+            csv_to_bib(csv_file, bib_file, exclude_note)
+            logger.info(f"Generated BibTeX file: {bib_file}")
+            return True, ""
+        except Exception as e:
+            error_msg = f"Failed to generate BibTeX for {csv_file}: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    with ProcessPoolExecutor() as executor:
+        results = executor.map(process_csv, csv_files)
+
+    for success, error in results:
+        if success:
+            success_count += 1
+        elif error:
+            errors.append(error)
+
+    return success_count, errors
