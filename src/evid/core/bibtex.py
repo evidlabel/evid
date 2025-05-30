@@ -1,16 +1,34 @@
 from pathlib import Path
 import logging
-from evid.core.label_setup import csv_to_bib
+from typing import List
+from evid.core.label_setup import csv_to_bib, parallel_csv_to_bib
 
 logger = logging.getLogger(__name__)
 
-def generate_bibtex(csv_file: Path) -> None:
-    """Generate a BibTeX file from a single label.csv file."""
-    bib_file = csv_file.parent / "label_table.bib"
-    try:
-        csv_to_bib(csv_file, bib_file, exclude_note=True)
-        logger.info(f"Generated BibTeX file: {bib_file}")
-        print(f"Successfully generated BibTeX file: {bib_file}")
-    except Exception as e:
-        logger.error(f"Failed to generate BibTeX for {csv_file}: {str(e)}")
-        print(f"Error generating BibTeX for {csv_file}: {str(e)}")
+def generate_bibtex(csv_files: List[Path], parallel: bool = False) -> None:
+    """Generate BibTeX files from a list of label.csv files."""
+    if not csv_files:
+        print("No CSV files provided.")
+        return
+
+    if parallel:
+        success_count, errors = parallel_csv_to_bib(csv_files, exclude_note=True)
+    else:
+        success_count = 0
+        errors = []
+        for csv_file in csv_files:
+            bib_file = csv_file.parent / "label_table.bib"
+            try:
+                csv_to_bib(csv_file, bib_file, exclude_note=True)
+                logger.info(f"Generated BibTeX file: {bib_file}")
+                success_count += 1
+            except Exception as e:
+                error_msg = f"Failed to generate BibTeX for {csv_file}: {str(e)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+
+    print(f"Successfully generated {success_count} BibTeX files.")
+    if errors:
+        print(f"Encountered {len(errors)} errors:")
+        for error in errors:
+            print(f"  - {error}")
