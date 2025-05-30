@@ -9,8 +9,9 @@ import uuid
 import subprocess
 import sys
 import logging
+from bs4 import BeautifulSoup
 from evid.utils.text import normalize_text
-from evid.core.label_setup import textpdf_to_latex, csv_to_bib
+from evid.core.label_setup import textpdf_to_latex, clean_text_for_latex
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ def create_label(file_path: Path, dataset: str, uuid: str) -> None:
 def add_evidence(
     directory: Path, dataset: str, source: str, label: bool = False
 ) -> None:
-    """Add a PDF to the specified dataset."""
+    """Add a PDF or text content to the specified dataset."""
     unique_dir = directory / dataset / str(uuid.uuid4())
     unique_dir.mkdir(parents=True)
 
@@ -88,14 +89,51 @@ def add_evidence(
         try:
             response = requests.get(source, timeout=10)
             response.raise_for_status()
-            if "application/pdf" not in response.headers.get("Content-Type", ""):
-                sys.exit("URL must point to a PDF file.")
-            pdf_file = BytesIO(response.content)
+            content_type = response.headers.get("Content-Type", "")
             file_name = source.split("/")[-1] or "document"
-            # Ensure the file has a .pdf suffix
-            file_name = Path(file_name).stem + ".pdf"
+
+            if "application/pdf" in content_type:
+                pdf_file = BytesIO(response.content)
+                file_name = Path(file_name).stem + ".pdf"
+            else:
+                # Handle non-PDF content (e.g., HTML or plain text)
+                soup = BeautifulSoup(response.text, "html.parser")
+                # Extract text, removing scripts, styles, and boilerplate
+                for elem in soup(["script", "style", "head", "nav", "footer"]):
+                    elem.decompose()
+                text_content = soup.get_text(separator="\n", strip=True)
+                text_content = clean_text_for_latex(normalize_text(text_content))
+                file_name = Path(file_name).stem + ".txt"
+                title = normalize_text(file_name)
+                authors = ""
+                date = ""
+                # Save text content to label.tex directly
+                label_file = unique_dir / "label.tex"
+                latex_content = LATEX_TEMPLATE.replace("BODY", text_content).replace(
+                    "DATE", arrow.now().format("YYYY-MM-DD")
+                ).replace("NAME", title.replace("_", " "))
+                with label_file.open("w", encoding="utf-8") as f:
+                    f.write(latex_content)
+                # Save metadata
+                info = {
+                    "original_name": file_name,
+                    "uuid": unique_dir.name,
+                    "time_added": arrow.now().format("YYYY-MM-DD"),
+                    "dates": date,
+                    "title": title,
+                    "authors": authors,
+                    "tags": "",
+                    "label": title.replace(" ", "_").lower(),
+                    "url": source,
+                }
+                info_yaml_path = unique_dir / "info.yml"
+                with info_yaml_path.open("w", encoding="utf-8") as f:
+                    yaml.dump(info, f, allow_unicode=True)
+                yaml.dump(info, sys.stdout, allow_unicode=True)
+                print(f"\nAdded text content to {unique_dir}")
+                return
         except requests.RequestException as e:
-            sys.exit(f"Failed to download PDF: {str(e)}")
+            sys.exit(f"Failed to download content: {str(e)}")
     else:
         file_path = Path(source)
         if not file_path.exists():
@@ -105,7 +143,7 @@ def add_evidence(
         file_name = file_path.name
         pdf_file = file_path
 
-    # Extract metadata
+    # Extract metadata for PDF
     title, authors, date = extract_pdf_metadata(pdf_file, file_name)
     label_str = title.replace(" ", "_").lower()
 
@@ -140,19 +178,11 @@ def add_evidence(
 
     print(f"\nAdded evidence to {unique_dir}")
 
-    # Prompt to open info.yml in VS Code
-    open_vscode = (
-        input("\nWould you like to open info.yml in Visual Studio Code? (y/n): ")
-        .strip()
-        .lower()
-    )
-    if open_vscode == "y":
-        try:
-            subprocess.run(["code", str(info_yaml_path)], check=True)
-        except subprocess.SubprocessError as e:
-            print(f"Failed to open info.yml in VS Code: {str(e)}")
-
     # Trigger labeling if --label flag is set
     if label:
         print(f"\nGenerating and opening label file for {file_name}...")
         create_label(target_path, dataset, unique_dir.name)
+
+# Import LATEX_TEMPLATE for non-PDF content
+from evid.core.label_setup import LATEX_TEMPLATE
+from evid.core.label_setup import csv_to_bib

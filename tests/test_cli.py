@@ -91,42 +91,89 @@ def test_add_evidence_custom_directory(tmp_path, tmp_path_factory):
 
 
 @pytest.fixture
-def setup_bibtex_csv(tmp_path):
+def setup_bibtex_csvs(tmp_path):
     dataset_path = tmp_path / "test_dataset"
     entry1 = dataset_path / "uuid1"
+    entry2 = dataset_path / "uuid2"
+    entry3 = dataset_path / "uuid3"
     entry1.mkdir(parents=True)
+    entry2.mkdir(parents=True)
+    entry3.mkdir(parents=True)
 
-    # Create label.csv file
+    # Create valid label.csv files
     csv_data = "label ; quote ; note ; section title ; section no ; page ; date ; opage\n" \
                "test_label ; Test quote ; Test note ; Section 1 ; 1 ; 1 ; 2023-01-01 ; 0"
-    csv_path = entry1 / "label.csv"
-    with csv_path.open("w") as f:
+    csv_path1 = entry1 / "label.csv"
+    csv_path2 = entry2 / "label.csv"
+    with csv_path1.open("w") as f:
+        f.write(csv_data)
+    with csv_path2.open("w") as f:
         f.write(csv_data)
 
-    # Create info.yml file
+    # Create an empty CSV file
+    csv_path3 = entry3 / "label.csv"
+    csv_path3.touch()
+
+    # Create info.yml files
     info_data = {"uuid": "uuid1", "url": "http://example.com"}
     with (entry1 / "info.yml").open("w") as f:
         yaml.dump(info_data, f)
+    info_data = {"uuid": "uuid2", "url": "http://example.com"}
+    with (entry2 / "info.yml").open("w") as f:
+        yaml.dump(info_data, f)
+    info_data = {"uuid": "uuid3", "url": "http://example.com"}
+    with (entry3 / "info.yml").open("w") as f:
+        yaml.dump(info_data, f)
 
-    return csv_path
+    return [csv_path1, csv_path2, csv_path3]
 
 
-def test_generate_bibtex_single_csv(setup_bibtex_csv):
-    csv_path = setup_bibtex_csv
-    generate_bibtex(csv_path)
+def test_generate_bibtex_multiple_csv_sequential(setup_bibtex_csvs, capsys):
+    csv_paths = setup_bibtex_csvs
+    generate_bibtex(csv_paths, parallel=False)
 
-    bib_file = csv_path.parent / "label_table.bib"
-    assert bib_file.exists()
-    with bib_file.open("r") as f:
-        content = f.read()
-        assert "@article" in content
-        assert "nonote = {Test note}" in content
-        assert "title = {Test quote}" in content
-        assert "date = {2023-01-01}" in content
+    # Check BibTeX files for valid CSVs
+    for csv_path in csv_paths[:2]:
+        bib_file = csv_path.parent / "label_table.bib"
+        assert bib_file.exists()
+        with bib_file.open("r") as f:
+            content = f.read()
+            assert "@article" in content
+            assert "nonote = {Test note}" in content
+            assert "title = {Test quote}" in content
+            assert "date = {2023-01-01}" in content
+
+    # Check that empty CSV caused an error but didn't stop processing
+    captured = capsys.readouterr()
+    assert "Successfully generated 2 BibTeX files." in captured.out
+    assert "Encountered 1 errors:" in captured.out
+    assert f"Failed to generate BibTeX for {csv_paths[2]}" in captured.out
+
+
+def test_generate_bibtex_multiple_csv_parallel(setup_bibtex_csvs, capsys):
+    csv_paths = setup_bibtex_csvs
+    generate_bibtex(csv_paths, parallel=True)
+
+    # Check BibTeX files for valid CSVs
+    for csv_path in csv_paths[:2]:
+        bib_file = csv_path.parent / "label_table.bib"
+        assert bib_file.exists()
+        with bib_file.open("r") as f:
+            content = f.read()
+            assert "@article" in content
+            assert "nonote = {Test note}" in content
+            assert "title = {Test quote}" in content
+            assert "date = {2023-01-01}" in content
+
+    # Check that empty CSV caused an error but didn't stop processing
+    captured = capsys.readouterr()
+    assert "Successfully generated 2 BibTeX files." in captured.out
+    assert "Encountered 1 errors:" in captured.out
+    assert f"Failed to generate BibTeX for {csv_paths[2]}" in captured.out
 
 
 def test_generate_bibtex_nonexistent_csv(tmp_path):
-    csv_path = tmp_path / "nonexistent.csv"
+    csv_paths = [tmp_path / "nonexistent1.csv", tmp_path / "nonexistent2.csv"]
     with pytest.raises(SystemExit) as exc_info:
-        generate_bibtex(csv_path)
-    assert f"CSV file '{csv_path}' does not exist." in str(exc_info.value)
+        generate_bibtex(csv_paths)
+    assert "CSV file" in str(exc_info.value)

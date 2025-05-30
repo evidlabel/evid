@@ -48,8 +48,11 @@ def main():
     parser_list = subparsers.add_parser("list", help="List all available datasets")
 
     # BibTeX command
-    parser_bibtex = subparsers.add_parser("bibtex", help="Generate BibTeX file from a single label.csv file")
-    parser_bibtex.add_argument("csv_file", help="Path to the label.csv file to process")
+    parser_bibtex = subparsers.add_parser("bibtex", help="Generate BibTeX files from label.csv files")
+    parser_bibtex.add_argument("csv_files", nargs="+", help="Paths to the label.csv files to process")
+    parser_bibtex.add_argument(
+        "--parallel", action="store_true", help="Process CSV files in parallel"
+    )
 
     # GUI command
     parser_gui = subparsers.add_parser("gui", help="Launch the evid GUI")
@@ -81,10 +84,13 @@ def main():
     elif args.command == "list":
         list_datasets(directory)
     elif args.command == "bibtex":
-        csv_file = Path(args.csv_file)
-        if not csv_file.exists():
-            sys.exit(f"CSV file '{csv_file}' does not exist.")
-        generate_bibtex(csv_file)
+        csv_files = [Path(csv_file) for csv_file in args.csv_files]
+        for csv_file in csv_files:
+            if not csv_file.exists():
+                logger.error(f"CSV file '{csv_file}' does not exist.")
+                print(f"Error: CSV file '{csv_file}' does not exist.")
+                sys.exit(1)
+        generate_bibtex(csv_files, parallel=args.parallel)
     elif args.command == "gui":
         gui_main(directory)
 
