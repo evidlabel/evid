@@ -13,7 +13,7 @@ def temp_workdir(tmp_path):
     yield workdir
 
 
-@pytest.mark.skip("Skipping test_rebut_doc_success")
+# @pytest.mark.skip("Skipping test_rebut_doc_success")
 @patch("subprocess.run")
 def test_rebut_doc_success(mock_run, temp_workdir):
     output_path = Path.home() / "Documents/fct_output"
