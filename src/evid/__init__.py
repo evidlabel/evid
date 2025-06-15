@@ -14,6 +14,9 @@ def load_config() -> dict:
     config_path = Path.home() / ".evidrc"
     default_config = {
         "default_dir": str(Path("~/Documents/evid").expanduser()),
+        "editor": "code",  # Default editor for files
+        "directory": "code",  # New: Default opener for directories
+        "latex": "pdflatex {file}",  # New: Command to compile LaTeX
     }
     if config_path.exists():
         try:
