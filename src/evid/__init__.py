@@ -22,7 +22,9 @@ def load_config() -> dict:
         try:
             with config_path.open("r") as f:
                 config = yaml.safe_load(f) or {}
-                return {**default_config, **config}
+                out = {**default_config, **config}
+                print(out)
+                return out
         except yaml.YAMLError:
             return default_config
     return default_config
