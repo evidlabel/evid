@@ -16,8 +16,8 @@ from pathlib import Path
 import yaml
 import subprocess
 import logging
-from evid.core.label_setup import textpdf_to_latex, csv_to_bib
-from evid.core.rebut_doc import rebut_doc
+from evid.core.label import create_label  # Import for shared labeling code
+from evid.core.label_setup import csv_to_bib
 import arrow
 from evid import DEFAULT_DIR
 
@@ -116,37 +116,17 @@ class BrowseEvidenceTab(QWidget):
 
         for info_file in self.directory.glob(f"{dataset}/**/info.yml"):
             try:
-                # Read raw content for debugging
-                with info_file.open("r", encoding="utf-8") as f:
-                    raw_content = f.read()
-                    logger.debug(f"Raw YAML for {info_file}: {raw_content}")
-
-                # Parse YAML
                 with info_file.open("r", encoding="utf-8") as f:
                     metadata = yaml.safe_load(f)
 
-                # Validate metadata
-                if metadata is None:
-                    logger.warning(f"Skipping {info_file}: Empty or malformed YAML")
-                    continue
-                if not isinstance(metadata, dict):
-                    logger.warning(f"Skipping {info_file}: Expected dict, got {type(metadata).__name__}")
-                    continue
+                if metadata is None or not isinstance(metadata, dict) or "uuid" not in metadata:
+                    continue  # Skip invalid entries
 
-                # Log parsed metadata
-                logger.debug(f"Parsed metadata for {info_file}: {metadata}")
-
-                # Check for uuid presence
-                if "uuid" not in metadata:
-                    logger.warning(f"Skipping {info_file}: Missing UUID field")
-                    continue
-
-                # Parse date for sorting
                 date_str = str(metadata.get("time_added", "1970-01-01"))
                 try:
                     date = arrow.get(date_str, "YYYY-MM-DD")
                 except arrow.parser.ParserError:
-                    date = arrow.get("1970-01-01")  # Fallback for invalid dates
+                    date = arrow.get("1970-01-01")
 
                 self.metadata_entries.append((date, metadata))
             except yaml.YAMLError as e:
@@ -170,15 +150,11 @@ class BrowseEvidenceTab(QWidget):
         self.table.setRowCount(0)
 
         for date, metadata in self.metadata_entries:
-            # Convert all metadata values to strings and check for search text
-            metadata_str = " ".join(
-                str(value).lower() for value in metadata.values()
-            )
+            metadata_str = " ".join(str(value).lower() for value in metadata.values())
             if not search_text or search_text in metadata_str:
                 row = self.table.rowCount()
                 self.table.insertRow(row)
 
-                # Set table items with fallbacks
                 authors = str(metadata.get("authors", "Unknown"))
                 label = str(metadata.get("label", "Unknown"))
                 time_added = str(metadata.get("time_added", "Unknown"))
@@ -235,40 +211,9 @@ class BrowseEvidenceTab(QWidget):
             uuid = uuid_item.text()
             file_name = self.table.item(row, 3).text()
             file_path = self.directory / dataset / uuid / file_name
-            label_file = file_path.parent / "label.tex"
-            csv_file = file_path.parent / "label.csv"
-            bib_file = file_path.parent / "label_table.bib"
 
-            try:
-                if not label_file.exists():
-                    textpdf_to_latex(file_path, label_file)
-
-                # Open the labeller in VS Code without waiting
-                subprocess.run(["code", str(label_file)], check=True)
-
-                # Monitor for CSV file changes in a separate process if needed
-                # For simplicity, skip automatic BibTeX generation here
-                logger.info(f"Opened label file in VS Code: {label_file}")
-            except FileNotFoundError:
-                logger.error("VS Code not found. Please ensure 'code' is in your PATH.")
-                QMessageBox.critical(
-                    self,
-                    "VS Code Not Found",
-                    "Visual Studio Code is not installed or not in your PATH. Please install VS Code or ensure the 'code' command is available."
-                )
-                continue
-            except subprocess.SubprocessError as e:
-                logger.error(f"Error opening VS Code: {str(e)}")
-                QMessageBox.critical(
-                    self, "Error Opening VS Code", f"Failed to open VS Code for row {row + 1}: {str(e)}"
-                )
-                continue
-            except Exception as e:
-                logger.error(f"Error during label workflow: {str(e)}")
-                QMessageBox.critical(
-                    self, "Label Workflow Error", f"An unexpected error occurred for row {row + 1}: {str(e)}"
-                )
-                continue
+            # Call the shared create_label function
+            create_label(file_path, dataset, uuid)
 
     def generate_bibtex(self):
         selected_rows = sorted(set(index.row() for index in self.table.selectedIndexes()))
@@ -300,14 +245,14 @@ class BrowseEvidenceTab(QWidget):
                     QMessageBox.warning(
                         self,
                         "CSV Missing",
-                        f"No label.csv found for entry in row {row + 1}. BibTeX generation skipped."
+                        f"No label.csv found for entry in row {row + 1}. BibTeX generation skipped.",
                     )
             except Exception as e:
                 logger.error(f"Error generating BibTeX for row {row + 1}: {str(e)}")
                 QMessageBox.critical(
                     self,
                     "BibTeX Generation Error",
-                    f"Failed to generate BibTeX for row {row + 1}: {str(e)}"
+                    f"Failed to generate BibTeX for row {row + 1}: {str(e)}",
                 )
                 continue
 
@@ -315,15 +260,8 @@ class BrowseEvidenceTab(QWidget):
             QMessageBox.information(
                 self,
                 "BibTeX Generation Complete",
-                f"Successfully generated BibTeX files for {success_count} entries."
+                f"Successfully generated BibTeX files for {success_count} entries.",
             )
-
-    def create_label(self):  # Keep original method for backward compatibility
-        row = self.table.currentRow()
-        if row < 0:
-            QMessageBox.warning(self, "No Selection", "Please select an evidence entry.")
-            return
-        self.create_labels()  # Delegate to multi-selection method
 
     def run_rebut(self):
         row = self.table.currentRow()
@@ -347,18 +285,19 @@ class BrowseEvidenceTab(QWidget):
             QMessageBox.critical(
                 self,
                 "Directory Missing",
-                f"The evidence directory {workdir} does not exist. It may have been moved or deleted."
+                f"The evidence directory {workdir} does not exist. It may have been moved or deleted.",
             )
             return
 
         try:
+            from evid.core.rebut_doc import rebut_doc
             rebut_doc(workdir)
         except FileNotFoundError as e:
             logger.warning(f"Rebuttal failed: {str(e)}")
             QMessageBox.critical(
                 self,
                 "Rebuttal Failed",
-                f"Could not run rebuttal: {str(e)}. Ensure required files are available."
+                f"Could not run rebuttal: {str(e)}. Ensure required files are available.",
             )
         except Exception as e:
             logger.warning(f"Unexpected error during rebuttal: {str(e)}")
