@@ -1,7 +1,6 @@
 import pytest
 from PyQt6.QtWidgets import QApplication
 from evid.gui.tabs.browse_evidence import BrowseEvidenceTab
-from pathlib import Path
 import yaml
 import sys
 
