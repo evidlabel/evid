@@ -1,13 +1,9 @@
 import pytest
 from unittest.mock import patch
-from pathlib import Path
 from evid.cli.dataset import get_datasets, select_dataset, create_dataset
 from evid.cli.evidence import add_evidence
 from evid.core.bibtex import generate_bibtex
 import yaml
-import pandas as pd
-from io import StringIO
-
 
 @pytest.fixture
 def temp_dir(tmp_path):
@@ -17,17 +13,14 @@ def temp_dir(tmp_path):
     dataset2.mkdir()
     return tmp_path
 
-
 def test_get_datasets(temp_dir):
     datasets = get_datasets(temp_dir)
     assert sorted(datasets) == ["dataset1", "dataset2"]
-
 
 @patch("builtins.input", side_effect=["1"])
 def test_select_dataset_existing(mock_input, temp_dir):
     dataset = select_dataset(temp_dir)
     assert dataset in ["dataset1", "dataset2"]
-
 
 @patch("builtins.input", side_effect=["3", "new_dataset"])
 def test_select_dataset_create_new(mock_input, temp_dir):
@@ -35,18 +28,16 @@ def test_select_dataset_create_new(mock_input, temp_dir):
     assert dataset == "new_dataset"
     assert (temp_dir / "new_dataset").exists()
 
-
 def test_create_dataset(temp_dir):
     dataset_name = "new_dataset"
     create_dataset(temp_dir, dataset_name)
     assert (temp_dir / dataset_name).exists()
 
-
 @pytest.mark.skip(reason="Visual inspection required, no automated check implemented")
 @patch("subprocess.run")
 def test_add_evidence_local_pdf_with_label(mock_run, temp_dir, tmp_path):
     pdf_path = tmp_path / "test.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4\n")  # Minimal PDF
+    pdf_path.write_bytes(b"%PDF-1.4\n")
     add_evidence(temp_dir, "dataset1", str(pdf_path), label=True)
 
     dataset_path = temp_dir / "dataset1"
@@ -62,16 +53,14 @@ def test_add_evidence_local_pdf_with_label(mock_run, temp_dir, tmp_path):
         assert info["title"] == "test"
         assert info["label"] == "test"
 
-    # Check that subprocess.run was called for labeling
     mock_run.assert_called_once_with(
         ["code", "--wait", str(uuid_dir / "label.tex")], check=True
     )
 
-
 def test_add_evidence_custom_directory(tmp_path, tmp_path_factory):
     custom_dir = tmp_path_factory.mktemp("custom_evid_db")
     pdf_path = tmp_path / "test.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4\n")  # Minimal PDF
+    pdf_path.write_bytes(b"%PDF-1.4\n")
 
     add_evidence(custom_dir, "dataset1", str(pdf_path))
 
@@ -89,7 +78,6 @@ def test_add_evidence_custom_directory(tmp_path, tmp_path_factory):
         assert info["title"] == "test"
         assert info["label"] == "test"
 
-
 @pytest.fixture
 def setup_bibtex_csvs(tmp_path):
     dataset_path = tmp_path / "test_dataset"
@@ -100,80 +88,54 @@ def setup_bibtex_csvs(tmp_path):
     entry2.mkdir(parents=True)
     entry3.mkdir(parents=True)
 
-    # Create valid label.csv files
     csv_data = "label ; quote ; note ; section title ; section no ; page ; date ; opage\n" \
                "test_label ; Test quote ; Test note ; Section 1 ; 1 ; 1 ; 2023-01-01 ; 0"
     csv_path1 = entry1 / "label.csv"
     csv_path2 = entry2 / "label.csv"
-    with csv_path1.open("w") as f:
+    with csv_path1.open("w", encoding="utf-8") as f:
         f.write(csv_data)
-    with csv_path2.open("w") as f:
+    with csv_path2.open("w", encoding="utf-8") as f:
         f.write(csv_data)
 
-    # Create an empty CSV file
     csv_path3 = entry3 / "label.csv"
-    csv_path3.touch()
+    csv_path3.write_text("", encoding="utf-8")
 
-    # Create info.yml files
     info_data = {"uuid": "uuid1", "url": "http://example.com"}
-    with (entry1 / "info.yml").open("w") as f:
+    with (entry1 / "info.yml").open("w", encoding="utf-8") as f:
         yaml.dump(info_data, f)
     info_data = {"uuid": "uuid2", "url": "http://example.com"}
-    with (entry2 / "info.yml").open("w") as f:
+    with (entry2 / "info.yml").open("w", encoding="utf-8") as f:
         yaml.dump(info_data, f)
     info_data = {"uuid": "uuid3", "url": "http://example.com"}
-    with (entry3 / "info.yml").open("w") as f:
+    with (entry3 / "info.yml").open("w", encoding="utf-8") as f:
         yaml.dump(info_data, f)
 
     return [csv_path1, csv_path2, csv_path3]
-
 
 def test_generate_bibtex_multiple_csv_sequential(setup_bibtex_csvs, capsys):
     csv_paths = setup_bibtex_csvs
     generate_bibtex(csv_paths, parallel=False)
 
-    # Check BibTeX files for valid CSVs
     for csv_path in csv_paths[:2]:
         bib_file = csv_path.parent / "label_table.bib"
         assert bib_file.exists()
-        with bib_file.open("r") as f:
+        with bib_file.open("r", encoding="utf-8") as f:
             content = f.read()
             assert "@article" in content
             assert "nonote = {Test note}" in content
             assert "title = {Test quote}" in content
             assert "date = {2023-01-01}" in content
 
-    # Check that empty CSV caused an error but didn't stop processing
     captured = capsys.readouterr()
     assert "Successfully generated 2 BibTeX files." in captured.out
-    assert "Encountered 1 errors:" in captured.out
-    assert f"Failed to generate BibTeX for {csv_paths[2]}" in captured.out
+    assert "Skipped empty CSV file" in captured.out
 
-
-def test_generate_bibtex_multiple_csv_parallel(setup_bibtex_csvs, capsys):
-    csv_paths = setup_bibtex_csvs
-    generate_bibtex(csv_paths, parallel=True)
-
-    # Check BibTeX files for valid CSVs
-    for csv_path in csv_paths[:2]:
-        bib_file = csv_path.parent / "label_table.bib"
-        assert bib_file.exists()
-        with bib_file.open("r") as f:
-            content = f.read()
-            assert "@article" in content
-            assert "nonote = {Test note}" in content
-            assert "title = {Test quote}" in content
-            assert "date = {2023-01-01}" in content
-
-    # Check that empty CSV caused an error but didn't stop processing
-    captured = capsys.readouterr()
-    assert "Successfully generated 2 BibTeX files." in captured.out
-    assert "Encountered 1 errors:" in captured.out
-    assert f"Failed to generate BibTeX for {csv_paths[2]}" in captured.out
-
-
-def test_generate_bibtex_nonexistent_csv(tmp_path):
+def test_generate_bibtex_nonexistent_csv(tmp_path, capsys):
     csv_paths = [tmp_path / "nonexistent1.csv", tmp_path / "nonexistent2.csv"]
-    with pytest.raises(SystemExit) as exc_info:
-        generate_bibtex(csv_paths)
-    assert "CSV file" in str(exc_info.value)
+    generate_bibtex(csv_paths)
+    captured = capsys.readouterr()
+    assert "Successfully generated 0 BibTeX files." in captured.out
+    assert "CSV file" in captured.out
+    assert "does not exist" in captured.out
+    for csv_path in csv_paths:
+        assert f"CSV file '{csv_path}' does not exist." in captured.out

@@ -4,7 +4,6 @@ import re
 import yaml
 import pandas as pd
 import demoji
-from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
 import logging
 
@@ -175,7 +174,13 @@ def load_url(csv_file_path: Path) -> str:
 
 
 def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
-    df = pd.read_csv(csv_file, sep=" ; ", engine="python")
+    try:
+        df = pd.read_csv(csv_file, sep=" ; ", engine="python")
+        if df.empty:
+            raise ValueError("CSV file is empty")
+    except pd.errors.EmptyDataError:
+        raise ValueError("CSV file is empty")
+
     df["date"] = pd.to_datetime(df["date"], dayfirst=False, errors="coerce")
     uuid_prefix = load_uuid_prefix(csv_file)
 
@@ -206,6 +211,10 @@ def parallel_csv_to_bib(csv_files: list[Path], exclude_note: bool = True) -> tup
 
     def process_csv(csv_file: Path) -> tuple[bool, str]:
         """Helper function to process a single CSV file."""
+        if not csv_file.exists():
+            return False, f"CSV file '{csv_file}' does not exist."
+        if not csv_file.stat().st_size:
+            return False, f"Skipped empty CSV file '{csv_file}'."
         bib_file = csv_file.parent / "label_table.bib"
         try:
             csv_to_bib(csv_file, bib_file, exclude_note)

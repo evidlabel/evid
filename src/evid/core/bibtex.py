@@ -17,6 +17,16 @@ def generate_bibtex(csv_files: List[Path], parallel: bool = False) -> None:
         success_count = 0
         errors = []
         for csv_file in csv_files:
+            if not csv_file.exists():
+                error_msg = f"CSV file '{csv_file}' does not exist."
+                logger.error(error_msg)
+                errors.append(error_msg)
+                continue
+            if not csv_file.stat().st_size:
+                error_msg = f"Skipped empty CSV file '{csv_file}'."
+                logger.warning(error_msg)
+                errors.append(error_msg)
+                continue
             bib_file = csv_file.parent / "label_table.bib"
             try:
                 csv_to_bib(csv_file, bib_file, exclude_note=True)
@@ -29,6 +39,6 @@ def generate_bibtex(csv_files: List[Path], parallel: bool = False) -> None:
 
     print(f"Successfully generated {success_count} BibTeX files.")
     if errors:
-        print(f"Encountered {len(errors)} errors:")
+        print(f"Encountered {len(errors)} issues:")
         for error in errors:
             print(f"  - {error}")

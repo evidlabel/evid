@@ -1,4 +1,3 @@
-from pathlib import Path
 
 def normalize_text(text: str | bytes | None, default: str = "") -> str:
     """Normalize text to UTF-8, preserving Danish characters (æ, ø, å)."""

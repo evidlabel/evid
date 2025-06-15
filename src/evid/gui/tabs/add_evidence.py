@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QMessageBox,
 )
-from PyQt6.QtCore import Qt
 from pathlib import Path
 import uuid
 import arrow

@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 import fitz
 from evid.core.label_setup import textpdf_to_latex, clean_text_for_latex
 
