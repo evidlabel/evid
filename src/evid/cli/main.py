@@ -2,21 +2,21 @@ import argparse
 import sys
 from pathlib import Path
 import logging
+from rich.logging import RichHandler
 from evid import CONFIG
 from evid.cli.dataset import list_datasets, select_dataset, create_dataset, track_dataset
 from evid.cli.evidence import add_evidence
 from evid.core.bibtex import generate_bibtex
 from evid.gui.main import main as gui_main
 
-# Set up logging
-logging.basicConfig(level=logging.DEBUG)
+# Set up logging with Rich handler
+logging.basicConfig(handlers=[RichHandler()], level=logging.DEBUG, rich_tracebacks=True)
 logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description="evid CLI for managing PDF documents")
     parser.add_argument(
-        "-d",
-        "--directory",
+        "-d", "--directory",
         default=CONFIG["default_dir"],
         help="Directory for storing datasets (default: ~/Documents/evid)",
     )
@@ -25,10 +25,8 @@ def main():
     # Add command
     parser_add = subparsers.add_parser("add", help="Add a PDF from a URL or local file")
     parser_add.add_argument("source", help="URL or path to the PDF file")
-    parser_add.add_argument("--dataset", help="Target dataset name")
-    parser_add.add_argument(
-        "--label", action="store_true", help="Open the labeler after adding the PDF"
-    )
+    parser_add.add_argument("-s", "--dataset", help="Target dataset name")  # Added short option
+    parser_add.add_argument("-l", "--label", action="store_true", help="Open the labeler after adding the PDF")  # Added short option
 
     # Set submenu
     parser_set = subparsers.add_parser("set", help="Manage datasets")
@@ -39,10 +37,8 @@ def main():
     parser_set_create.add_argument("dataset", help="Name of the dataset to create")
 
     # Set track command
-    parser_set_track = subparsers.add_parser("track", help="Track a dataset with Git")
-    parser_set_track.add_argument(
-        "dataset", nargs="?", help="Name of the dataset to track"
-    )
+    parser_set_track = set_subparsers.add_parser("track", help="Track a dataset with Git")
+    parser_set_track.add_argument("dataset", nargs="?", help="Name of the dataset to track")
 
     # List datasets command
     parser_list = subparsers.add_parser("list", help="List all available datasets")
@@ -50,16 +46,13 @@ def main():
     # BibTeX command
     parser_bibtex = subparsers.add_parser("bibtex", help="Generate BibTeX files from label.csv files")
     parser_bibtex.add_argument("csv_files", nargs="+", help="Paths to the label.csv files to process")
-    parser_bibtex.add_argument(
-        "--parallel", action="store_true", help="Process CSV files in parallel"
-    )
+    parser_bibtex.add_argument("-p", "--parallel", action="store_true", help="Process CSV files in parallel")  # Added short option
 
     # GUI command
     parser_gui = subparsers.add_parser("gui", help="Launch the evid GUI")
 
     args = parser.parse_args()
 
-    # Convert directory to Path and expand user home directory
     directory = Path(args.directory).expanduser()
 
     if args.command is None:
@@ -68,9 +61,7 @@ def main():
         if args.dataset:
             dataset = args.dataset
             if not (directory / dataset).exists():
-                sys.exit(
-                    f"Dataset '{dataset}' does not exist. Create it with 'evid set create'."
-                )
+                sys.exit(f"Dataset '{dataset}' does not exist. Create it with 'evid set create'.")
         else:
             dataset = select_dataset(directory, "Select dataset for adding evidence")
         add_evidence(directory, dataset, args.source, args.label)
