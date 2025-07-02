@@ -11,10 +11,14 @@ from evid.utils.text import normalize_text
 from evid.core.label_setup import clean_text_for_latex
 from evid.core.pdf_metadata import extract_pdf_metadata  # Moved to new file
 from evid.core.label import create_label  # Moved to new file
+import arrow
+import yaml
+
 
 # Configure Rich handler for colored logging
-logging.basicConfig(handlers=[RichHandler()], level=logging.INFO, rich_tracebacks=True)
+logging.basicConfig(handlers=[RichHandler(rich_tracebacks=True)], level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def add_evidence(
     directory: Path, dataset: str, source: str, label: bool = False
@@ -46,9 +50,11 @@ def add_evidence(
                 authors = ""
                 date = ""
                 label_file = unique_dir / "label.tex"
-                latex_content = LATEX_TEMPLATE.replace("BODY", text_content).replace(
-                    "DATE", arrow.now().format("YYYY-MM-DD")
-                ).replace("NAME", title.replace("_", " "))
+                latex_content = (
+                    LATEX_TEMPLATE.replace("BODY", text_content)
+                    .replace("DATE", arrow.now().format("YYYY-MM-DD"))
+                    .replace("NAME", title.replace("_", " "))
+                )
                 with label_file.open("w", encoding="utf-8") as f:
                     f.write(latex_content)
                 info = {
@@ -113,6 +119,7 @@ def add_evidence(
     if label:
         logger.info(f"Generating and opening label file for {file_name}...")
         create_label(target_path, dataset, unique_dir.name)
+
 
 # Import LATEX_TEMPLATE for non-PDF content
 from evid.core.label_setup import LATEX_TEMPLATE
