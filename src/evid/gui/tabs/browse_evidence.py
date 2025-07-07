@@ -1,3 +1,5 @@
+"""GUI tab for browsing evidence."""
+import logging
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -15,8 +17,7 @@ from PyQt6.QtCore import Qt
 from pathlib import Path
 import yaml
 import subprocess
-import logging
-from evid.core.label import create_label  # Import for shared labeling code
+from evid.core.label import create_label
 from evid.core.label_setup import csv_to_bib
 import arrow
 from evid import DEFAULT_DIR
@@ -173,27 +174,32 @@ class BrowseEvidenceTab(QWidget):
         self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)
 
     def open_directory(self):
-        row = self.table.currentRow()
-        if row < 0:
-            QMessageBox.warning(self, "No Selection", "Please select an evidence entry.")
+        """Open selected directories in a single VS Code window."""
+        selected_rows = sorted(set(index.row() for index in self.table.selectedIndexes()))
+        if not selected_rows:
+            QMessageBox.warning(self, "No Selection", "Please select at least one evidence entry.")
             return
 
         dataset = self.dataset_combo.currentText()
-        uuid_item = self.table.item(row, 4)
-        if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-            QMessageBox.critical(self, "Invalid Entry", "Selected entry has no valid UUID.")
-            return
+        paths = []
+        for row in selected_rows:
+            uuid_item = self.table.item(row, 4)
+            if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
+                QMessageBox.critical(self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID.")
+                continue
 
-        uuid = uuid_item.text()
-        path = self.directory / dataset / uuid
-        if not path.exists():
-            QMessageBox.critical(self, "Directory Missing", f"The directory {path} does not exist.")
-            return
+            uuid = uuid_item.text()
+            path = self.directory / dataset / uuid
+            if not path.exists():
+                QMessageBox.critical(self, "Directory Missing", f"The directory {path} does not exist.")
+                continue
+            paths.append(str(path))
 
-        try:
-            subprocess.run(["code", str(path)], check=True)
-        except subprocess.SubprocessError as e:
-            QMessageBox.critical(self, "Error Opening VS Code", f"Failed to open directory in VS Code: {str(e)}")
+        if paths:
+            try:
+                subprocess.run(["code"] + paths, check=True)  # Open all in one window
+            except subprocess.SubprocessError as e:
+                QMessageBox.critical(self, "Error Opening VS Code", f"Failed to open directories in VS Code: {str(e)}")
 
     def create_labels(self):
         selected_rows = sorted(set(index.row() for index in self.table.selectedIndexes()))
@@ -264,43 +270,44 @@ class BrowseEvidenceTab(QWidget):
             )
 
     def run_rebut(self):
-        row = self.table.currentRow()
-        if row < 0:
+        selected_rows = sorted(set(index.row() for index in self.table.selectedIndexes()))
+        if not selected_rows:
             QMessageBox.warning(
                 self, "No Selection", "Please select an evidence entry to rebut."
             )
             return
 
         dataset = self.dataset_combo.currentText()
-        uuid_item = self.table.item(row, 4)
-        if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-            QMessageBox.critical(self, "Invalid Entry", "Selected entry has no valid UUID.")
-            return
+        for row in selected_rows:
+            uuid_item = self.table.item(row, 4)
+            if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
+                QMessageBox.critical(self, "Invalid Entry", "Selected entry has no valid UUID.")
+                continue
 
-        uuid = uuid_item.text()
-        workdir = self.directory / dataset / uuid
+            uuid = uuid_item.text()
+            workdir = self.directory / dataset / uuid
 
-        if not workdir.exists():
-            logger.warning(f"Working directory {workdir} does not exist for rebuttal")
-            QMessageBox.critical(
-                self,
-                "Directory Missing",
-                f"The evidence directory {workdir} does not exist. It may have been moved or deleted.",
-            )
-            return
+            if not workdir.exists():
+                logger.warning(f"Working directory {workdir} does not exist for rebuttal")
+                QMessageBox.critical(
+                    self,
+                    "Directory Missing",
+                    f"The evidence directory {workdir} does not exist. It may have been moved or deleted.",
+                )
+                continue
 
-        try:
-            from evid.core.rebut_doc import rebut_doc
-            rebut_doc(workdir)
-        except FileNotFoundError as e:
-            logger.warning(f"Rebuttal failed: {str(e)}")
-            QMessageBox.critical(
-                self,
-                "Rebuttal Failed",
-                f"Could not run rebuttal: {str(e)}. Ensure required files are available.",
-            )
-        except Exception as e:
-            logger.warning(f"Unexpected error during rebuttal: {str(e)}")
-            QMessageBox.critical(
-                self, "Rebuttal Error", f"An unexpected error occurred: {str(e)}"
-            )
+            try:
+                from evid.core.rebut_doc import rebut_doc
+                rebut_doc(workdir)
+            except FileNotFoundError as e:
+                logger.warning(f"Rebuttal failed: {str(e)}")
+                QMessageBox.critical(
+                    self,
+                    "Rebuttal Failed",
+                    f"Could not run rebuttal: {str(e)}. Ensure required files are available.",
+                )
+            except Exception as e:
+                logger.warning(f"Unexpected error during rebuttal: {str(e)}")
+                QMessageBox.critical(
+                    self, "Rebuttal Error", f"An unexpected error occurred: {str(e)}"
+                )
