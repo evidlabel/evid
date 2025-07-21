@@ -21,6 +21,7 @@ from evid.core.label import create_label
 from evid.core.label_setup import csv_to_bib
 import arrow
 from evid import DEFAULT_DIR
+from evid.core.models import InfoModel  # Added for validation
 
 # Set up logging with detailed output
 logging.basicConfig(level=logging.DEBUG)
@@ -123,6 +124,10 @@ class BrowseEvidenceTab(QWidget):
                 if metadata is None or not isinstance(metadata, dict) or "uuid" not in metadata:
                     continue  # Skip invalid entries
 
+                # Validate with Pydantic
+                validated_metadata = InfoModel(**metadata)
+                metadata = validated_metadata.model_dump()
+
                 date_str = str(metadata.get("time_added", "1970-01-01"))
                 try:
                     date = arrow.get(date_str, "YYYY-MM-DD")
@@ -130,6 +135,9 @@ class BrowseEvidenceTab(QWidget):
                     date = arrow.get("1970-01-01")
 
                 self.metadata_entries.append((date, metadata))
+            except ValueError as e:
+                logger.error(f"Validation error in {info_file}: {str(e)}")
+                continue
             except yaml.YAMLError as e:
                 logger.error(f"YAML parsing error in {info_file}: {str(e)}")
                 continue

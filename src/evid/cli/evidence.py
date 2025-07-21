@@ -13,6 +13,7 @@ from evid.core.pdf_metadata import extract_pdf_metadata  # Moved to new file
 from evid.core.label import create_label  # Moved to new file
 import arrow
 import yaml
+from evid.core.models import InfoModel  # Added for validation
 
 
 # Configure Rich handler for colored logging
@@ -108,6 +109,14 @@ def add_evidence(
         "url": source if is_url else "",
     }
 
+    # Validate with Pydantic
+    try:
+        validated_info = InfoModel(**info)
+        info = validated_info.model_dump()
+    except ValueError as e:
+        logger.error(f"Validation error for info.yml: {e}")
+        sys.exit(f"Validation failed: {e}")
+
     info_yaml_path = unique_dir / "info.yml"
     with info_yaml_path.open("w", encoding="utf-8") as f:
         yaml.dump(info, f, allow_unicode=True)
@@ -135,6 +144,13 @@ def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
             if info_path.exists():
                 with info_path.open("r") as f:
                     info = yaml.safe_load(f)
+                    # Validate with Pydantic
+                    try:
+                        validated_info = InfoModel(**info)
+                        info = validated_info.model_dump()
+                    except ValueError as e:
+                        logger.warning(f"Validation error for {info_path}: {e}. Skipping.")
+                        continue
                     evidences.append(
                         {
                             "uuid": d.name,

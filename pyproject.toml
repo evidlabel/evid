@@ -19,6 +19,8 @@ dependencies = [
     "beautifulsoup4>=4.12.3,<5",
     "rich>=13.7.1,<14",  # Added for colored logging
     "rich-click>=1.8.3,<2",  # Added for enhanced CLI
+    "pydantic>=2.9.2,<3",  # Added for validation
+    "numpy>=2.1.2,<3",  # Added for vectorization
 ]
 
 [project.scripts]
@@ -29,6 +31,8 @@ dev = [
     "pytest~=7.0",
     "pytest-qt>=4.2.0,<5",
     "fitz>=0.0.1.dev2,<0.0.2",
+    "mkdocs>=1.6.1,<2",  # Added for documentation
+    "uv>=0.4.22,<1",  # Prefer uv for installation
 ]
 
 [tool.hatch.build.targets.sdist]
