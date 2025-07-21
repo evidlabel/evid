@@ -2,8 +2,6 @@
 
 `evid` is a GUI application for labelling text from PDF files, aimed at the legal industry. 
 
-<!-- a Python-based tool designed for creating and managing datasets of PDF documents with associated metadata and labels. It enables easy citation of documents and supports generating responses using Large Language Models (LLMs) by organizing documents with metadata and LaTeX-based labelling. The tool features a user-friendly PyQt6 GUI for adding and browsing documents, making it ideal for researchers, professionals, and anyone needing to manage PDF-based datasets. -->
-
 ## Key Features
 
 - **PDF Logging**: Add PDFs with metadata such as title, authors, tags, and dates.
@@ -11,6 +9,7 @@
 - **PyQt6 GUI**: Intuitive interface with tabs for adding and browsing documents.
 - **LaTeX Integration**: Generate LaTeX documents for labels and responses, with BibTeX support for citations.
 - **Modular Database**: Organize documents into datasets with YAML-based metadata storage.
+- **CLI Support**: Manage datasets and evidence through a powerful command-line interface.
 
 ## Getting Started
 
@@ -22,7 +21,6 @@
 
 ```bash
 uv pip install https://github.com/evidlabel/evid.git
-evid 
+evid
 ```
-
 

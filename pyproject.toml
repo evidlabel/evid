@@ -32,6 +32,7 @@ dev = [
     "pytest-qt>=4.2.0,<5",
     "fitz>=0.0.1.dev2,<0.0.2",
     "mkdocs>=1.6.1,<2",  # Added for documentation
+    "mkdocs-material",
     "uv>=0.4.22,<1",  # Prefer uv for installation
 ]
 
