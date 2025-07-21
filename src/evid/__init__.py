@@ -1,6 +1,7 @@
-import importlib.metadata
 from pathlib import Path
 import yaml
+import importlib.metadata
+from evid.core.models import ConfigModel
 
 NAME = "evid"
 try:
@@ -10,19 +11,22 @@ except importlib.metadata.PackageNotFoundError:
 
 
 def load_config() -> dict:
-    """Load configuration from ~/.evidrc or return default."""
+    """Load and validate configuration from ~/.evidrc or return defaults."""
     config_path = Path.home() / ".evidrc"
-    default_config = {
-        "default_dir": str(Path("~/Documents/evid").expanduser()),
-    }
     if config_path.exists():
         try:
             with config_path.open("r") as f:
-                config = yaml.safe_load(f) or {}
-                return {**default_config, **config}
+                user_config = yaml.safe_load(f) or {}
+            config_model = ConfigModel(**user_config)
+            return config_model.model_dump()
         except yaml.YAMLError:
-            return default_config
-    return default_config
+            print("Invalid YAML in .evidrc, using defaults.")
+            return ConfigModel().model_dump()
+        except ValueError as e:  # Includes Pydantic ValidationError
+            print(f"Validation error in .evidrc: {e}. Using defaults.")
+            return ConfigModel().model_dump()
+    else:
+        return ConfigModel().model_dump()
 
 
 CONFIG = load_config()
