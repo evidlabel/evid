@@ -4,8 +4,11 @@ import re
 import yaml
 import pandas as pd
 import demoji
-from datetime import datetime
+from concurrent.futures import ProcessPoolExecutor
+import logging
+from evid.core.models import InfoModel  # Added for validation
 
+logger = logging.getLogger(__name__)
 
 LATEX_TEMPLATE = r"""
 \documentclass[parskip=full]{article}
@@ -87,12 +90,20 @@ def textpdf_to_latex(pdfname: Path, outputfile: Path = None) -> str:
     if info_file.exists():
         with info_file.open() as f:
             info = yaml.safe_load(f)
-            date = info.get("dates", "DATE")
-            if isinstance(date, list):
-                date = date[0] if date else "DATE"
-            # Ensure date is a string
-            date = str(date)
-            name = info.get("label", "label")
+            # Validate with Pydantic
+            try:
+                validated_info = InfoModel(**info)
+                info = validated_info.model_dump()
+            except ValueError as e:
+                logger.warning(f"Validation error for {info_file}: {e}. Using defaults.")
+                date, name = "DATE", "NAME"
+            else:
+                date = info.get("dates", "DATE")
+                if isinstance(date, list):
+                    date = date[0] if date else "DATE"
+                # Ensure date is a string
+                date = str(date)
+                name = info.get("label", "label")
     else:
         date, name = "DATE", "NAME"
 
@@ -156,6 +167,13 @@ def load_uuid_prefix(csv_file_path: Path) -> str:
     if info_file.exists():
         with info_file.open("r") as info_file:
             info_data = yaml.safe_load(info_file)
+            # Validate with Pydantic
+            try:
+                validated_info = InfoModel(**info_data)
+                info_data = validated_info.model_dump()
+            except ValueError as e:
+                logger.warning(f"Validation error for {info_file}: {e}")
+                return ""
             if "uuid" in info_data:
                 return info_data["uuid"][:4]
     return ""
@@ -166,13 +184,26 @@ def load_url(csv_file_path: Path) -> str:
     if info_file.exists():
         with info_file.open("r") as info_file:
             info_data = yaml.safe_load(info_file)
+            # Validate with Pydantic
+            try:
+                validated_info = InfoModel(**info_data)
+                info_data = validated_info.model_dump()
+            except ValueError as e:
+                logger.warning(f"Validation error for {info_file}: {e}")
+                return ""
             if "url" in info_data:
                 return info_data["url"]
     return ""
 
 
 def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
-    df = pd.read_csv(csv_file, sep=" ; ", engine="python")
+    try:
+        df = pd.read_csv(csv_file, sep=" ; ", engine="python")
+        if df.empty:
+            raise ValueError("CSV file is empty")
+    except pd.errors.EmptyDataError:
+        raise ValueError("CSV file is empty")
+
     df["date"] = pd.to_datetime(df["date"], dayfirst=False, errors="coerce")
     uuid_prefix = load_uuid_prefix(csv_file)
 
@@ -194,3 +225,36 @@ def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
             if exclude_note:
                 bibtex_entry = bibtex_entry.replace("note =", "nonote =")
             bibtex_file.write(emojis_to_text(bibtex_entry))
+
+
+def parallel_csv_to_bib(csv_files: list[Path], exclude_note: bool = True) -> tuple[int, list[str]]:
+    """Process multiple CSV files to BibTeX in parallel using ProcessPoolExecutor."""
+    success_count = 0
+    errors = []
+
+    def process_csv(csv_file: Path) -> tuple[bool, str]:
+        """Helper function to process a single CSV file."""
+        if not csv_file.exists():
+            return False, f"CSV file '{csv_file}' does not exist."
+        if not csv_file.stat().st_size:
+            return False, f"Skipped empty CSV file '{csv_file}'."
+        bib_file = csv_file.parent / "label_table.bib"
+        try:
+            csv_to_bib(csv_file, bib_file, exclude_note)
+            logger.info(f"Generated BibTeX file: {bib_file}")
+            return True, ""
+        except Exception as e:
+            error_msg = f"Failed to generate BibTeX for {csv_file}: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+
+    with ProcessPoolExecutor() as executor:
+        results = executor.map(process_csv, csv_files)
+
+    for success, error in results:
+        if success:
+            success_count += 1
+        elif error:
+            errors.append(error)
+
+    return success_count, errors

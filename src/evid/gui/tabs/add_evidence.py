@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QMessageBox,
 )
-from PyQt6.QtCore import Qt
 from pathlib import Path
 import uuid
 import arrow
@@ -22,6 +21,7 @@ import pypdf
 from evid import DEFAULT_DIR
 from evid.utils.text import normalize_text
 import logging
+from evid.core.models import InfoModel  # Added for validation
 
 logger = logging.getLogger(__name__)
 
@@ -185,11 +185,13 @@ class AddEvidenceTab(QWidget):
             dataset_path.mkdir(parents=True, exist_ok=False)
             self.dataset_combo.addItem(dataset_name)
             self.dataset_combo.setCurrentText(dataset_name)
-            QMessageBox.information(
-                self,
-                "Dataset Created",
-                f"Dataset '{dataset_name}' created successfully.",
-            )
+            logger.info(f"Successfully created new dataset: {dataset_name}")
+            # QMessageBox.information(
+            #     self,
+            #     "Dataset Created",
+            #     f"Dataset '{dataset_name}' created successfully.",
+            #     # QMessageBox.Ok,
+            # )
 
     def add_evidence(self):
         dataset = self.dataset_combo.currentText()
@@ -233,6 +235,15 @@ class AddEvidenceTab(QWidget):
             "label": self.label_input.text(),
             "url": self.url_input.text(),
         }
+
+        # Validate with Pydantic
+        try:
+            validated_info = InfoModel(**info)
+            info = validated_info.model_dump()
+        except ValueError as e:
+            logger.error(f"Validation error for info.yml: {e}")
+            QMessageBox.critical(self, "Validation Error", f"Validation failed: {e}")
+            return
 
         target_path = unique_dir / file_name
         if hasattr(self, "memory_pdf_file") and self.memory_pdf_file:
