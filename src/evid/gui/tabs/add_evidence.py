@@ -185,11 +185,13 @@ class AddEvidenceTab(QWidget):
             dataset_path.mkdir(parents=True, exist_ok=False)
             self.dataset_combo.addItem(dataset_name)
             self.dataset_combo.setCurrentText(dataset_name)
-            QMessageBox.information(
-                self,
-                "Dataset Created",
-                f"Dataset '{dataset_name}' created successfully.",
-            )
+            logger.info(f"Successfully created new dataset: {dataset_name}")
+            # QMessageBox.information(
+            #     self,
+            #     "Dataset Created",
+            #     f"Dataset '{dataset_name}' created successfully.",
+            #     # QMessageBox.Ok,
+            # )
 
     def add_evidence(self):
         dataset = self.dataset_combo.currentText()
