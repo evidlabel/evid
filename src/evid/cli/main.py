@@ -13,6 +13,8 @@ from evid.cli.dataset import (
 from evid.cli.evidence import add_evidence, label_evidence
 from evid.core.bibtex import generate_bibtex
 from evid.gui.main import main as gui_main
+from evid.core.models import ConfigModel  # For rc command
+import yaml
 
 # Set up logging with Rich handler
 logging.basicConfig(handlers=[RichHandler()], level=logging.DEBUG, rich_tracebacks=True)
@@ -109,6 +111,39 @@ def gui(obj):
 def label(obj, dataset: str, uuid: str):
     directory = obj["directory"]
     label_evidence(directory, dataset, uuid)
+
+
+@main.command(help="Initialize or update .evidrc with default settings")
+def rc():
+    """Initialize or update ~/.evidrc by adding missing fields from defaults."""
+    config_path = Path.home() / ".evidrc"
+    if config_path.exists():
+        try:
+            with config_path.open("r") as f:
+                user_config = yaml.safe_load(f) or {}
+        except yaml.YAMLError:
+            user_config = {}
+            print("Invalid YAML in .evidrc, starting fresh.")
+    else:
+        user_config = {}
+
+    # Validate and fill missing with defaults using Pydantic
+    try:
+        config_model = ConfigModel(**user_config)
+    except ValueError:
+        # If validation fails, use defaults and override with valid user values
+        default_config = ConfigModel().model_dump()
+        merged = {**default_config, **user_config}
+        config_model = ConfigModel(**merged)  # Re-validate merged
+
+    config = config_model.model_dump()
+
+    # Write back the complete config
+    with config_path.open("w") as f:
+        yaml.dump(config, f, allow_unicode=True)
+
+    action = "updated" if config_path.exists() else "created"
+    print(f".evidrc {action} at {config_path} with complete default fields.")
 
 
 if __name__ == "__main__":

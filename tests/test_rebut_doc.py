@@ -11,7 +11,19 @@ def temp_workdir(tmp_path):
                   "test_label ; Test quote ; Test note ; Section 1 ; 1 ; 1 ; 2023-01-01 ; 0"
     csv_file = workdir / "label.csv"
     csv_file.write_text(csv_content, encoding="utf-8")
-    (workdir / "info.yml").write_text("uuid: test_uuid", encoding="utf-8")
+    info_data = {
+        "original_name": "test.pdf",
+        "uuid": "test_uuid",
+        "time_added": "2023-01-01",
+        "dates": "2023-01-01",
+        "title": "Test",
+        "authors": "Author",
+        "tags": "",
+        "label": "test",
+        "url": "http://example.com"
+    }
+    with (workdir / "info.yml").open("w", encoding="utf-8") as f:
+        yaml.dump(info_data, f)
     yield workdir
 
 @pytest.mark.parametrize("bib_content", [

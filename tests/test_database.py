@@ -11,10 +11,26 @@ def temp_dataset(tmp_path):
     entry1.mkdir(parents=True)
     entry2.mkdir(parents=True)
 
+    info_data = {
+        "original_name": "doc1.pdf",
+        "uuid": "uuid1",
+        "time_added": "2023-01-01",
+        "dates": "2023-01-01",
+        "title": "Doc1",
+        "authors": "Author1",
+        "tags": "",
+        "label": "doc1",
+        "url": ""
+    }
     with (entry1 / "info.yml").open("w") as f:
-        yaml.dump({"title": "Doc1", "uuid": "uuid1", "original_name": "doc1.pdf"}, f)
+        yaml.dump(info_data, f)
+    info_data["uuid"] = "uuid2"
+    info_data["original_name"] = "doc2.pdf"
+    info_data["title"] = "Doc2"
+    info_data["authors"] = "Author2"
+    info_data["label"] = "doc2"
     with (entry2 / "info.yml").open("w") as f:
-        yaml.dump({"title": "Doc2", "uuid": "uuid2", "original_name": "doc2.pdf"}, f)
+        yaml.dump(info_data, f)
 
     yield tmp_path, ["dataset"]
 

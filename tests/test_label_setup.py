@@ -14,8 +14,19 @@ def temp_pdf_with_info(tmp_path):
     doc.save(pdf_path)
     
     # Create info.yml
+    info_data = {
+        "original_name": "test.pdf",
+        "uuid": "test-uuid",
+        "time_added": "2023-01-01",
+        "dates": "2023-01-01",
+        "title": "Test Title",
+        "authors": "Test Author",
+        "tags": "",
+        "label": "test_label",
+        "url": ""
+    }
     with info_path.open("w") as f:
-        f.write("dates: 2023-01-01\nlabel: test_label")
+        yaml.dump(info_data, f)
     
     yield pdf_path, info_path
     doc.close()
