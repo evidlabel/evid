@@ -4,6 +4,7 @@ from evid.cli.dataset import get_datasets, select_dataset, create_dataset
 from evid.cli.evidence import add_evidence
 from evid.core.bibtex import generate_bibtex
 import yaml
+import fitz  # Added for creating valid PDFs
 
 @pytest.fixture
 def temp_dir(tmp_path):
@@ -33,11 +34,16 @@ def test_create_dataset(temp_dir):
     create_dataset(temp_dir, dataset_name)
     assert (temp_dir / dataset_name).exists()
 
-@pytest.mark.skip(reason="Visual inspection required, no automated check implemented")
 @patch("subprocess.run")
 def test_add_evidence_local_pdf_with_label(mock_run, temp_dir, tmp_path):
     pdf_path = tmp_path / "test.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4\n")
+    # Create a valid PDF using fitz
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((100, 100), "Test content")
+    doc.save(str(pdf_path))
+    doc.close()
+
     add_evidence(temp_dir, "dataset1", str(pdf_path), label=True)
 
     dataset_path = temp_dir / "dataset1"
@@ -46,6 +52,7 @@ def test_add_evidence_local_pdf_with_label(mock_run, temp_dir, tmp_path):
     uuid_dir = uuid_dirs[0]
     assert (uuid_dir / "test.pdf").exists()
     assert (uuid_dir / "info.yml").exists()
+    assert (uuid_dir / "label.tex").exists()  # Check label.tex created
 
     with (uuid_dir / "info.yml").open("r") as f:
         info = yaml.safe_load(f)
@@ -53,14 +60,23 @@ def test_add_evidence_local_pdf_with_label(mock_run, temp_dir, tmp_path):
         assert info["title"] == "test"
         assert info["label"] == "test"
 
+    with (uuid_dir / "label.tex").open("r") as f:
+        content = f.read()
+        assert "Test content" in content  # Check generated content
+
     mock_run.assert_called_once_with(
-        ["code", "--wait", str(uuid_dir / "label.tex")], check=True
+        ["code", str(uuid_dir / "label.tex")], check=True
     )
 
 def test_add_evidence_custom_directory(tmp_path, tmp_path_factory):
     custom_dir = tmp_path_factory.mktemp("custom_evid_db")
     pdf_path = tmp_path / "test.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4\n")
+    # Create a valid PDF using fitz
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((100, 100), "Test content")
+    doc.save(str(pdf_path))
+    doc.close()
 
     add_evidence(custom_dir, "dataset1", str(pdf_path))
 

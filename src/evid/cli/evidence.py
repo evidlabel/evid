@@ -123,3 +123,77 @@ def add_evidence(
 
 # Import LATEX_TEMPLATE for non-PDF content
 from evid.core.label_setup import LATEX_TEMPLATE
+
+
+def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
+    """Return a list of evidence metadata in the dataset."""
+    dataset_path = directory / dataset
+    evidences = []
+    for d in dataset_path.iterdir():
+        if d.is_dir() and not d.name.startswith("."):
+            info_path = d / "info.yml"
+            if info_path.exists():
+                with info_path.open("r") as f:
+                    info = yaml.safe_load(f)
+                    evidences.append(
+                        {
+                            "uuid": d.name,
+                            "title": info.get("title", d.name),
+                            "authors": info.get("authors", ""),
+                            "date": info.get("time_added", ""),
+                        }
+                    )
+            else:
+                evidences.append(
+                    {"uuid": d.name, "title": d.name, "authors": "", "date": ""}
+                )
+    return evidences
+
+
+def select_evidence(
+    directory: Path, dataset: str, prompt_message: str = "Select evidence"
+) -> str:
+    """Prompt user to select an evidence from the dataset."""
+    evidences = get_evidence_list(directory, dataset)
+    if not evidences:
+        sys.exit("No evidences found in dataset.")
+
+    print(f"{prompt_message}:")
+    for i, ev in enumerate(evidences, 1):
+        print(
+            f"{i}. {ev['title']} by {ev['authors']} ({ev['date']}) - {ev['uuid']}"
+        )
+
+    choice = input("Select evidence (number): ").strip()
+    try:
+        choice_num = int(choice)
+        if 1 <= choice_num <= len(evidences):
+            return evidences[choice_num - 1]["uuid"]
+        else:
+            sys.exit("Invalid number.")
+    except ValueError:
+        sys.exit("Invalid selection.")
+
+
+def label_evidence(directory: Path, dataset: str = None, uuid: str = None) -> None:
+    """Label an evidence in the specified dataset."""
+    from evid.cli.dataset import select_dataset
+
+    if not dataset:
+        dataset = select_dataset(directory, "Select dataset to label")
+
+    if not uuid:
+        uuid = select_evidence(directory, dataset)
+
+    evidence_path = directory / dataset / uuid
+    if not evidence_path.exists():
+        sys.exit(f"Evidence {uuid} in {dataset} does not exist.")
+
+    pdf_files = list(evidence_path.glob("*.pdf"))
+    if not pdf_files:
+        sys.exit("No PDF found in evidence directory.")
+    if len(pdf_files) > 1:
+        logger.warning("Multiple PDFs found, using the first one.")
+    file_path = pdf_files[0]
+
+    create_label(file_path, dataset, uuid)

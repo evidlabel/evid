@@ -18,6 +18,7 @@ dependencies = [
     "gitpython>=3.1.43,<4",
     "beautifulsoup4>=4.12.3,<5",
     "rich>=13.7.1,<14",  # Added for colored logging
+    "rich-click>=1.8.3,<2",  # Added for enhanced CLI
 ]
 
 [project.scripts]
