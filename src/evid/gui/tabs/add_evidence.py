@@ -21,6 +21,7 @@ import pypdf
 from evid import DEFAULT_DIR
 from evid.utils.text import normalize_text
 import logging
+from evid.core.models import InfoModel  # Added for validation
 
 logger = logging.getLogger(__name__)
 
@@ -232,6 +233,15 @@ class AddEvidenceTab(QWidget):
             "label": self.label_input.text(),
             "url": self.url_input.text(),
         }
+
+        # Validate with Pydantic
+        try:
+            validated_info = InfoModel(**info)
+            info = validated_info.model_dump()
+        except ValueError as e:
+            logger.error(f"Validation error for info.yml: {e}")
+            QMessageBox.critical(self, "Validation Error", f"Validation failed: {e}")
+            return
 
         target_path = unique_dir / file_name
         if hasattr(self, "memory_pdf_file") and self.memory_pdf_file:

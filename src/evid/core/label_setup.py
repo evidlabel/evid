@@ -6,6 +6,7 @@ import pandas as pd
 import demoji
 from concurrent.futures import ProcessPoolExecutor
 import logging
+from evid.core.models import InfoModel  # Added for validation
 
 logger = logging.getLogger(__name__)
 
@@ -89,12 +90,20 @@ def textpdf_to_latex(pdfname: Path, outputfile: Path = None) -> str:
     if info_file.exists():
         with info_file.open() as f:
             info = yaml.safe_load(f)
-            date = info.get("dates", "DATE")
-            if isinstance(date, list):
-                date = date[0] if date else "DATE"
-            # Ensure date is a string
-            date = str(date)
-            name = info.get("label", "label")
+            # Validate with Pydantic
+            try:
+                validated_info = InfoModel(**info)
+                info = validated_info.model_dump()
+            except ValueError as e:
+                logger.warning(f"Validation error for {info_file}: {e}. Using defaults.")
+                date, name = "DATE", "NAME"
+            else:
+                date = info.get("dates", "DATE")
+                if isinstance(date, list):
+                    date = date[0] if date else "DATE"
+                # Ensure date is a string
+                date = str(date)
+                name = info.get("label", "label")
     else:
         date, name = "DATE", "NAME"
 
@@ -158,6 +167,13 @@ def load_uuid_prefix(csv_file_path: Path) -> str:
     if info_file.exists():
         with info_file.open("r") as info_file:
             info_data = yaml.safe_load(info_file)
+            # Validate with Pydantic
+            try:
+                validated_info = InfoModel(**info_data)
+                info_data = validated_info.model_dump()
+            except ValueError as e:
+                logger.warning(f"Validation error for {info_file}: {e}")
+                return ""
             if "uuid" in info_data:
                 return info_data["uuid"][:4]
     return ""
@@ -168,6 +184,13 @@ def load_url(csv_file_path: Path) -> str:
     if info_file.exists():
         with info_file.open("r") as info_file:
             info_data = yaml.safe_load(info_file)
+            # Validate with Pydantic
+            try:
+                validated_info = InfoModel(**info_data)
+                info_data = validated_info.model_dump()
+            except ValueError as e:
+                logger.warning(f"Validation error for {info_file}: {e}")
+                return ""
             if "url" in info_data:
                 return info_data["url"]
     return ""
