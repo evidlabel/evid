@@ -44,7 +44,8 @@ jobs:
 
       - name: Run tests
         run: |
-          uv run pytest -v 
+          source .venv/bin/activate
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" uv run pytest -v 
 
   deploy-docs:
     runs-on: ubuntu-latest
