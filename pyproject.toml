@@ -3,7 +3,7 @@ name = "evid"
 version = "0.1.4"
 description = "document logger, adder of metadata"
 authors = [{ name = "evid 210122431+evidlabel@users.noreply.github.com" }]
-requires-python = ">=3.9,<4.0"
+requires-python = ">=3.11,<4.0"
 readme = "README.md"
 license = "MIT"
 dependencies = [
