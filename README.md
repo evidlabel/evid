@@ -1,30 +1,52 @@
 ![Deploy](https://github.com/evidlabel/evid/actions/workflows/ci.yml/badge.svg)![Version](https://img.shields.io/github/v/release/evidlabel/evid)
 # evid - pdf labeler
+`evid` is an application, aimed at the legal industry, for labelling pdf text content and making the labels citeable (for use in e.g. LaTeX or typst). 
 
-evid is a Python-based tool for managing PDF files with metadata extraction and organization capabilities. It features a PyQt6-based GUI and a command-line interface (CLI).
+<!-- Python-based tool for managing PDF files with metadata extraction and organization capabilities. It features a PyQt6-based GUI and a command-line interface (CLI). -->
 
-## Features
+## Workflow
+- Create a dataset
+- Add pdfs
+- Label pdfs using an editor, surrounding labelled text with `\lb{<bibtexkey>}{text}{<remark>}`
+- Latex compilation of the labelled `label.tex` file will produce a table of labels. 
+- Use `generate bibtex` to create a bibtex file. 
+- Use `rebut` to create a line-by-line rebuttal, that can be used in an LLM (the remarks are line prompts for the LLM).  
+
+<!-- ## Features
 - PDF logging with metadata (title, authors, tags, dates)
 - Automatic date extraction from PDFs
 - PyQt6 GUI with tabs for adding and browsing documents
 - CLI for adding PDFs via URL or local file
-- LaTeX document generation for labels and rebuttals
+- LaTeX document generation for labels and rebuttals -->
 
 ## Installation
-1. Clone the repository: `git clone <repository-url>`
-2. Install dependencies: `poetry install`
-3. Run the GUI: `poetry run evid gui` or CLI: `poetry run evid --help`
+
+```bash
+uv pip install https://github.com/evidlabel/evid.git
+```
 
 ## Usage
-Launch the GUI with `poetry run evid gui` to access the interface for adding and browsing documents.
+### GUI
+Launch the gui using:
+```bash
+evid 
+```
+Which gives access to a two pane app, one for adding files, and one for browsing datasets. 
+
+<img src="docs/assets/image.png" alt="drawing" width="50%"/><img src="docs/assets/browse.png" alt="drawing" width="50%"/>
+
+Launch the GUI with `evid gui` or just `evid` to access the interface for adding and browsing documents.
+
+### CLI
 
 Use the CLI to add PDFs:
 - Add a PDF (from URL or local file):
 ```bash
-poetry run evid add <url_or_path> [--dataset <dataset>]
+evid add <url_or_path> 
 ```
 
-If `--dataset` is not specified, the CLI prompts you to select or create a dataset. The `add` command automatically detects whether the input is a URL (starting with `http://` or `https://`) or a local file path. Each PDF is stored in a unique folder (named with a UUID) alongside an `info.yml` file containing metadata.
+If `--dataset` is not specified, the CLI prompts you to select or create a dataset. 
+The `add` command automatically detects whether the input is a URL (starting with `http://` or `https://`) or a local file path. Each PDF is stored in a unique folder (named with a UUID) alongside an `info.yml` file containing metadata.
 
 ## Documentation 
 
