@@ -64,7 +64,7 @@ mkdocs serve
 
 5. **Submit a Pull Request**:
 - Push your branch and create a PR against the `main` branch.
-- Ensure the CI pipeline passes (runs `pytest` on Ubuntu with Python 3.9).
+- Ensure the CI pipeline passes (runs `pytest` on Ubuntu with Python 3.11).
 
 ## Extending evid
 
