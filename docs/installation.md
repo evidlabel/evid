@@ -4,7 +4,7 @@ This guide covers how to install `evid` on your system using `uv`, the recommend
 
 ## Prerequisites
 
-- **Python**: Version 3.9 or higher (but less than 4.0).
+- **Python**: Version 3.11 or higher (but less than 4.0).
 - **uv**: For dependency management and installation.
 - **Git**: To clone the repository and enable optional Git-based version control for datasets.
 - **Optional**: A LaTeX distribution (e.g., TeX Live) for generating LaTeX documents.
@@ -210,7 +210,7 @@ evid
 
 ## Troubleshooting (General)
 
-- **uv errors**: Ensure Python 3.9+ is installed and `uv` is correctly configured. Try `uv python use 3.9` if `uv` uses the wrong Python version.
+- **uv errors**: Ensure Python 3.11+ is installed and `uv` is correctly configured. Try `uv python use 3.11` if `uv` uses the wrong Python version.
 - **Missing LaTeX**: If LaTeX documents fail to generate, install a LaTeX distribution like TeX Live (included in WSL2 instructions above).
 - **GUI issues**: Verify that `PyQt6` is installed correctly. Check for Qt-related errors in the terminal output. For WSL2, ensure the X server is running.
 
