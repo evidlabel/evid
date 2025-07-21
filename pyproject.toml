@@ -26,7 +26,7 @@ dependencies = [
 [project.scripts]
 evid = "evid.cli.main:main"
 
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "pytest~=7.0",
     "pytest-qt>=4.2.0,<5",
