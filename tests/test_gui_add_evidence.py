@@ -1,8 +1,8 @@
 import pytest
 from PyQt6.QtWidgets import QApplication
+from unittest.mock import patch
 from evid.gui.tabs.add_evidence import AddEvidenceTab
 import sys
-
 
 @pytest.fixture
 def add_tab(tmp_path):
@@ -11,16 +11,13 @@ def add_tab(tmp_path):
     yield tab
     app.quit()
 
-
-@pytest.mark.skip("Skipping test_add_evidence for now")
-def test_add_evidence_missing_fields(add_tab):
+@patch("PyQt6.QtWidgets.QMessageBox.warning")
+def test_add_evidence_missing_fields(mock_warning, add_tab):
     # Simulate missing fields by not filling anything
     add_tab.dataset_combo.clear()  # No dataset selected
-    result = add_tab.add_evidence()
-    assert result is None  # Should return None due to validation
+    add_tab.add_evidence()
+    mock_warning.assert_called_once()
 
-
-@pytest.mark.skip("Skipping test_create_dataset for now")
 def test_create_dataset(add_tab, tmp_path):
     dataset_name = "test_dataset"
     add_tab.new_dataset_input.setText(dataset_name)
