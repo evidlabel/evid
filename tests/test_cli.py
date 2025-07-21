@@ -116,13 +116,29 @@ def setup_bibtex_csvs(tmp_path):
     csv_path3 = entry3 / "label.csv"
     csv_path3.write_text("", encoding="utf-8")
 
-    info_data = {"uuid": "uuid1", "url": "http://example.com"}
+    info_data = {
+        "original_name": "doc.pdf",
+        "uuid": "uuid1",
+        "time_added": "2023-01-01",
+        "dates": "2023-01-01",
+        "title": "Doc1",
+        "authors": "Author1",
+        "tags": "",
+        "label": "doc1",
+        "url": "http://example.com"
+    }
     with (entry1 / "info.yml").open("w", encoding="utf-8") as f:
         yaml.dump(info_data, f)
-    info_data = {"uuid": "uuid2", "url": "http://example.com"}
+    info_data["uuid"] = "uuid2"
+    info_data["title"] = "Doc2"
+    info_data["authors"] = "Author2"
+    info_data["label"] = "doc2"
     with (entry2 / "info.yml").open("w", encoding="utf-8") as f:
         yaml.dump(info_data, f)
-    info_data = {"uuid": "uuid3", "url": "http://example.com"}
+    info_data["uuid"] = "uuid3"
+    info_data["title"] = "Doc3"
+    info_data["authors"] = "Author3"
+    info_data["label"] = "doc3"
     with (entry3 / "info.yml").open("w", encoding="utf-8") as f:
         yaml.dump(info_data, f)
 
