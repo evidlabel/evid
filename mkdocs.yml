@@ -1,4 +1,4 @@
-site_name: evid docs
+site_name: evid
 repo_url: https://github.com/evidlabel/evid
 theme:
   name: material
