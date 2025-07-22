@@ -76,7 +76,7 @@ jobs:
       - name: Build MkDocs site
         run: |
           source .venv/bin/activate
-          mkdocs build
+          uv run mkdocs build
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
