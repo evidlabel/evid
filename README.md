@@ -5,7 +5,7 @@
 ## Workflow
 - Create a dataset
 - Add PDFs
-- Label PDFs using an editor, surrounding labelled text with `\lb{<bibtexkey>}{text}{<remark>}`
+- Label the text, extracted from the PDF, using a text editor, surrounding labelled text with `\lb{<bibtexkey>}{text}{<remark>}` in latex or `#lab(key,text,note)` in typst
 - LaTeX compilation of the labelled `label.tex` file will produce a table of labels. 
 - Use `generate bibtex` to create a BibTeX file. 
 - Use `rebut` to create a line-by-line rebuttal, that can be used in an LLM (the remarks are line prompts for the LLM).  
