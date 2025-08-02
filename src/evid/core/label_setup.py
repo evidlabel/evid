@@ -6,6 +6,7 @@ import pandas as pd
 import demoji
 from concurrent.futures import ProcessPoolExecutor
 import logging
+import json
 from evid.core.models import InfoModel
 
 logger = logging.getLogger(__name__)
@@ -200,6 +201,36 @@ def load_url(file_path: Path) -> str:
                 return info_data["url"]
     return ""
 
+def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
+    try:
+        with open(json_file) as f:
+            data = json.load(f)
+        if not data:
+            raise ValueError("JSON data is empty")
+        df = pd.DataFrame([item['value'] for item in data])
+        if df.empty:
+            raise ValueError("DataFrame is empty")
+        df.rename(columns={'key': 'label', 'text': 'quote'}, inplace=True)
+        df["date"] = pd.to_datetime(df["date"], dayfirst=False, errors="coerce")
+        uuid_prefix = load_uuid_prefix(json_file)
+        df["latex_label"] = [f"{uuid_prefix}:{label.strip()}" for label in df["label"]]
+        with open(output_file, "w") as bibtex_file:
+            for index, row in df.iterrows():
+                bibtex_entry = f"""@article{{ {row["latex_label"]}  ,
+    note = {{{row["note"]}}},
+    title = {{{replace_underscores(replace_multiple_spaces(remove_backslash_substrings(row["quote"])))}}},
+    journal = {{{replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row["title"]))))}}},
+    date = {{{row["date"].strftime("%Y-%m-%d") if not pd.isnull(row["date"]) else ""}}},
+    pages = {{{int(row["opage"]) if "opage" in row and not pd.isnull(row["opage"]) else ""}}},
+    url = {{{load_url(json_file)}}},
+    }}
+    """
+                if exclude_note:
+                    bibtex_entry = bibtex_entry.replace("note =", "nonote =")
+                bibtex_file.write(emojis_to_text(bibtex_entry))
+    except Exception as e:
+        raise ValueError(f"Error processing JSON: {e}")
+
 def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
     try:
         df = pd.read_csv(csv_file)
@@ -261,6 +292,7 @@ def parallel_csv_to_bib(csv_files: list[Path], exclude_note: bool = True) -> tup
             errors.append(error)
 
     return success_count, errors
+
 
 
 

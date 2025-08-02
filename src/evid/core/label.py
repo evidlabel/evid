@@ -24,14 +24,39 @@ def create_label(file_path: Path, dataset: str, uuid: str) -> None:
             else:
                 logger.warning(f"Unsupported file type: {file_path.suffix}")
                 return
-        subprocess.run([CONFIG["editor"], str(label_file)], check=True)
+
+        # Open the editor
+        try:
+            subprocess.run([CONFIG["editor"], str(label_file)], check=True)
+        except FileNotFoundError:
+            logger.error(
+                f"The configured editor '{CONFIG['editor']}' not found. Please ensure it is in your PATH."
+            )
+            print(
+                f"The configured editor '{CONFIG['editor']}' is not installed or not in your PATH."
+            )
+            return  # Exit early if editor fails to open
+        except subprocess.SubprocessError as e:
+            logger.error(f"Error opening the configured editor: {str(e)}")
+            print(f"Failed to open the configured editor: {str(e)}")
+            return  # Exit early if editor fails
 
         json_file = file_path.parent / "label.json"
 
-        # pipe the results from typst query to a JSON file
-        subprocess.run(["typst","query",label_file, "\"<lab>\"]", stdout=open(json_file, "w"), check=True)
+        # Pipe the results from typst query to a JSON file
+        try:
+            subprocess.run(
+                ["typst", "query", str(label_file), "<lab>"],
+                stdout=open(json_file, "w"),
+                check=True,
+            )
+        except subprocess.SubprocessError as e:
+            logger.error(f"Error running typst query: {str(e)}")
+            print(f"Failed to run typst query: {str(e)}")
+            return  # Exit early if query fails
+
         # _file = file_path.parent / "label.csv"
-        bib_file = file_path.parent / "label_table.bib"
+        bib_file = file_path.parent / "label1.bib"
         if json_file.exists():
             json_to_bib(json_file, bib_file, exclude_note=True)
             logger.info(f"Generated BibTeX file: {bib_file}")
@@ -40,16 +65,6 @@ def create_label(file_path: Path, dataset: str, uuid: str) -> None:
             print(
                 f"No label.json found in {file_path.parent}. BibTeX generation skipped."
             )
-    except FileNotFoundError:
-        logger.error(
-            f"The configured editor '{CONFIG['editor']}' not found. Please ensure it is in your PATH."
-        )
-        print(
-            f"The configured editor '{CONFIG['editor']}' is not installed or not in your PATH."
-        )
-    except subprocess.SubprocessError as e:
-        logger.error(f"Error opening the configured editor: {str(e)}")
-        print(f"Failed to open the configured editor: {str(e)}")
     except Exception as e:
         logger.error(f"Error during label workflow: {str(e)}")
         print(f"An unexpected error occurred: {str(e)}")
