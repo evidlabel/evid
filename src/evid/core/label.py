@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 from evid.core.label_setup import textpdf_to_typst, text_to_typst, json_to_bib
 from evid import CONFIG  # Import CONFIG to access the editor setting
+import json
+import pandas as pd
 
 # Configure Rich handler for colored logging
 logging.basicConfig(handlers=[RichHandler(rich_tracebacks=True)], level=logging.INFO)
@@ -55,11 +57,12 @@ def create_label(file_path: Path, dataset: str, uuid: str) -> None:
             print(f"Failed to run typst query: {str(e)}")
             return  # Exit early if query fails
 
-        # _file = file_path.parent / "label.csv"
-        bib_file = file_path.parent / "label1.bib"
+        bib_file = file_path.parent / "label.bib"
         if json_file.exists():
             json_to_bib(json_file, bib_file, exclude_note=True)
             logger.info(f"Generated BibTeX file: {bib_file}")
+
+            # csv had no function other than to generate the bib file, fully deprecate csv use
         else:
             logger.warning(f"JSON file {json_file} not found after labelling")
             print(

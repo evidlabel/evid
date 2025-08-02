@@ -1,4 +1,5 @@
 """GUI tab for browsing evidence."""
+
 import logging
 from PyQt6.QtWidgets import (
     QWidget,
@@ -18,7 +19,7 @@ from pathlib import Path
 import yaml
 import subprocess
 from evid.core.label import create_label
-from evid.core.label_setup import csv_to_bib
+from evid.core.label_setup import json_to_bib
 import arrow
 from evid import DEFAULT_DIR
 from evid.core.models import InfoModel  # Added for validation
@@ -66,7 +67,9 @@ class BrowseEvidenceTab(QWidget):
         )
         self.table.setSortingEnabled(True)  # Enable sorting
         self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)  # Default sort by Date
-        self.table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)  # Enable multi-selection
+        self.table.setSelectionMode(
+            QTableWidget.SelectionMode.ExtendedSelection
+        )  # Enable multi-selection
 
         # Set default column widths
         header = self.table.horizontalHeader()
@@ -85,8 +88,12 @@ class BrowseEvidenceTab(QWidget):
 
         # Buttons
         button_layout = QHBoxLayout()
-        button_layout.addWidget(QPushButton("Label Selected", clicked=self.create_labels))
-        button_layout.addWidget(QPushButton("Generate BibTeX", clicked=self.generate_bibtex))
+        button_layout.addWidget(
+            QPushButton("Label Selected", clicked=self.create_labels)
+        )
+        button_layout.addWidget(
+            QPushButton("Generate BibTeX", clicked=self.generate_bibtex)
+        )
         button_layout.addWidget(QPushButton("Rebut", clicked=self.run_rebut))
         layout.addLayout(button_layout)
 
@@ -121,7 +128,11 @@ class BrowseEvidenceTab(QWidget):
                 with info_file.open("r", encoding="utf-8") as f:
                     metadata = yaml.safe_load(f)
 
-                if metadata is None or not isinstance(metadata, dict) or "uuid" not in metadata:
+                if (
+                    metadata is None
+                    or not isinstance(metadata, dict)
+                    or "uuid" not in metadata
+                ):
                     continue  # Skip invalid entries
 
                 # Validate with Pydantic
@@ -176,16 +187,22 @@ class BrowseEvidenceTab(QWidget):
                 self.table.setItem(row, 3, QTableWidgetItem(original_name))
                 self.table.setItem(row, 4, QTableWidgetItem(uuid_value))
 
-                logger.debug(f"Added row {row}: Authors={authors}, Label={label}, UUID={uuid_value}")
+                logger.debug(
+                    f"Added row {row}: Authors={authors}, Label={label}, UUID={uuid_value}"
+                )
 
         self.table.setSortingEnabled(True)
         self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)
 
     def open_directory(self):
         """Open selected directories in a single VS Code window."""
-        selected_rows = sorted(set(index.row() for index in self.table.selectedIndexes()))
+        selected_rows = sorted(
+            set(index.row() for index in self.table.selectedIndexes())
+        )
         if not selected_rows:
-            QMessageBox.warning(self, "No Selection", "Please select at least one evidence entry.")
+            QMessageBox.warning(
+                self, "No Selection", "Please select at least one evidence entry."
+            )
             return
 
         dataset = self.dataset_combo.currentText()
@@ -193,13 +210,17 @@ class BrowseEvidenceTab(QWidget):
         for row in selected_rows:
             uuid_item = self.table.item(row, 4)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-                QMessageBox.critical(self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID.")
+                QMessageBox.critical(
+                    self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID."
+                )
                 continue
 
             uuid = uuid_item.text()
             path = self.directory / dataset / uuid
             if not path.exists():
-                QMessageBox.critical(self, "Directory Missing", f"The directory {path} does not exist.")
+                QMessageBox.critical(
+                    self, "Directory Missing", f"The directory {path} does not exist."
+                )
                 continue
             paths.append(str(path))
 
@@ -207,19 +228,29 @@ class BrowseEvidenceTab(QWidget):
             try:
                 subprocess.run(["code"] + paths, check=True)  # Open all in one window
             except subprocess.SubprocessError as e:
-                QMessageBox.critical(self, "Error Opening VS Code", f"Failed to open directories in VS Code: {str(e)}")
+                QMessageBox.critical(
+                    self,
+                    "Error Opening VS Code",
+                    f"Failed to open directories in VS Code: {str(e)}",
+                )
 
     def create_labels(self):
-        selected_rows = sorted(set(index.row() for index in self.table.selectedIndexes()))
+        selected_rows = sorted(
+            set(index.row() for index in self.table.selectedIndexes())
+        )
         if not selected_rows:
-            QMessageBox.warning(self, "No Selection", "Please select at least one evidence entry.")
+            QMessageBox.warning(
+                self, "No Selection", "Please select at least one evidence entry."
+            )
             return
 
         dataset = self.dataset_combo.currentText()
         for row in selected_rows:
             uuid_item = self.table.item(row, 4)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-                QMessageBox.critical(self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID.")
+                QMessageBox.critical(
+                    self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID."
+                )
                 continue
 
             uuid = uuid_item.text()
@@ -230,9 +261,13 @@ class BrowseEvidenceTab(QWidget):
             create_label(file_path, dataset, uuid)
 
     def generate_bibtex(self):
-        selected_rows = sorted(set(index.row() for index in self.table.selectedIndexes()))
+        selected_rows = sorted(
+            set(index.row() for index in self.table.selectedIndexes())
+        )
         if not selected_rows:
-            QMessageBox.warning(self, "No Selection", "Please select at least one evidence entry.")
+            QMessageBox.warning(
+                self, "No Selection", "Please select at least one evidence entry."
+            )
             return
 
         dataset = self.dataset_combo.currentText()
@@ -240,14 +275,16 @@ class BrowseEvidenceTab(QWidget):
         for row in selected_rows:
             uuid_item = self.table.item(row, 4)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-                QMessageBox.critical(self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID.")
+                QMessageBox.critical(
+                    self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID."
+                )
                 continue
 
             uuid = uuid_item.text()
             file_name = self.table.item(row, 3).text()
             file_path = self.directory / dataset / uuid / file_name
             csv_file = file_path.parent / "label.csv"
-            bib_file = file_path.parent / "label_table.bib"
+            bib_file = file_path.parent / "label.bib"
 
             try:
                 if csv_file.exists():
@@ -278,7 +315,9 @@ class BrowseEvidenceTab(QWidget):
             )
 
     def run_rebut(self):
-        selected_rows = sorted(set(index.row() for index in self.table.selectedIndexes()))
+        selected_rows = sorted(
+            set(index.row() for index in self.table.selectedIndexes())
+        )
         if not selected_rows:
             QMessageBox.warning(
                 self, "No Selection", "Please select an evidence entry to rebut."
@@ -289,14 +328,18 @@ class BrowseEvidenceTab(QWidget):
         for row in selected_rows:
             uuid_item = self.table.item(row, 4)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-                QMessageBox.critical(self, "Invalid Entry", "Selected entry has no valid UUID.")
+                QMessageBox.critical(
+                    self, "Invalid Entry", "Selected entry has no valid UUID."
+                )
                 continue
 
             uuid = uuid_item.text()
             workdir = self.directory / dataset / uuid
 
             if not workdir.exists():
-                logger.warning(f"Working directory {workdir} does not exist for rebuttal")
+                logger.warning(
+                    f"Working directory {workdir} does not exist for rebuttal"
+                )
                 QMessageBox.critical(
                     self,
                     "Directory Missing",
@@ -306,6 +349,7 @@ class BrowseEvidenceTab(QWidget):
 
             try:
                 from evid.core.rebut_doc import rebut_doc
+
                 rebut_doc(workdir)
             except FileNotFoundError as e:
                 logger.warning(f"Rebuttal failed: {str(e)}")
@@ -319,4 +363,3 @@ class BrowseEvidenceTab(QWidget):
                 QMessageBox.critical(
                     self, "Rebuttal Error", f"An unexpected error occurred: {str(e)}"
                 )
-
