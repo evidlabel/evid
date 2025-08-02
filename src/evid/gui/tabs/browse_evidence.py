@@ -44,10 +44,11 @@ class BrowseEvidenceTab(QWidget):
         dataset_layout.addWidget(QLabel("Dataset:"))
         self.dataset_combo = QComboBox()
         self.dataset_combo.addItems(self.get_datasets())
+        self.dataset_combo.currentIndexChanged.connect(self.load_metadata)
         if self.dataset_combo.count() > 0:
             self.dataset_combo.setCurrentIndex(0)
         dataset_layout.addWidget(self.dataset_combo)
-        dataset_layout.addWidget(QPushButton("Load", clicked=self.load_metadata))
+        dataset_layout.addWidget(QPushButton("Reload", clicked=self.load_metadata))
         dataset_layout.addWidget(QPushButton("Open Dir", clicked=self.open_directory))
         layout.addLayout(dataset_layout)
 
@@ -113,8 +114,7 @@ class BrowseEvidenceTab(QWidget):
     def load_metadata(self):
         dataset = self.dataset_combo.currentText()
         if not dataset:
-            QMessageBox.warning(self, "No Dataset", "Please select a dataset to load.")
-            return
+            return  # Silently return if no dataset selected
 
         # Fully reset table and metadata
         self.table.setSortingEnabled(False)
@@ -362,4 +362,5 @@ class BrowseEvidenceTab(QWidget):
                 QMessageBox.critical(
                     self, "Rebuttal Error", f"An unexpected error occurred: {str(e)}"
                 )
+
 
