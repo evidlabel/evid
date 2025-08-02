@@ -319,3 +319,4 @@ class BrowseEvidenceTab(QWidget):
                 QMessageBox.critical(
                     self, "Rebuttal Error", f"An unexpected error occurred: {str(e)}"
                 )
+
