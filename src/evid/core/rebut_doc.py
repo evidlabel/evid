@@ -3,7 +3,7 @@ import logging
 import bibtexparser as bib
 import subprocess
 
-from evid.core.label_setup import json_to_bib
+from evid.core.label_setup import csv_to_bib
 
 logger = logging.getLogger(__name__)
 
@@ -57,34 +57,22 @@ def write_rebuttal(body: str, output_file: Path):
 
 def rebut_doc(workdir: Path):
     """Generate rebuttal document from evidence directory."""
-    from .label_setup import csv_to_bib
-
-    json_file = workdir / "label.json"
+    csv_file = workdir / "label.csv"
     bib_file = workdir / "label1.bib"
     rebut_file = workdir / "rebut.typ"
 
     try:
-        if not json_file.exists():
-            raise FileNotFoundError(f"JSON file {json_file} not found")
-        if not json_file.stat().st_size:
-            raise ValueError(f"JSON file {json_file} is empty")
+        if not csv_file.exists():
+            raise FileNotFoundError(f"CSV file {csv_file} not found")
+        if not csv_file.stat().st_size:
+            raise ValueError(f"CSV file {csv_file} is empty")
 
-        json_to_bib(json_file, bib_file, exclude_note=True)
+        csv_to_bib(csv_file, bib_file, exclude_note=True)
         rebut_body = base_rebuttal(bib_file)
         write_rebuttal(rebut_body, rebut_file)
 
         if rebut_file.exists():
-            try:
-                pdf_file = rebut_file.with_suffix(".pdf")
-                subprocess.run(
-                    ["typst", "compile", str(rebut_file), str(pdf_file)], check=True
-                )
-                subprocess.run(["xdg-open", str(pdf_file)], check=True)
-            except subprocess.SubprocessError as e:
-                logger.warning(
-                    f"Failed to compile and open PDF: {str(e)}. Opening source file instead."
-                )
-                subprocess.run(["xdg-open", str(rebut_file)], check=True)
+            subprocess.run(["xdg-open", str(rebut_file)], check=True)
         else:
             logger.warning(f"Rebuttal file {rebut_file} was not generated")
             raise RuntimeError("Rebuttal file was not generated")
@@ -92,3 +80,4 @@ def rebut_doc(workdir: Path):
     except Exception as e:
         logger.error(f"Failed to generate rebuttal: {str(e)}")
         raise
+
