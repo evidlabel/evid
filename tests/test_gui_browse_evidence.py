@@ -43,10 +43,11 @@ class BrowseEvidenceTab(QWidget):
         dataset_layout.addWidget(QLabel("Dataset:"))
         self.dataset_combo = QComboBox()
         self.dataset_combo.addItems(self.get_datasets())
+        self.dataset_combo.currentIndexChanged.connect(self.load_metadata)
         if self.dataset_combo.count() > 0:
             self.dataset_combo.setCurrentIndex(0)
         dataset_layout.addWidget(self.dataset_combo)
-        dataset_layout.addWidget(QPushButton("Load", clicked=self.load_metadata))
+        dataset_layout.addWidget(QPushButton("Reload", clicked=self.load_metadata))
         dataset_layout.addWidget(QPushButton("Open Dir", clicked=self.open_directory))
         layout.addLayout(dataset_layout)
 
@@ -106,8 +107,7 @@ class BrowseEvidenceTab(QWidget):
     def load_metadata(self):
         dataset = self.dataset_combo.currentText()
         if not dataset:
-            QMessageBox.warning(self, "No Dataset", "Please select a dataset to load.")
-            return
+            return  # Silently return if no dataset selected
 
         # Fully reset table and metadata
         self.table.setSortingEnabled(False)
@@ -359,8 +359,6 @@ def setup_dataset(tmp_path):
 
 def test_load_metadata_valid(browse_tab, setup_dataset):
     browse_tab.dataset_combo.addItem(setup_dataset)
-    browse_tab.load_metadata()
-
     assert browse_tab.table.rowCount() == 1
     assert browse_tab.table.item(0, 0).text() == "Author"
     assert browse_tab.table.item(0, 1).text() == "Test"
@@ -371,5 +369,5 @@ def test_load_metadata_empty_info(browse_tab, tmp_path):
     entry.mkdir(parents=True)
     (entry / "info.yml").touch()
     browse_tab.dataset_combo.addItem("empty_dataset")
-    browse_tab.load_metadata()
     assert browse_tab.table.rowCount() == 0  # Invalid entry skipped
+

@@ -26,23 +26,37 @@ def generate_bib_from_typ(
                 "typst",
                 "query",
                 str(typ_file),
-                '"<lab>"',
+                "<lab>",
                 "--package-path",
-                os.path.expanduser("~/.cache/typst/packages"),
+                os.path.expanduser("~/.cache/typst"),
             ],
             stdout=open(json_file, "w"),
             stderr=subprocess.PIPE,
-            check=True,
+            check=False,
         )
-    except subprocess.CalledProcessError as e:
-        error_msg = f"Error running typst query on {typ_file}: {str(e)}\nStderr: {e.stderr.decode('utf-8')}"
-        return False, error_msg
-    try:
-        json_to_bib(json_file=json_file, bib_file=bib_file, exclude_note=exclude_note)
-        logger.info(f"Generated BibTeX file: {bib_file}")
-        return True, ""
+
+        # print the command in pastable form for debugging in shell
+        cmd_for_shell = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in result.args])
+        logger.info(
+            f"Running command: {cmd_for_shell} > {json_file}"
+        )
+        stderr_output = result.stderr.decode("utf-8")
+        if stderr_output:
+            logger.info(f"Stderr: {stderr_output}")
+        if result.returncode != 0:
+            if "text is not locatable" in stderr_output:
+                logger.warning(f"Ignoring non-fatal Typst query error: {stderr_output}")
+            else:
+                error_msg = f"Error running typst query on {typ_file}: Command returned non-zero exit status {result.returncode}.\nStderr: {stderr_output}"
+                return False, error_msg
+        try:
+            json_to_bib(json_file, bib_file, exclude_note=exclude_note)
+            logger.info(f"Generated BibTeX file: {bib_file}")
+            return True, ""
+        except Exception as e:
+            return False, f"Failed to generate BibTeX for {typ_file}: {str(e)}"
     except Exception as e:
-        return False, f"Failed to generate BibTeX for {typ_file}: {str(e)}"
+        return False, f"Unexpected error during Typst query: {str(e)}"
 
 
 def generate_bibtex(typ_files: List[Path], parallel: bool = False) -> None:
