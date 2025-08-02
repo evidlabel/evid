@@ -20,7 +20,7 @@ def generate_bib_from_typ(
     json_file = typ_file.parent / "label.json"
     bib_file = typ_file.parent / "label.bib"
     try:
-        subprocess.run(
+        result = subprocess.run(
             # replace $HOME by actual home dir
             [
                 "typst",
@@ -31,10 +31,12 @@ def generate_bib_from_typ(
                 os.path.expanduser("~/.cache/typst/packages"),
             ],
             stdout=open(json_file, "w"),
+            stderr=subprocess.PIPE,
             check=True,
         )
-    except subprocess.SubprocessError as e:
-        return False, f"Error running typst query on {typ_file}: {str(e)}"
+    except subprocess.CalledProcessError as e:
+        error_msg = f"Error running typst query on {typ_file}: {str(e)}\nStderr: {e.stderr.decode('utf-8')}"
+        return False, error_msg
     try:
         json_to_bib(json_file=json_file, bib_file=bib_file, exclude_note=exclude_note)
         logger.info(f"Generated BibTeX file: {bib_file}")
@@ -64,3 +66,4 @@ def generate_bibtex(typ_files: List[Path], parallel: bool = False) -> None:
         print(f"Encountered {len(errors)} issues:")
         for error in errors:
             print(f"  - {error}")
+
