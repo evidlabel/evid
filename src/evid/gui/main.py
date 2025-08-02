@@ -28,6 +28,7 @@ class EvidenceManagerApp(QMainWindow):
 
         self.tabs.addTab(self.add_tab, "Add")
         self.tabs.addTab(self.browse_tab, "Browse")
+        self.tabs.setCurrentIndex(1)  # Set Browse tab as active initially
 
         # Setup keyboard shortcuts
         self.setup_shortcuts()
@@ -128,3 +129,4 @@ def main(directory=DEFAULT_DIR):
     window = EvidenceManagerApp(Path(directory))
     window.show()
     sys.exit(app.exec())
+
