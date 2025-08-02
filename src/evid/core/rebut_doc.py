@@ -3,7 +3,7 @@ import logging
 import bibtexparser as bib
 import subprocess
 
-from evid.core.label_setup import csv_to_bib
+from evid.core.bibtex import generate_bib_from_typ
 
 logger = logging.getLogger(__name__)
 
@@ -57,17 +57,15 @@ def write_rebuttal(body: str, output_file: Path):
 
 def rebut_doc(workdir: Path):
     """Generate rebuttal document from evidence directory."""
-    csv_file = workdir / "label.csv"
-    bib_file = workdir / "label.bib"
+    typ_file = workdir / "label.typ"
     rebut_file = workdir / "rebut.typ"
+    bib_file = workdir / "label.bib"
 
     try:
-        if not csv_file.exists():
-            raise FileNotFoundError(f"CSV file {csv_file} not found")
-        if not csv_file.stat().st_size:
-            raise ValueError(f"CSV file {csv_file} is empty")
+        success, msg = generate_bib_from_typ(typ_file)
+        if not success:
+            raise RuntimeError(msg)
 
-        csv_to_bib(csv_file, bib_file, exclude_note=True)
         rebut_body = base_rebuttal(bib_file)
         write_rebuttal(rebut_body, rebut_file)
 
@@ -80,5 +78,4 @@ def rebut_doc(workdir: Path):
     except Exception as e:
         logger.error(f"Failed to generate rebuttal: {str(e)}")
         raise
-
 

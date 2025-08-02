@@ -4,10 +4,9 @@ import logging
 from rich.logging import RichHandler
 from pathlib import Path
 import subprocess
-from evid.core.label_setup import textpdf_to_typst, text_to_typst, json_to_bib
+from evid.core.label_setup import textpdf_to_typst, text_to_typst
 from evid import CONFIG  # Import CONFIG to access the editor setting
-import json
-import pandas as pd
+from evid.core.bibtex import generate_bib_from_typ
 
 # Configure Rich handler for colored logging
 logging.basicConfig(handlers=[RichHandler(rich_tracebacks=True)], level=logging.INFO)
@@ -43,31 +42,14 @@ def create_label(file_path: Path, dataset: str, uuid: str) -> None:
             print(f"Failed to open the configured editor: {str(e)}")
             return  # Exit early if editor fails
 
-        json_file = file_path.parent / "label.json"
+        success, msg = generate_bib_from_typ(label_file)
+        if not success:
+            logger.error(f"Error during label workflow: {msg}")
+            print(f"An unexpected error occurred: {msg}")
+            return
 
-        # Pipe the results from typst query to a JSON file
-        try:
-            subprocess.run(
-                ["typst", "query", str(label_file), "<lab>"],
-                stdout=open(json_file, "w"),
-                check=True,
-            )
-        except subprocess.SubprocessError as e:
-            logger.error(f"Error running typst query: {str(e)}")
-            print(f"Failed to run typst query: {str(e)}")
-            return  # Exit early if query fails
-
-        bib_file = file_path.parent / "label.bib"
-        if json_file.exists():
-            json_to_bib(json_file, bib_file, exclude_note=True)
-            logger.info(f"Generated BibTeX file: {bib_file}")
-
-            # csv had no function other than to generate the bib file, fully deprecate csv use
-        else:
-            logger.warning(f"JSON file {json_file} not found after labelling")
-            print(
-                f"No label.json found in {file_path.parent}. BibTeX generation skipped."
-            )
+        # csv had no function other than to generate the bib file, fully deprecate csv use
     except Exception as e:
         logger.error(f"Error during label workflow: {str(e)}")
         print(f"An unexpected error occurred: {str(e)}")
+

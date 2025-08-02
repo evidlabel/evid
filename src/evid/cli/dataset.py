@@ -98,8 +98,7 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
         gitignore_content = """# Ignore everything by default
 */*
 # Allow specific files
-!label.csv
-!label_table.bib
+!label.bib
 !*.typ
 !info.yml
 !*.pdf
@@ -118,4 +117,5 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
             f"Failed to initialize Git repository for {dataset_path}: {str(e)}"
         )
         sys.exit(f"Failed to initialize Git repository: {str(e)}")
+
 
