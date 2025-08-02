@@ -4,7 +4,6 @@ import re
 import yaml
 import pandas as pd
 import demoji
-from concurrent.futures import ProcessPoolExecutor
 import logging
 import json
 from evid.core.models import InfoModel
@@ -12,14 +11,15 @@ from evid.core.models import InfoModel
 logger = logging.getLogger(__name__)
 
 LIGATURES = {
-    '\uFB00': 'ff',  # ﬀ
-    '\uFB01': 'fi',  # ﬁ
-    '\uFB02': 'fl',  # ﬂ
-    '\uFB03': 'ffi', # ﬃ
-    '\uFB04': 'ffl', # ﬄ
-    '\uFB05': 'ft',  # ﬅ
-    '\uFB06': 'st',  # ﬆ
+    "\ufb00": "ff",  # ﬀ
+    "\ufb01": "fi",  # ﬁ
+    "\ufb02": "fl",  # ﬂ
+    "\ufb03": "ffi",  # ﬃ
+    "\ufb04": "ffl",  # ﬄ
+    "\ufb05": "ft",  # ﬅ
+    "\ufb06": "st",  # ﬆ
 }
+
 
 def clean_text_for_typst(text: str) -> str:
     # Expand ligatures
@@ -27,25 +27,26 @@ def clean_text_for_typst(text: str) -> str:
         text = text.replace(lig, repl)
 
     # Split into lines
-    lines = text.split('\n')
+    lines = text.split("\n")
 
     # Process lines: comment if '@' in line, and add extra newline if ends with punctuation
     processed_lines = []
     for line in lines:
-        if '@' in line:
-            processed_lines.append('// ' + line)
+        if "@" in line:
+            processed_lines.append("// " + line)
         else:
             processed_lines.append(line)
             stripped = line.strip()
-            if stripped and stripped[-1] in '.!?':
-                processed_lines.append('')
+            if stripped and stripped[-1] in ".!?":
+                processed_lines.append("")
 
     # Join back
-    text = '\n'.join(processed_lines)
+    text = "\n".join(processed_lines)
 
     # Collapse multiple newlines
     text = re.sub(r"(\n\s*\n)+", r"\n\n", text)
     return text
+
 
 def textpdf_to_typst(pdfname: Path, outputfile: Path = None) -> str:
     info_file = pdfname.with_name("info.yml")
@@ -73,10 +74,10 @@ def textpdf_to_typst(pdfname: Path, outputfile: Path = None) -> str:
     body = ""
     for i, page in enumerate(pdf):
         text = clean_text_for_typst(page.get_text())
-        body += f'#mset(values: (opage: {i + 1}))\n== Page {i + 1}\n{text}\n\n'
+        body += f"#mset(values: (opage: {i + 1}))\n== Page {i + 1}\n{text}\n\n"
     pdf.close()
 
-    typst_content = f'''#import "@preview/labtyp:0.1.0": lablist, lab, mset
+    typst_content = f"""#import "@preview/labtyp:0.1.0": lablist, lab, mset
 
 #mset(values: (
   title: "{name.replace("_", " ")}",
@@ -88,11 +89,12 @@ def textpdf_to_typst(pdfname: Path, outputfile: Path = None) -> str:
 
 = List of Labels
 #lablist()
-'''
+"""
 
     if outputfile:
         outputfile.write_text(typst_content)
     return typst_content
+
 
 def text_to_typst(txtname: Path, outputfile: Path = None) -> str:
     info_file = txtname.with_name("info.yml")
@@ -119,7 +121,7 @@ def text_to_typst(txtname: Path, outputfile: Path = None) -> str:
     with txtname.open("r", encoding="utf-8") as f:
         body = clean_text_for_typst(f.read())
 
-    typst_content = f'''#import "@preview/labtyp:0.1.0": lablist, lab, mset
+    typst_content = f"""#import "@preview/labtyp:0.1.0": lablist, lab, mset
 
 #mset(values: (
   title: "{name.replace("_", " ")}",
@@ -131,11 +133,12 @@ def text_to_typst(txtname: Path, outputfile: Path = None) -> str:
 
 = List of Labels
 #lablist()
-'''
+"""
 
     if outputfile:
         outputfile.write_text(typst_content)
     return typst_content
+
 
 def replace_multiple_spaces(s):
     try:
@@ -144,12 +147,14 @@ def replace_multiple_spaces(s):
         print(s)
         return ""
 
+
 def replace_underscores(s):
     try:
         return re.sub(r"_", " ", s)
     except TypeError:
         print(s)
         return ""
+
 
 def remove_curly_brace_content(s):
     try:
@@ -158,6 +163,7 @@ def remove_curly_brace_content(s):
         print(s)
         return ""
 
+
 def remove_backslash_substrings(s):
     try:
         return re.sub(r"\\[^ ]*", "", s)
@@ -165,9 +171,11 @@ def remove_backslash_substrings(s):
         print(s)
         return ""
 
+
 def emojis_to_text(s):
     # Replace all emojis in the content
     return demoji.replace(s, "(emoji)")
+
 
 def load_uuid_prefix(file_path: Path) -> str:
     info_file = file_path.with_name("info.yml")
@@ -185,6 +193,7 @@ def load_uuid_prefix(file_path: Path) -> str:
                 return info_data["uuid"][:4]
     return ""
 
+
 def load_url(file_path: Path) -> str:
     info_file = file_path.with_name("info.yml")
     if info_file.exists():
@@ -201,27 +210,34 @@ def load_url(file_path: Path) -> str:
                 return info_data["url"]
     return ""
 
+
 def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
     try:
         with open(json_file) as f:
             data = json.load(f)
         if not data:
             raise ValueError("JSON data is empty")
-        df = pd.DataFrame([item['value'] for item in data])
+        df = pd.DataFrame([item["value"] for item in data])
         if df.empty:
             raise ValueError("DataFrame is empty")
-        df.rename(columns={'key': 'label', 'text': 'quote'}, inplace=True)
-        df["date"] = pd.to_datetime(df.get("date", pd.Series([pd.NaT] * len(df))), dayfirst=False, errors="coerce")
+        if "key" not in df.columns:
+            raise KeyError("'key' column missing in JSON data")
+        df.rename(columns={"key": "label", "text": "quote"}, inplace=True)
+        df["date"] = pd.to_datetime(
+            df.get("date", pd.Series([pd.NaT] * len(df))),
+            dayfirst=False,
+            errors="coerce",
+        )
         uuid_prefix = load_uuid_prefix(json_file)
         df["latex_label"] = [f"{uuid_prefix}:{label.strip()}" for label in df["label"]]
         with open(output_file, "w") as bibtex_file:
             for index, row in df.iterrows():
                 bibtex_entry = f"""@article{{ {row["latex_label"]}  ,
-    note = {{{row["note"]}}},
-    title = {{{replace_underscores(replace_multiple_spaces(remove_backslash_substrings(row["quote"])))}}},
-    journal = {{{replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row["title"]))))}}},
+    note = {{{row.get("note", "")}}},
+    title = {{{replace_underscores(replace_multiple_spaces(remove_backslash_substrings(row.get("quote", ""))))}}},
+    journal = {{{replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row.get("title", "")))))}}},
     date = {{{row["date"].strftime("%Y-%m-%d") if not pd.isnull(row["date"]) else ""}}},
-    pages = {{{int(row["opage"]) if "opage" in row and not pd.isnull(row["opage"]) else ""}}},
+    pages = {{{int(row.get("opage", "")) if "opage" in row and not pd.isnull(row.get("opage", "")) else ""}}},
     url = {{{load_url(json_file)}}},
     }}
     """
@@ -230,70 +246,3 @@ def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
                 bibtex_file.write(emojis_to_text(bibtex_entry))
     except Exception as e:
         raise ValueError(f"Error processing JSON: {e}")
-
-def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
-    try:
-        df = pd.read_csv(csv_file)
-        if df.empty:
-            raise ValueError("DataFrame is empty")
-    except Exception as e:
-        raise ValueError(f"Error loading CSV: {e}")
-
-    df["date"] = pd.to_datetime(df.get("date", pd.Series([pd.NaT] * len(df))), dayfirst=False, errors="coerce")
-    uuid_prefix = load_uuid_prefix(csv_file)
-
-    df["latex_label"] = [f"{uuid_prefix}:{label.strip()}" for label in df["label"]]
-
-    with open(output_file, "w") as bibtex_file:
-        for index, row in df.iterrows():
-            label_title = row["latex_label"]
-            bibtex_entry = f"""@article{{ {label_title}  ,
-    note = {{{row["note"]}}},
-    title = {{{replace_underscores(replace_multiple_spaces(remove_backslash_substrings(row["quote"])))}}},
-    journal = {{{replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row["title"]))))}}},
-    date = {{{row["date"].strftime("%Y-%m-%d") if not pd.isnull(row["date"]) else ""}}},
-    pages = {{{int(row["opage"]) if "opage" in row and not pd.isnull(row["opage"]) else ""}}},
-    url = {{{load_url(csv_file)}}},
-    }}
-    """
-
-            if exclude_note:
-                bibtex_entry = bibtex_entry.replace("note =", "nonote =")
-            bibtex_file.write(emojis_to_text(bibtex_entry))
-
-def parallel_csv_to_bib(csv_files: list[Path], exclude_note: bool = True) -> tuple[int, list[str]]:
-    """Process multiple CSV files to BibTeX in parallel using ProcessPoolExecutor."""
-    success_count = 0
-    errors = []
-
-    def process_csv(csv_file: Path) -> tuple[bool, str]:
-        """Helper function to process a single CSV file."""
-        if not csv_file.exists():
-            return False, f"CSV file '{csv_file}' does not exist."
-        if not csv_file.stat().st_size:
-            return False, f"Skipped empty CSV file '{csv_file}'."
-        bib_file = csv_file.parent / "label_table.bib"
-        try:
-            csv_to_bib(csv_file, bib_file, exclude_note)
-            logger.info(f"Generated BibTeX file: {bib_file}")
-            return True, ""
-        except Exception as e:
-            error_msg = f"Failed to generate BibTeX for {csv_file}: {str(e)}"
-            logger.error(error_msg)
-            return False, error_msg
-
-    with ProcessPoolExecutor() as executor:
-        results = list(executor.map(process_csv, csv_files))
-
-    for success, error in results:
-        if success:
-            success_count += 1
-        elif error:
-            errors.append(error)
-
-    return success_count, errors
-
-
-
-
-

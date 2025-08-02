@@ -58,7 +58,7 @@ def write_rebuttal(body: str, output_file: Path):
 def rebut_doc(workdir: Path):
     """Generate rebuttal document from evidence directory."""
     csv_file = workdir / "label.csv"
-    bib_file = workdir / "label1.bib"
+    bib_file = workdir / "label.bib"
     rebut_file = workdir / "rebut.typ"
 
     try:
@@ -80,4 +80,5 @@ def rebut_doc(workdir: Path):
     except Exception as e:
         logger.error(f"Failed to generate rebuttal: {str(e)}")
         raise
+
 
