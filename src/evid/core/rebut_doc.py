@@ -3,6 +3,7 @@ import logging
 import bibtexparser as bib
 import subprocess
 
+from evid import CONFIG
 from evid.core.bibtex import generate_bib_from_typ
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ def rebut_doc(workdir: Path):
         write_rebuttal(rebut_body, rebut_file)
 
         if rebut_file.exists():
-            subprocess.run(["xdg-open", str(rebut_file)], check=True)
+            subprocess.run([CONFIG["editor"], str(rebut_file)], check=True)
         else:
             logger.warning(f"Rebuttal file {rebut_file} was not generated")
             raise RuntimeError("Rebuttal file was not generated")
@@ -78,4 +79,5 @@ def rebut_doc(workdir: Path):
     except Exception as e:
         logger.error(f"Failed to generate rebuttal: {str(e)}")
         raise
+
 
