@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, call
 import logging
 from evid.core.rebut_doc import rebut_doc, base_rebuttal, write_rebuttal
 import yaml
@@ -45,16 +45,16 @@ def temp_workdir(tmp_path):
     ],
 )
 def test_base_rebuttal(tmp_path, bib_content):
-    bib_file = tmp_path / "label_table.bib"
+    bib_file = tmp_path / "label1.bib"
     bib_file.write_text(bib_content, encoding="utf-8")
     rebut_body = base_rebuttal(bib_file)
-    assert "\\item Regarding: \\bcite{test_uuid:test_label}" in rebut_body
-    assert "% prompt: Test note" in rebut_body
-    assert f"\\addbibresource{{{bib_file.absolute()}}}" in rebut_body
+    assert "+ Regarding: #cite(<test_uuid:test_label>, form: \"full\")" in rebut_body
+    assert "// Test note" in rebut_body
+    assert f"#bibliography(\"{bib_file.name}\"" in rebut_body
 
 
 def test_write_rebuttal(tmp_path):
-    output_file = tmp_path / "rebut.tex"
+    output_file = tmp_path / "rebut.typ"
     body = "Sample rebuttal content"
     write_rebuttal(body, output_file)
     assert output_file.exists()
@@ -62,7 +62,7 @@ def test_write_rebuttal(tmp_path):
 
 
 def test_write_rebuttal_existing_file(tmp_path):
-    output_file = tmp_path / "rebut.tex"
+    output_file = tmp_path / "rebut.typ"
     output_file.write_text("Existing content", encoding="utf-8")
     body = "New content"
     write_rebuttal(body, output_file)
@@ -73,8 +73,8 @@ def test_write_rebuttal_existing_file(tmp_path):
 def test_rebut_doc_success(mock_run, temp_workdir, caplog):
     caplog.set_level(logging.INFO)
     rebut_doc(temp_workdir)
-    bib_file = temp_workdir / "label_table.bib"
-    rebut_file = temp_workdir / "rebut.tex"
+    bib_file = temp_workdir / "label1.bib"
+    rebut_file = temp_workdir / "rebut.typ"
     assert bib_file.exists(), f"Bib file {bib_file} not created"
     with bib_file.open("r", encoding="utf-8") as f:
         bib_content = f.read()
@@ -83,10 +83,14 @@ def test_rebut_doc_success(mock_run, temp_workdir, caplog):
     assert rebut_file.exists(), f"Rebut file {rebut_file} not created"
     rebut_content = rebut_file.read_text(encoding="utf-8")
     assert (
-        "Regarding: \\bcite" in rebut_content
+        "+ Regarding: #cite" in rebut_content
     ), f"Expected citation not found in {rebut_content}"
     assert "Written a new" in caplog.text
-    mock_run.assert_called_once_with(["xdg-open", str(rebut_file)], check=True)
+    pdf_file = rebut_file.with_suffix(".pdf")
+    mock_run.assert_has_calls([
+        call(["typst", "compile", str(rebut_file), str(pdf_file)], check=True),
+        call(["xdg-open", str(pdf_file)], check=True)
+    ])
 
 
 def test_rebut_doc_no_label(temp_workdir, caplog):
@@ -103,3 +107,4 @@ def test_rebut_doc_empty_label(temp_workdir, caplog):
         rebut_doc(temp_workdir)
     assert f"CSV file {temp_workdir / 'label.csv'} is empty" in str(exc_info.value)
     assert "Failed to generate rebuttal" in caplog.text
+

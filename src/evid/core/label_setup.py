@@ -211,7 +211,7 @@ def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
         if df.empty:
             raise ValueError("DataFrame is empty")
         df.rename(columns={'key': 'label', 'text': 'quote'}, inplace=True)
-        df["date"] = pd.to_datetime(df["date"], dayfirst=False, errors="coerce")
+        df["date"] = pd.to_datetime(df.get("date", pd.Series([pd.NaT] * len(df))), dayfirst=False, errors="coerce")
         uuid_prefix = load_uuid_prefix(json_file)
         df["latex_label"] = [f"{uuid_prefix}:{label.strip()}" for label in df["label"]]
         with open(output_file, "w") as bibtex_file:
@@ -239,7 +239,7 @@ def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
     except Exception as e:
         raise ValueError(f"Error loading CSV: {e}")
 
-    df["date"] = pd.to_datetime(df["date"], dayfirst=False, errors="coerce")
+    df["date"] = pd.to_datetime(df.get("date", pd.Series([pd.NaT] * len(df))), dayfirst=False, errors="coerce")
     uuid_prefix = load_uuid_prefix(csv_file)
 
     df["latex_label"] = [f"{uuid_prefix}:{label.strip()}" for label in df["label"]]
@@ -292,6 +292,7 @@ def parallel_csv_to_bib(csv_files: list[Path], exclude_note: bool = True) -> tup
             errors.append(error)
 
     return success_count, errors
+
 
 
 
