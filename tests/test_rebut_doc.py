@@ -86,10 +86,8 @@ def test_rebut_doc_success(mock_run, temp_workdir, caplog):
         "+ Regarding: #cite" in rebut_content
     ), f"Expected citation not found in {rebut_content}"
     assert "Written a new" in caplog.text
-    pdf_file = rebut_file.with_suffix(".pdf")
     mock_run.assert_has_calls([
-        call(["typst", "compile", str(rebut_file), str(pdf_file)], check=True),
-        call(["xdg-open", str(pdf_file)], check=True)
+        call(["xdg-open", str(rebut_file)], check=True)
     ])
 
 
@@ -107,4 +105,5 @@ def test_rebut_doc_empty_label(temp_workdir, caplog):
         rebut_doc(temp_workdir)
     assert f"CSV file {temp_workdir / 'label.csv'} is empty" in str(exc_info.value)
     assert "Failed to generate rebuttal" in caplog.text
+
 
