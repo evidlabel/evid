@@ -19,7 +19,7 @@ from pathlib import Path
 import yaml
 import subprocess
 from evid.core.label import create_label
-from evid.core.label_setup import json_to_bib
+from evid.core.bibtex import generate_bib_from_typ
 import arrow
 from evid import DEFAULT_DIR
 from evid.core.models import InfoModel  # Added for validation
@@ -283,29 +283,28 @@ class BrowseEvidenceTab(QWidget):
             uuid = uuid_item.text()
             file_name = self.table.item(row, 3).text()
             file_path = self.directory / dataset / uuid / file_name
-            csv_file = file_path.parent / "label.csv"
+            typ_file = file_path.parent / "label.typ"
             bib_file = file_path.parent / "label.bib"
 
-            try:
-                if csv_file.exists():
-                    csv_to_bib(csv_file, bib_file, exclude_note=True)
+            if typ_file.exists():
+                success, msg = generate_bib_from_typ(typ_file)
+                if success:
                     logger.info(f"Generated BibTeX file: {bib_file}")
                     success_count += 1
                 else:
-                    logger.warning(f"CSV file {csv_file} not found")
-                    QMessageBox.warning(
+                    logger.error(msg)
+                    QMessageBox.critical(
                         self,
-                        "CSV Missing",
-                        f"No label.csv found for entry in row {row + 1}. BibTeX generation skipped.",
+                        "BibTeX Generation Error",
+                        f"Failed to generate BibTeX for row {row + 1}: {msg}",
                     )
-            except Exception as e:
-                logger.error(f"Error generating BibTeX for row {row + 1}: {str(e)}")
-                QMessageBox.critical(
+            else:
+                logger.warning(f"Typst file {typ_file} not found")
+                QMessageBox.warning(
                     self,
-                    "BibTeX Generation Error",
-                    f"Failed to generate BibTeX for row {row + 1}: {str(e)}",
+                    "Typst Missing",
+                    f"No label.typ found for entry in row {row + 1}. BibTeX generation skipped.",
                 )
-                continue
 
         if success_count > 0:
             QMessageBox.information(
@@ -363,3 +362,4 @@ class BrowseEvidenceTab(QWidget):
                 QMessageBox.critical(
                     self, "Rebuttal Error", f"An unexpected error occurred: {str(e)}"
                 )
+
