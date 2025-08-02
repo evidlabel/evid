@@ -6,86 +6,47 @@ import pandas as pd
 import demoji
 from concurrent.futures import ProcessPoolExecutor
 import logging
-from evid.core.models import InfoModel  # Added for validation
+from evid.core.models import InfoModel
 
 logger = logging.getLogger(__name__)
 
-LATEX_TEMPLATE = r"""
-\documentclass[parskip=full]{article}
-\nonstopmode
-
-%% HEADER
-
-\usepackage{xargs}
-\usepackage{xcolor}
-\usepackage{hyperref}
-\hypersetup{
-  colorlinks=true,
-  linkcolor=blue,
-  anchorcolor=blue,
-  filecolor=magenta,
-  urlcolor=cyan,
+LIGATURES = {
+    '\uFB00': 'ff',  # ﬀ
+    '\uFB01': 'fi',  # ﬁ
+    '\uFB02': 'fl',  # ﬂ
+    '\uFB03': 'ffi', # ﬃ
+    '\uFB04': 'ffl', # ﬄ
+    '\uFB05': 'ft',  # ﬅ
+    '\uFB06': 'st',  # ﬆ
 }
 
-\usepackage{todonotes}
-\usepackage{etoolbox}
-\makeatletter
-\pretocmd{\@startsection}{\gdef\thesectiontype{#1}}{}{}
-\pretocmd{\@sect}{\@namedef{the\thesectiontype title}{#8}}{}{}
-\pretocmd{\@ssect}{\@namedef{the\thesectiontype title}{#5}}{}{}
-\makeatother
+def clean_text_for_typst(text: str) -> str:
+    # Expand ligatures
+    for lig, repl in LIGATURES.items():
+        text = text.replace(lig, repl)
 
-\newwrite\textfile
-\immediate\openout\textfile=\jobname.csv
-\immediate\write\textfile{label ; quote ; note ; section title ; section no ; page ; date ; opage}
+    # Split into lines
+    lines = text.split('\n')
 
+    # Process lines: comment if '@' in line, and add extra newline if ends with punctuation
+    processed_lines = []
+    for line in lines:
+        if '@' in line:
+            processed_lines.append('// ' + line)
+        else:
+            processed_lines.append(line)
+            stripped = line.strip()
+            if stripped and stripped[-1] in '.!?':
+                processed_lines.append('')
 
-\newcommandx{\lb}[3]{\immediate\write\textfile{#1 \space; #2 \space; #3 \space; \thesectiontitle \space;  \thesection  \space;  \thepage  \space;  \pdate \space; \thesubsectiontitle}%
-  \csdef{#1}{#2}%
-  \hypertarget{#1}{\textcolor{blue}{#2}}\todo[color=blue!10!white,caption={\small#1; #3; #2}]{#1: #3}%
-}
+    # Join back
+    text = '\n'.join(processed_lines)
 
-\newcommandx{\cc}[1]{
-  \hyperlink{#1}{\csuse{#1}}
-}
-
-
-\newcommand{\sdate}[1]{%
-  \def\localdate{#1}%
-}
-
-\newcommand{\pdate}{%
-  \localdate%
-}
-
-\usepackage{scrextend}
-%% HEADER
-
-% \title{}
-
-\begin{document}
-\maketitle
-
-\tableofcontents
-\listoftodos[Labels]
-
-\sdate{DATE}
-
-\section{NAME}
-BODY
-
-\end{document}
-"""
-
-
-def clean_text_for_latex(text: str) -> str:
-    # Only escape specific LaTeX special characters as per test expectation
-    text = re.sub(r"([#%&])", r"\\\1", text)
+    # Collapse multiple newlines
     text = re.sub(r"(\n\s*\n)+", r"\n\n", text)
     return text
 
-
-def textpdf_to_latex(pdfname: Path, outputfile: Path = None) -> str:
+def textpdf_to_typst(pdfname: Path, outputfile: Path = None) -> str:
     info_file = pdfname.with_name("info.yml")
     if info_file.exists():
         with info_file.open() as f:
@@ -95,7 +56,7 @@ def textpdf_to_latex(pdfname: Path, outputfile: Path = None) -> str:
                 validated_info = InfoModel(**info)
                 info = validated_info.model_dump()
             except ValueError as e:
-                logger.warning(f"Validation error for {info_file}: {e}. Using defaults.")
+                logger.warning(f"Validation error for {info_file}: {e}")
                 date, name = "DATE", "NAME"
             else:
                 date = info.get("dates", "DATE")
@@ -108,22 +69,72 @@ def textpdf_to_latex(pdfname: Path, outputfile: Path = None) -> str:
         date, name = "DATE", "NAME"
 
     pdf = fitz.open(pdfname)
-    text = "".join(
-        f"\\subsection{{{i.number}}}\n\n{clean_text_for_latex(i.get_text())}"
-        for i in pdf
-    )
+    body = ""
+    for i, page in enumerate(pdf):
+        text = clean_text_for_typst(page.get_text())
+        body += f'#mset(values: (opage: {i + 1}))\n== Page {i + 1}\n{text}\n\n'
     pdf.close()
 
-    out = (
-        LATEX_TEMPLATE.replace("BODY", text)
-        .replace("DATE", date)
-        .replace("NAME", name.replace("_", " "))
-    )
+    typst_content = f'''#import "@preview/labtyp:0.1.0": lablist, lab, mset
+
+#mset(values: (
+  title: "{name.replace("_", " ")}",
+  date: "{date}"))
+
+= {name.replace("_", " ")}
+
+{body}
+
+= List of Labels
+#lablist()
+'''
 
     if outputfile:
-        outputfile.write_text(out)
-    return out
+        outputfile.write_text(typst_content)
+    return typst_content
 
+def text_to_typst(txtname: Path, outputfile: Path = None) -> str:
+    info_file = txtname.with_name("info.yml")
+    if info_file.exists():
+        with info_file.open() as f:
+            info = yaml.safe_load(f)
+            # Validate with Pydantic
+            try:
+                validated_info = InfoModel(**info)
+                info = validated_info.model_dump()
+            except ValueError as e:
+                logger.warning(f"Validation error for {info_file}: {e}")
+                date, name = "DATE", "NAME"
+            else:
+                date = info.get("dates", "DATE")
+                if isinstance(date, list):
+                    date = date[0] if date else "DATE"
+                # Ensure date is a string
+                date = str(date)
+                name = info.get("label", "label")
+    else:
+        date, name = "DATE", "NAME"
+
+    with txtname.open("r", encoding="utf-8") as f:
+        body = clean_text_for_typst(f.read())
+
+    typst_content = f'''#import "@preview/labtyp:0.1.0": lablist, lab, mset
+
+#mset(values: (
+  title: "{name.replace("_", " ")}",
+  date: "{date}"))
+
+= {name.replace("_", " ")}
+
+{body}
+
+= List of Labels
+#lablist()
+'''
+
+    if outputfile:
+        outputfile.write_text(typst_content)
+    return typst_content
 
 def replace_multiple_spaces(s):
     try:
@@ -132,14 +143,12 @@ def replace_multiple_spaces(s):
         print(s)
         return ""
 
-
 def replace_underscores(s):
     try:
         return re.sub(r"_", " ", s)
     except TypeError:
         print(s)
         return ""
-
 
 def remove_curly_brace_content(s):
     try:
@@ -148,7 +157,6 @@ def remove_curly_brace_content(s):
         print(s)
         return ""
 
-
 def remove_backslash_substrings(s):
     try:
         return re.sub(r"\\[^ ]*", "", s)
@@ -156,14 +164,12 @@ def remove_backslash_substrings(s):
         print(s)
         return ""
 
-
 def emojis_to_text(s):
     # Replace all emojis in the content
     return demoji.replace(s, "(emoji)")
 
-
-def load_uuid_prefix(csv_file_path: Path) -> str:
-    info_file = csv_file_path.with_name("info.yml")
+def load_uuid_prefix(file_path: Path) -> str:
+    info_file = file_path.with_name("info.yml")
     if info_file.exists():
         with info_file.open("r") as info_file:
             info_data = yaml.safe_load(info_file)
@@ -178,9 +184,8 @@ def load_uuid_prefix(csv_file_path: Path) -> str:
                 return info_data["uuid"][:4]
     return ""
 
-
-def load_url(csv_file_path: Path) -> str:
-    info_file = csv_file_path.with_name("info.yml")
+def load_url(file_path: Path) -> str:
+    info_file = file_path.with_name("info.yml")
     if info_file.exists():
         with info_file.open("r") as info_file:
             info_data = yaml.safe_load(info_file)
@@ -195,14 +200,13 @@ def load_url(csv_file_path: Path) -> str:
                 return info_data["url"]
     return ""
 
-
 def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
     try:
-        df = pd.read_csv(csv_file, sep=" ; ", engine="python")
+        df = pd.read_csv(csv_file)
         if df.empty:
-            raise ValueError("CSV file is empty")
-    except pd.errors.EmptyDataError:
-        raise ValueError("CSV file is empty")
+            raise ValueError("DataFrame is empty")
+    except Exception as e:
+        raise ValueError(f"Error loading CSV: {e}")
 
     df["date"] = pd.to_datetime(df["date"], dayfirst=False, errors="coerce")
     uuid_prefix = load_uuid_prefix(csv_file)
@@ -215,9 +219,9 @@ def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
             bibtex_entry = f"""@article{{ {label_title}  ,
     note = {{{row["note"]}}},
     title = {{{replace_underscores(replace_multiple_spaces(remove_backslash_substrings(row["quote"])))}}},
-    journal = {{{replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row["section title"]))))}}},
+    journal = {{{replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row["title"]))))}}},
     date = {{{row["date"].strftime("%Y-%m-%d") if not pd.isnull(row["date"]) else ""}}},
-    pages = {{{int(row["opage"]) + 1 if "opage" in row and not pd.isnull(row["opage"]) else ""}}},
+    pages = {{{int(row["opage"]) if "opage" in row and not pd.isnull(row["opage"]) else ""}}},
     url = {{{load_url(csv_file)}}},
     }}
     """
@@ -225,7 +229,6 @@ def csv_to_bib(csv_file: Path, output_file: Path, exclude_note: bool):
             if exclude_note:
                 bibtex_entry = bibtex_entry.replace("note =", "nonote =")
             bibtex_file.write(emojis_to_text(bibtex_entry))
-
 
 def parallel_csv_to_bib(csv_files: list[Path], exclude_note: bool = True) -> tuple[int, list[str]]:
     """Process multiple CSV files to BibTeX in parallel using ProcessPoolExecutor."""
@@ -249,7 +252,7 @@ def parallel_csv_to_bib(csv_files: list[Path], exclude_note: bool = True) -> tup
             return False, error_msg
 
     with ProcessPoolExecutor() as executor:
-        results = executor.map(process_csv, csv_files)
+        results = list(executor.map(process_csv, csv_files))
 
     for success, error in results:
         if success:
@@ -258,3 +261,6 @@ def parallel_csv_to_bib(csv_files: list[Path], exclude_note: bool = True) -> tup
             errors.append(error)
 
     return success_count, errors
+
+
+

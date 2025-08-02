@@ -42,3 +42,4 @@ def generate_bibtex(csv_files: List[Path], parallel: bool = False) -> None:
         print(f"Encountered {len(errors)} issues:")
         for error in errors:
             print(f"  - {error}")
+
