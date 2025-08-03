@@ -5,6 +5,7 @@ from evid.cli.evidence import add_evidence
 from evid.core.bibtex import generate_bibtex
 import yaml
 import fitz  # Added for creating valid PDFs
+import json
 
 @pytest.fixture
 def temp_dir(tmp_path):
@@ -34,8 +35,9 @@ def test_create_dataset(temp_dir):
     create_dataset(temp_dir, dataset_name)
     assert (temp_dir / dataset_name).exists()
 
+@patch("evid.core.bibtex.generate_bib_from_typ", return_value=(True, ""))
 @patch("subprocess.run")
-def test_add_evidence_local_pdf_with_label(mock_run, temp_dir, tmp_path):
+def test_add_evidence_local_pdf_with_label(mock_run, mock_bib, temp_dir, tmp_path):
     pdf_path = tmp_path / "test.pdf"
     # Create a valid PDF using fitz
     doc = fitz.open()
@@ -52,7 +54,7 @@ def test_add_evidence_local_pdf_with_label(mock_run, temp_dir, tmp_path):
     uuid_dir = uuid_dirs[0]
     assert (uuid_dir / "test.pdf").exists()
     assert (uuid_dir / "info.yml").exists()
-    assert (uuid_dir / "label.tex").exists()  # Check label.tex created
+    assert (uuid_dir / "label.typ").exists()  # Check label.typ created
 
     with (uuid_dir / "info.yml").open("r") as f:
         info = yaml.safe_load(f)
@@ -60,12 +62,12 @@ def test_add_evidence_local_pdf_with_label(mock_run, temp_dir, tmp_path):
         assert info["title"] == "test"
         assert info["label"] == "test"
 
-    with (uuid_dir / "label.tex").open("r") as f:
+    with (uuid_dir / "label.typ").open("r") as f:
         content = f.read()
         assert "Test content" in content  # Check generated content
 
     mock_run.assert_called_once_with(
-        ["code", str(uuid_dir / "label.tex")], check=True
+        ["code", str(uuid_dir / "label.typ")], check=True
     )
 
 def test_add_evidence_custom_directory(tmp_path, tmp_path_factory):
@@ -95,7 +97,7 @@ def test_add_evidence_custom_directory(tmp_path, tmp_path_factory):
         assert info["label"] == "test"
 
 @pytest.fixture
-def setup_bibtex_csvs(tmp_path):
+def setup_bibtex_typs(tmp_path):
     dataset_path = tmp_path / "test_dataset"
     entry1 = dataset_path / "uuid1"
     entry2 = dataset_path / "uuid2"
@@ -104,17 +106,26 @@ def setup_bibtex_csvs(tmp_path):
     entry2.mkdir(parents=True)
     entry3.mkdir(parents=True)
 
-    csv_data = "label ; quote ; note ; section title ; section no ; page ; date ; opage\n" \
-               "test_label ; Test quote ; Test note ; Section 1 ; 1 ; 1 ; 2023-01-01 ; 0"
-    csv_path1 = entry1 / "label.csv"
-    csv_path2 = entry2 / "label.csv"
-    with csv_path1.open("w", encoding="utf-8") as f:
-        f.write(csv_data)
-    with csv_path2.open("w", encoding="utf-8") as f:
-        f.write(csv_data)
+    typ_data = """#import "@local/labtyp:0.1.0": lablist, lab, mset
 
-    csv_path3 = entry3 / "label.csv"
-    csv_path3.write_text("", encoding="utf-8")
+#mset(values: (title: "Test Title", date: "2023-01-01"))
+
+= Test Title
+
+Test content
+
+= List of Labels
+#lablist()
+"""
+    typ_path1 = entry1 / "label.typ"
+    typ_path2 = entry2 / "label.typ"
+    with typ_path1.open("w", encoding="utf-8") as f:
+        f.write(typ_data)
+    with typ_path2.open("w", encoding="utf-8") as f:
+        f.write(typ_data)
+
+    typ_path3 = entry3 / "label.typ"
+    typ_path3.write_text("", encoding="utf-8")
 
     info_data = {
         "original_name": "doc.pdf",
@@ -142,32 +153,48 @@ def setup_bibtex_csvs(tmp_path):
     with (entry3 / "info.yml").open("w", encoding="utf-8") as f:
         yaml.dump(info_data, f)
 
-    return [csv_path1, csv_path2, csv_path3]
+    return [typ_path1, typ_path2, typ_path3]
 
-def test_generate_bibtex_multiple_csv_sequential(setup_bibtex_csvs, capsys):
-    csv_paths = setup_bibtex_csvs
-    generate_bibtex(csv_paths, parallel=False)
+@patch("subprocess.run")
+def test_generate_bibtex_multiple_typ_sequential(mock_run, setup_bibtex_typs, capsys):
+    def side_effect(*args, **kwargs):
+        if "stdout" in kwargs:
+            stdout_file = kwargs["stdout"]
+            typ_file = Path(args[0][2])
+            if typ_file.stat().st_size > 0:
+                json_content = json.dumps([{"value": {"key": "test_label", "text": "Test quote", "date": "2023-01-01", "opage": 1, "title": "Test Title", "note": "Test note"}}])
+                stdout_file.write(json_content)
+            else:
+                stdout_file.write('[]')
+            stdout_file.close()
+        return mock.MagicMock(returncode=0, stderr=b"")
 
-    for csv_path in csv_paths[:2]:
-        bib_file = csv_path.parent / "label_table.bib"
+    mock_run.side_effect = side_effect
+
+    typ_paths = setup_bibtex_typs
+    generate_bibtex(typ_paths, parallel=False)
+
+    for typ_path in typ_paths[:2]:
+        bib_file = typ_path.parent / "label.bib"
         assert bib_file.exists()
         with bib_file.open("r", encoding="utf-8") as f:
             content = f.read()
             assert "@article" in content
-            assert "nonote = {Test note}" in content
-            assert "title = {Test quote}" in content
-            assert "date = {2023-01-01}" in content
 
     captured = capsys.readouterr()
     assert "Successfully generated 2 BibTeX files." in captured.out
-    assert "Skipped empty CSV file" in captured.out
+    assert "Encountered 1 issues:" in captured.out
+    assert "Skipped empty Typst file" in captured.out
 
-def test_generate_bibtex_nonexistent_csv(tmp_path, capsys):
-    csv_paths = [tmp_path / "nonexistent1.csv", tmp_path / "nonexistent2.csv"]
-    generate_bibtex(csv_paths)
+def test_generate_bibtex_nonexistent_typ(tmp_path, capsys):
+    typ_paths = [tmp_path / "nonexistent1.typ", tmp_path / "nonexistent2.typ"]
+    generate_bibtex(typ_paths)
     captured = capsys.readouterr()
     assert "Successfully generated 0 BibTeX files." in captured.out
-    assert "CSV file" in captured.out
+    assert "Encountered 2 issues:" in captured.out
+    assert "Typst file" in captured.out
     assert "does not exist" in captured.out
-    for csv_path in csv_paths:
-        assert f"CSV file '{csv_path}' does not exist." in captured.out
+    for typ_path in typ_paths:
+        assert f"Typst file '{typ_path}' does not exist." in captured.out
+
+

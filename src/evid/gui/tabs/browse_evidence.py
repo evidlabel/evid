@@ -45,8 +45,6 @@ class BrowseEvidenceTab(QWidget):
         self.dataset_combo = QComboBox()
         self.dataset_combo.addItems(self.get_datasets())
         self.dataset_combo.currentIndexChanged.connect(self.load_metadata)
-        if self.dataset_combo.count() > 0:
-            self.dataset_combo.setCurrentIndex(0)
         dataset_layout.addWidget(self.dataset_combo)
         dataset_layout.addWidget(QPushButton("Reload", clicked=self.load_metadata))
         dataset_layout.addWidget(QPushButton("Open Dir", clicked=self.open_directory))
@@ -99,6 +97,10 @@ class BrowseEvidenceTab(QWidget):
         layout.addLayout(button_layout)
 
         self.setLayout(layout)
+
+        if self.dataset_combo.count() > 0:
+            self.dataset_combo.setCurrentIndex(0)
+            self.load_metadata()  # Automatically load metadata for the first dataset
 
     def get_datasets(self):
         return (
@@ -362,5 +364,3 @@ class BrowseEvidenceTab(QWidget):
                 QMessageBox.critical(
                     self, "Rebuttal Error", f"An unexpected error occurred: {str(e)}"
                 )
-
-
