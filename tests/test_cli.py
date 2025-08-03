@@ -1,10 +1,14 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+from pathlib import Path
+import sys
+import logging
+
 from evid.cli.dataset import get_datasets, select_dataset, create_dataset
 from evid.cli.evidence import add_evidence
 from evid.core.bibtex import generate_bibtex
 import yaml
-import fitz  # Added for creating valid PDFs
+import fitz
 import json
 
 @pytest.fixture
@@ -35,7 +39,7 @@ def test_create_dataset(temp_dir):
     create_dataset(temp_dir, dataset_name)
     assert (temp_dir / dataset_name).exists()
 
-@patch("evid.core.bibtex.generate_bib_from_typ", return_value=(True, ""))
+@patch("evid.core.label.generate_bib_from_typ", return_value=(True, ""))
 @patch("subprocess.run")
 def test_add_evidence_local_pdf_with_label(mock_run, mock_bib, temp_dir, tmp_path):
     pdf_path = tmp_path / "test.pdf"
@@ -167,7 +171,7 @@ def test_generate_bibtex_multiple_typ_sequential(mock_run, setup_bibtex_typs, ca
             else:
                 stdout_file.write('[]')
             stdout_file.close()
-        return mock.MagicMock(returncode=0, stderr=b"")
+        return MagicMock(returncode=0, stderr=b"")
 
     mock_run.side_effect = side_effect
 
