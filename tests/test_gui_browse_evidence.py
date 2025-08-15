@@ -4,6 +4,7 @@ import sys
 from evid.gui.tabs.browse_evidence import BrowseEvidenceTab
 import yaml
 
+
 @pytest.fixture
 def browse_tab(tmp_path):
     app = QApplication(sys.argv)
@@ -28,7 +29,7 @@ def setup_dataset(tmp_path):
                 "authors": "Author",
                 "tags": "",
                 "label": "Test",
-                "url": ""
+                "url": "",
             },
             f,
         )
@@ -41,6 +42,7 @@ def test_load_metadata_valid(browse_tab, setup_dataset):
     assert browse_tab.table.item(0, 0).text() == "Author"
     assert browse_tab.table.item(0, 1).text() == "Test"
 
+
 def test_load_metadata_empty_info(browse_tab, tmp_path):
     dataset_path = tmp_path / "empty_dataset"
     entry = dataset_path / "uuid"
@@ -48,4 +50,3 @@ def test_load_metadata_empty_info(browse_tab, tmp_path):
     (entry / "info.yml").touch()
     browse_tab.dataset_combo.addItem("empty_dataset")
     assert browse_tab.table.rowCount() == 0  # Invalid entry skipped
-

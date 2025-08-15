@@ -38,7 +38,7 @@ def base_rebuttal(bibfile: Path) -> str:
         note_key = "nonote" if "nonote" in row else "note"
         note = row[note_key]
         prompt = "\n".join(f"// {line}" for line in note.splitlines())
-        body += f"{prompt}\n+ Regarding: #cite(<{row['ID']}>, form: \"full\")\n\n"
+        body += f'{prompt}\n+ Regarding: #cite(<{row["ID"]}>, form: "full")\n\n'
 
     rebuttal_body = TYPST_TEMPLATE.replace("POINTS", body).replace(
         "BIBPATH", bibfile.name
@@ -79,5 +79,3 @@ def rebut_doc(workdir: Path):
     except Exception as e:
         logger.error(f"Failed to generate rebuttal: {str(e)}")
         raise
-
-

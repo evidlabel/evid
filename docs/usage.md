@@ -154,18 +154,17 @@ Use the Browse tab in the GUI to view and manage existing documents.
 The Typst documents are saved in the same folder as their respective PDFs and opened in Visual Studio Code for editing.
 
 - The user can label using their text editor inside the Typst document. For VS Code, the following keybinding allows labelling by selecting text and pressing `ctrl+l`:
+
 ```json
-[
-{
-"key": "ctrl+l",
-"command": "editor.action.insertSnippet",
-"when": "editorTextFocus && editorLangId == 'typst'",
-"args": {
-"snippet": "#lb(\"$1\", \"${TM_SELECTED_TEXT}\", \"$2\")"
-}
-}
-]
+    {
+        "key": "ctrl+L",
+        "command": "editor.action.insertSnippet",
+        "when": "editorTextFocus && editorLangId == 'typst'",
+        "args": {"snippet": "#lab(\"$1\",\"${TM_SELECTED_TEXT}\",\"$2\")"}
+    }
 ```
+
+
 The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).
 
 - After editing and saving the Typst file, upon closing the editor, the system runs a Typst query to extract labels into `label.json` and converts it to `label.bib`.
