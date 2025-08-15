@@ -64,25 +64,25 @@ To enable Git version control for a dataset, use:
 evid set track [<dataset_name>] [-d|--directory <custom_dir>]
 ```
 
-If no dataset name is provided, the CLI will prompt you to select an existing dataset. This command initializes a Git repository in the dataset's top-level directory with a `.gitignore` file that tracks only `label.csv`, `label_table.bib`, `*.tex`, `info.yml`, and `*.pdf` files, ignoring others (e.g., LaTeX byproducts like `label.pdf`). If the dataset is already a Git repository, the command will fail with an error message.
+If no dataset name is provided, the CLI will prompt you to select an existing dataset. This command initializes a Git repository in the dataset's top-level directory with a `.gitignore` file that tracks only `label.bib`, `*.typ`, `info.yml`, `*.pdf`, and `*.txt` files, ignoring others (e.g., Typst byproducts like `label.pdf`). If the dataset is already a Git repository, the command will fail with an error message.
 
 ### Generating BibTeX Files
 
-To convert all `label.csv` files in a dataset to `label_table.bib` files, use:
+To generate a BibTeX file from a `label.typ` file, use:
 
 ```bash
-evid bibtex <csv_files>... [-p|--parallel]
+evid bibtex <typ_file> [-p|--parallel]
 ```
 
-This command processes all specified `label.csv` files, generating a `label_table.bib` file for each in its respective directory. Use the `-p` or `--parallel` flag to process files concurrently, which can significantly speed up processing for large datasets. If no `csv_files` are provided, the command will display an error message. Errors for individual files are logged without stopping the process.
+This command processes the specified `label.typ` file, generating a `label.bib` file in its respective directory. Use the `-p` or `--parallel` flag to process files concurrently (though currently supports single file). If no `typ_file` is provided, the command will display an error message. Errors are logged without stopping the process.
 
 Example:
 
 ```bash
-evid bibtex path/to/file1.csv path/to/file2.csv -p
+evid bibtex path/to/label.typ -p
 ```
 
-This generates BibTeX files for the specified `label.csv` files using parallel processing.
+This generates a BibTeX file from the specified `label.typ` file.
 
 ## Adding Documents
 
@@ -135,42 +135,41 @@ Use the Browse tab in the GUI to view and manage existing documents.
 - Select a row and click Open Dir to open the document folder in Visual Studio Code.
 
 3. Create Labels:
-- Select one or more entries (hold Ctrl or Shift to select multiple) and click Label Selected to generate LaTeX documents (`label.tex`) for each selected PDF.
-- Each LaTeX file opens in a separate Visual Studio Code instance, allowing parallel editing without freezing the main application.
-- Edit each LaTeX file in Visual Studio Code (Ctrl+L inserts a `\lb` snippet) to add labels.
-- Save the file to generate a `label.csv`, which is then converted to `label_table.bib`.
+- Select one or more entries (hold Ctrl or Shift to select multiple) and click Label Selected to generate Typst documents (`label.typ`) for each selected PDF.
+- Each Typst file opens in a separate Visual Studio Code instance, allowing parallel editing without freezing the main application.
+- Edit each Typst file in Visual Studio Code (Ctrl+L inserts a lb snippet) to add labels.
+- Upon closing the editor, the system extracts labels to JSON and generates `label.bib`.
 
 4. Generate BibTeX:
-- Select one or more entries and click Generate BibTeX to convert existing `label.csv` files to `label_table.bib` for each selected PDF.
-- This is useful for updating BibTeX files after manual edits to `label.csv` or LaTeX files.
+- Select one or more entries and click Generate BibTeX to generate `label.bib` from `label.typ` for each selected entry.
+- This is useful for updating BibTeX files after edits to Typst files.
 
 5. Generate Responses:
-- Select an entry and click Rebut to create a response document (`rebut.tex`) using the BibTeX file.
-- The response lists citations with notes, formatted in LaTeX, suitable for LLM integration.
+- Select an entry and click Rebut to create a response document (`rebut.typ`) using the BibTeX file.
+- The response lists citations with notes, formatted in Typst, suitable for LLM integration.
 
 ## Labelling
 
-- When selecting one or more documents and pressing the "Label Selected" button, a LaTeX document is generated for each PDF containing the extracted text.
-The LaTeX documents are saved in the same folder as their respective PDFs and opened in Visual Studio Code for editing.
+- When selecting one or more documents and pressing the "Label Selected" button, a Typst document is generated for each PDF containing the extracted text.
+The Typst documents are saved in the same folder as their respective PDFs and opened in Visual Studio Code for editing.
 
-- The user can label using their text editor inside the LaTeX document. For VS Code, the following keybinding allows labelling by selecting text and pressing `ctrl+l`:
+- The user can label using their text editor inside the Typst document. For VS Code, the following keybinding allows labelling by selecting text and pressing `ctrl+l`:
+
 ```json
-[
-{
-"key": "ctrl+l",
-"command": "editor.action.insertSnippet",
-"when": "editorTextFocus && editorLangId == 'latex'",
-"args": {
-"snippet": "\\lb{$1}{${TM_SELECTED_TEXT}}{$2}"
-}
-}
-]
+    {
+        "key": "ctrl+L",
+        "command": "editor.action.insertSnippet",
+        "when": "editorTextFocus && editorLangId == 'typst'",
+        "args": {"snippet": "#lab(\"$1\",\"${TM_SELECTED_TEXT}\",\"$2\")"}
+    }
 ```
+
+
 The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).
 
-- The header in each LaTeX document causes LaTeX compilation to write the labels to `label.csv`.
-- The `label.csv` file can be converted to `label_table.bib` by clicking "Generate BibTeX" in the Browse tab, using the `bibtex` CLI command, or upon exiting the label editor (i.e., closing VS Code after editing `label.tex`).
-- The `label_table.bib` files for each PDF can be concatenated and used to formulate a rebuttal.
+- After editing and saving the Typst file, upon closing the editor, the system runs a Typst query to extract labels into `label.json` and converts it to `label.bib`.
+- You can also manually generate or update the `label.bib` by clicking "Generate BibTeX" in the Browse tab or using the `bibtex` CLI command.
+- The `label.bib` files for each PDF can be concatenated and used to formulate a rebuttal.
 - Note that the first 4 characters of the PDF's UUID are used as a prefix for the BibTeX label, ensuring labels only need to be unique within the same PDF, not across all PDFs in the dataset.
 
 ### Via CLI
@@ -196,9 +195,11 @@ This command creates or updates `~/.evidrc` by adding missing fields from the de
 ## Tips
 
 - **Date Extraction**: `evid` automatically extracts dates from PDFs in various formats (e.g., "12/01/2023", "15. januar 2024").
-- **LaTeX Setup**: Ensure a LaTeX distribution is installed for label and response generation.
-- **VS Code Integration**: Use the provided `.vscode/keybindings.json` for a Ctrl+L shortcut in LaTeX files.
-- **Git Tracking**: After tracking a dataset with `evid set track`, use standard Git commands (`git add`, `git commit`, etc.) to manage changes to tracked files (`label.csv`, `label_table.bib`, `*.tex`, `info.yml`, `*.pdf`).
+- **Typst Setup**: Ensure Typst is installed for label and response generation.
+- **VS Code Integration**: Use the provided `.vscode/keybindings.json` for a Ctrl+L shortcut in Typst files.
+- **Git Tracking**: After tracking a dataset with `evid set track`, use standard Git commands (`git add`, `git commit`, etc.) to manage changes to tracked files (`label.bib`, `*.typ`, `info.yml`, `*.pdf`, `*.txt`).
 - **Custom Directory**: Use the `-d` or `--directory` option with CLI commands to work with datasets in a non-default location (e.g., `evid list -d ~/my_evid_db`).
 
 For development details, see the [Development](development.md) section.
+
+

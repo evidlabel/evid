@@ -129,6 +129,3 @@ def main(directory=DEFAULT_DIR):
     window = EvidenceManagerApp(Path(directory))
     window.show()
     sys.exit(app.exec())
-
-
-

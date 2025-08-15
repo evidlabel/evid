@@ -8,7 +8,7 @@ This guide is for developers looking to contribute to or extend `evid`, a tool f
 evid/
 ├── src/
 │   ├── evid/
-│   │   ├── core/           # Core functionality (database, date extraction, LaTeX)
+│   │   ├── core/           # Core functionality (database, date extraction, Typst)
 │   │   ├── gui/            # PyQt6 GUI components
 │   │   ├── cli/            # Command-line interface modules
 │   │   └── __init__.py     # Package metadata
@@ -38,7 +38,7 @@ This installs `evid` and its dependencies using `uv`.
 pytest
 ```
 
-Tests cover date extraction, GUI components, LaTeX generation, and database functionality.
+Tests cover date extraction, GUI components, Typst generation, and database functionality.
 
 ## Contributing
 
@@ -70,8 +70,9 @@ mkdocs serve
 
 - **New GUI Tabs**: Add new classes in `src/evid/gui/tabs/` and register them in `src/evid/gui/main.py`.
 - **Custom Metadata**: Extend `info.yml` fields in `src/evid/gui/tabs/add_evidence.py`.
-- **LaTeX Templates**: Modify templates in `src/evid/core/label_setup.py` or `src/evid/core/rebut_doc.py`.
+- **Typst Templates**: Modify templates in `src/evid/core/label_setup.py` or `src/evid/core/rebut_doc.py`.
 - **CLI Commands**: Add new commands in `src/evid/cli/` by extending the `main.py` Click group.
 
 For issues or feature requests, check the repository's issue tracker.
+
 
