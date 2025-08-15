@@ -1,14 +1,14 @@
 # evid - pdf labeller
 
 `evid` is a GUI application for labelling text from PDF files, aimed at the legal industry. 
-With `evid` you can label snippets and add remarks on read-through, which will then be citable in LaTeX or typst documents. 
+With `evid` you can label snippets and add remarks on read-through, which will then be citable in Typst documents. 
 
 ## Key Features
 
 - **PDF Logging**: Add PDFs with metadata such as title, authors, tags, and dates.
 - **Automatic Date Extraction**: Extract dates from PDFs using advanced text parsing.
 - **PyQt6 GUI**: Intuitive interface with tabs for adding and browsing documents.
-- **LaTeX Integration**: Generate LaTeX documents for labels and responses, with BibTeX support for citations.
+- **Typst Integration**: Generate Typst documents for labels and responses, with BibTeX support for citations.
 - **Modular Database**: Organize documents into datasets with YAML-based metadata storage.
 - **CLI Support**: Manage datasets and evidence through a powerful command-line interface.
 
@@ -24,4 +24,5 @@ With `evid` you can label snippets and add remarks on read-through, which will t
 uv pip install https://github.com/evidlabel/evid.git
 evid
 ```
+
 

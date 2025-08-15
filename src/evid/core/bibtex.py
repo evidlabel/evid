@@ -36,10 +36,10 @@ def generate_bib_from_typ(
         )
 
         # print the command in pastable form for debugging in shell
-        cmd_for_shell = ' '.join([f'"{arg}"' if ' ' in arg else arg for arg in result.args])
-        logger.info(
-            f"Running command: {cmd_for_shell} > {json_file}"
+        cmd_for_shell = " ".join(
+            [f'"{arg}"' if " " in arg else arg for arg in result.args]
         )
+        logger.info(f"Running command: {cmd_for_shell} > {json_file}")
         stderr_output = result.stderr.decode("utf-8")
         if stderr_output:
             logger.info(f"Stderr: {stderr_output}")
@@ -80,4 +80,3 @@ def generate_bibtex(typ_files: List[Path], parallel: bool = False) -> None:
         print(f"Encountered {len(errors)} issues:")
         for error in errors:
             print(f"  - {error}")
-

@@ -1,13 +1,16 @@
 """Extract PDF metadata functions."""
+
 import logging
 from rich.logging import RichHandler
 from pathlib import Path
 import pypdf
 from evid.utils.text import normalize_text
 from io import BytesIO
+
 # Configure Rich handler for colored logging
 logging.basicConfig(handlers=[RichHandler(rich_tracebacks=True)], level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def extract_pdf_metadata(
     pdf_source: Path | BytesIO, file_name: str

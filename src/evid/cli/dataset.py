@@ -9,6 +9,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
 def get_datasets(directory: Path) -> list[str]:
     """Return a list of dataset names in the directory."""
     return (
@@ -21,6 +22,7 @@ def get_datasets(directory: Path) -> list[str]:
         else []
     )
 
+
 def list_datasets(directory: Path) -> None:
     """List all available datasets."""
     datasets = get_datasets(directory)
@@ -30,6 +32,7 @@ def list_datasets(directory: Path) -> None:
     print("Available datasets:")
     for i, dataset in enumerate(datasets, 1):
         print(f"{i}. {dataset}")
+
 
 def select_dataset(directory: Path, prompt_message: str = "Select dataset") -> str:
     """Prompt user to select a dataset or create a new one."""
@@ -62,6 +65,7 @@ def select_dataset(directory: Path, prompt_message: str = "Select dataset") -> s
             return choice
         sys.exit("Invalid selection or no dataset name provided.")
 
+
 def create_dataset(directory: Path, dataset: str) -> None:
     """Create a new dataset directory, failing if it already exists."""
     dataset_path = directory / dataset
@@ -69,6 +73,7 @@ def create_dataset(directory: Path, dataset: str) -> None:
         sys.exit(f"Dataset '{dataset}' already exists.")
     dataset_path.mkdir(parents=True, exist_ok=False)
     print(f"Created dataset: {dataset_path}")
+
 
 def track_dataset(directory: Path, dataset: str = None) -> None:
     """Initialize a Git repository in the specified dataset with a .gitignore."""
@@ -117,5 +122,3 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
             f"Failed to initialize Git repository for {dataset_path}: {str(e)}"
         )
         sys.exit(f"Failed to initialize Git repository: {str(e)}")
-
-

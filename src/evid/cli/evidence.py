@@ -199,4 +199,3 @@ def label_evidence(directory: Path, dataset: str = None, uuid: str = None) -> No
     file_path = files[0]
 
     create_label(file_path, dataset, uuid)
-

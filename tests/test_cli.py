@@ -1,8 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
-import sys
-import logging
 
 from evid.cli.dataset import get_datasets, select_dataset, create_dataset
 from evid.cli.evidence import add_evidence
@@ -10,6 +8,7 @@ from evid.core.bibtex import generate_bibtex
 import yaml
 import fitz
 import json
+
 
 @pytest.fixture
 def temp_dir(tmp_path):
@@ -19,14 +18,17 @@ def temp_dir(tmp_path):
     dataset2.mkdir()
     return tmp_path
 
+
 def test_get_datasets(temp_dir):
     datasets = get_datasets(temp_dir)
     assert sorted(datasets) == ["dataset1", "dataset2"]
+
 
 @patch("builtins.input", side_effect=["1"])
 def test_select_dataset_existing(mock_input, temp_dir):
     dataset = select_dataset(temp_dir)
     assert dataset in ["dataset1", "dataset2"]
+
 
 @patch("builtins.input", side_effect=["3", "new_dataset"])
 def test_select_dataset_create_new(mock_input, temp_dir):
@@ -34,10 +36,12 @@ def test_select_dataset_create_new(mock_input, temp_dir):
     assert dataset == "new_dataset"
     assert (temp_dir / "new_dataset").exists()
 
+
 def test_create_dataset(temp_dir):
     dataset_name = "new_dataset"
     create_dataset(temp_dir, dataset_name)
     assert (temp_dir / dataset_name).exists()
+
 
 @patch("evid.core.label.generate_bib_from_typ", return_value=(True, ""))
 @patch("subprocess.run")
@@ -70,9 +74,8 @@ def test_add_evidence_local_pdf_with_label(mock_run, mock_bib, temp_dir, tmp_pat
         content = f.read()
         assert "Test content" in content  # Check generated content
 
-    mock_run.assert_called_once_with(
-        ["code", str(uuid_dir / "label.typ")], check=True
-    )
+    mock_run.assert_called_once_with(["code", str(uuid_dir / "label.typ")], check=True)
+
 
 def test_add_evidence_custom_directory(tmp_path, tmp_path_factory):
     custom_dir = tmp_path_factory.mktemp("custom_evid_db")
@@ -99,6 +102,7 @@ def test_add_evidence_custom_directory(tmp_path, tmp_path_factory):
         assert info["original_name"] == "test.pdf"
         assert info["title"] == "test"
         assert info["label"] == "test"
+
 
 @pytest.fixture
 def setup_bibtex_typs(tmp_path):
@@ -140,7 +144,7 @@ Test content
         "authors": "Author1",
         "tags": "",
         "label": "doc1",
-        "url": "http://example.com"
+        "url": "http://example.com",
     }
     with (entry1 / "info.yml").open("w", encoding="utf-8") as f:
         yaml.dump(info_data, f)
@@ -159,6 +163,7 @@ Test content
 
     return [typ_path1, typ_path2, typ_path3]
 
+
 @patch("subprocess.run")
 def test_generate_bibtex_multiple_typ_sequential(mock_run, setup_bibtex_typs, capsys):
     def side_effect(*args, **kwargs):
@@ -166,10 +171,23 @@ def test_generate_bibtex_multiple_typ_sequential(mock_run, setup_bibtex_typs, ca
             stdout_file = kwargs["stdout"]
             typ_file = Path(args[0][2])
             if typ_file.stat().st_size > 0:
-                json_content = json.dumps([{"value": {"key": "test_label", "text": "Test quote", "date": "2023-01-01", "opage": 1, "title": "Test Title", "note": "Test note"}}])
+                json_content = json.dumps(
+                    [
+                        {
+                            "value": {
+                                "key": "test_label",
+                                "text": "Test quote",
+                                "date": "2023-01-01",
+                                "opage": 1,
+                                "title": "Test Title",
+                                "note": "Test note",
+                            }
+                        }
+                    ]
+                )
                 stdout_file.write(json_content)
             else:
-                stdout_file.write('[]')
+                stdout_file.write("[]")
             stdout_file.close()
         return MagicMock(returncode=0, stderr=b"")
 
@@ -190,6 +208,7 @@ def test_generate_bibtex_multiple_typ_sequential(mock_run, setup_bibtex_typs, ca
     assert "Encountered 1 issues:" in captured.out
     assert "Skipped empty Typst file" in captured.out
 
+
 def test_generate_bibtex_nonexistent_typ(tmp_path, capsys):
     typ_paths = [tmp_path / "nonexistent1.typ", tmp_path / "nonexistent2.typ"]
     generate_bibtex(typ_paths)
@@ -200,5 +219,3 @@ def test_generate_bibtex_nonexistent_typ(tmp_path, capsys):
     assert "does not exist" in captured.out
     for typ_path in typ_paths:
         assert f"Typst file '{typ_path}' does not exist." in captured.out
-
-

@@ -4,6 +4,7 @@ from typing import Dict, List
 from evid import DEFAULT_DIR
 from evid.core.models import InfoModel  # Added for validation
 
+
 class Database:
     def __init__(self, db_path: Path = DEFAULT_DIR, datasets: List[str] = None):
         self.db: Dict[str, Dict] = {}
@@ -31,4 +32,9 @@ class Database:
                     continue
 
     def get_filenames(self) -> List[str]:
-        return [entry["original_name"] for dataset in self.db.values() for entry in dataset.values() if "original_name" in entry]
+        return [
+            entry["original_name"]
+            for dataset in self.db.values()
+            for entry in dataset.values()
+            if "original_name" in entry
+        ]

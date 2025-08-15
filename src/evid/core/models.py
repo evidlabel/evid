@@ -15,7 +15,9 @@ class InfoModel(BaseModel):
 
 
 class ConfigModel(BaseModel):
-    default_dir: str = Field(default_factory=lambda: str(Path("~/Documents/evid").expanduser()))
+    default_dir: str = Field(
+        default_factory=lambda: str(Path("~/Documents/evid").expanduser())
+    )
     editor: str = "code"
     directory: str = "code"
     latex: str = "pdflatex {file}"

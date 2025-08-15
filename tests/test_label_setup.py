@@ -44,7 +44,7 @@ def test_textpdf_to_typst(temp_pdf_with_info):
     pdf_path, _ = temp_pdf_with_info
     typst = textpdf_to_typst(pdf_path)
 
-    assert "date: \"2023-01-01\")" in typst
+    assert 'date: "2023-01-01")' in typst
     assert "= test label" in typst
     assert "== Page 1" in typst
     assert "Sample text with #special chars" in typst
@@ -59,9 +59,8 @@ def test_textpdf_to_typst_no_info(tmp_path):
     doc.save(pdf_path)
 
     typst = textpdf_to_typst(pdf_path)
-    assert "date: \"DATE\")" in typst
+    assert 'date: "DATE")' in typst
     assert "= NAME" in typst
     assert "No info file" in typst
 
     doc.close()
-
