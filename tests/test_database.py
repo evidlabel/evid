@@ -20,7 +20,7 @@ def temp_dataset(tmp_path):
         "authors": "Author1",
         "tags": "",
         "label": "doc1",
-        "url": ""
+        "url": "",
     }
     with (entry1 / "info.yml").open("w") as f:
         yaml.dump(info_data, f)
@@ -59,4 +59,3 @@ def test_database_with_invalid_entry(tmp_path):
     db = Database(tmp_path, ["dataset"])
     assert "dataset" in db.db
     assert len(db.db["dataset"]) == 0  # Invalid entry skipped
-

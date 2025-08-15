@@ -52,4 +52,3 @@ def create_label(file_path: Path, dataset: str, uuid: str) -> None:
     except Exception as e:
         logger.error(f"Error during label workflow: {str(e)}")
         print(f"An unexpected error occurred: {str(e)}")
-
