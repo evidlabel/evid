@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from bs4 import BeautifulSoup
 from evid.utils.text import normalize_text
-from evid.core.label_setup import clean_text_for_latex
+from evid.core.label_setup import clean_text_for_typst
 from evid.core.pdf_metadata import extract_pdf_metadata  # Moved to new file
 from evid.core.label import create_label  # Moved to new file
 import arrow
@@ -29,6 +29,9 @@ def add_evidence(
     unique_dir.mkdir(parents=True)
 
     is_url = source.startswith("http://") or source.startswith("https://")
+    pdf_file = None
+    text_content = None
+    is_pdf = False
 
     if is_url:
         try:
@@ -40,41 +43,15 @@ def add_evidence(
             if "application/pdf" in content_type:
                 pdf_file = BytesIO(response.content)
                 file_name = Path(file_name).stem + ".pdf"
+                is_pdf = True
             else:
                 soup = BeautifulSoup(response.text, "html.parser")
                 for elem in soup(["script", "style", "head", "nav", "footer"]):
                     elem.decompose()
                 text_content = soup.get_text(separator="\n", strip=True)
-                text_content = clean_text_for_latex(normalize_text(text_content))
+                text_content = clean_text_for_typst(normalize_text(text_content))
                 file_name = Path(file_name).stem + ".txt"
-                title = normalize_text(file_name)
-                authors = ""
-                date = ""
-                label_file = unique_dir / "label.tex"
-                latex_content = (
-                    LATEX_TEMPLATE.replace("BODY", text_content)
-                    .replace("DATE", arrow.now().format("YYYY-MM-DD"))
-                    .replace("NAME", title.replace("_", " "))
-                )
-                with label_file.open("w", encoding="utf-8") as f:
-                    f.write(latex_content)
-                info = {
-                    "original_name": file_name,
-                    "uuid": unique_dir.name,
-                    "time_added": arrow.now().format("YYYY-MM-DD"),
-                    "dates": date,
-                    "title": title,
-                    "authors": authors,
-                    "tags": "",
-                    "label": title.replace(" ", "_").lower(),
-                    "url": source,
-                }
-                info_yaml_path = unique_dir / "info.yml"
-                with info_yaml_path.open("w", encoding="utf-8") as f:
-                    yaml.dump(info, f, allow_unicode=True)
-                yaml.dump(info, sys.stdout, allow_unicode=True)
-                logger.info(f"Added text content to {unique_dir}")
-                return
+                is_pdf = False
         except requests.RequestException as e:
             sys.exit(f"Failed to download content: {str(e)}")
     else:
@@ -85,15 +62,28 @@ def add_evidence(
             sys.exit("File must be a PDF.")
         file_name = file_path.name
         pdf_file = file_path
+        is_pdf = True
 
-    title, authors, date = extract_pdf_metadata(pdf_file, file_name)
+    # Extract metadata if PDF, else set defaults
+    if is_pdf:
+        pdf_source = pdf_file if is_url else pdf_file
+        title, authors, date = extract_pdf_metadata(pdf_source, file_name)
+    else:
+        title = normalize_text(Path(file_name).stem)
+        authors = ""
+        date = ""
+
     label_str = title.replace(" ", "_").lower()
 
     target_path = unique_dir / file_name
     if is_url:
-        with target_path.open("wb") as f:
-            pdf_file.seek(0)
-            f.write(pdf_file.getvalue())
+        if is_pdf:
+            with target_path.open("wb") as f:
+                pdf_file.seek(0)
+                f.write(pdf_file.getvalue())
+        else:
+            with target_path.open("w", encoding="utf-8") as f:
+                f.write(text_content)
     else:
         shutil.copy2(pdf_file, target_path)
 
@@ -130,10 +120,6 @@ def add_evidence(
         create_label(target_path, dataset, unique_dir.name)
 
 
-# Import LATEX_TEMPLATE for non-PDF content
-from evid.core.label_setup import LATEX_TEMPLATE
-
-
 def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
     """Return a list of evidence metadata in the dataset."""
     dataset_path = directory / dataset
@@ -149,7 +135,9 @@ def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
                         validated_info = InfoModel(**info)
                         info = validated_info.model_dump()
                     except ValueError as e:
-                        logger.warning(f"Validation error for {info_path}: {e}. Skipping.")
+                        logger.warning(
+                            f"Validation error for {info_path}: {e}. Skipping."
+                        )
                         continue
                     evidences.append(
                         {
@@ -176,9 +164,7 @@ def select_evidence(
 
     print(f"{prompt_message}:")
     for i, ev in enumerate(evidences, 1):
-        print(
-            f"{i}. {ev['title']} by {ev['authors']} ({ev['date']}) - {ev['uuid']}"
-        )
+        print(f"{i}. {ev['title']} by {ev['authors']} ({ev['date']}) - {ev['uuid']}")
 
     choice = input("Select evidence (number): ").strip()
     try:
@@ -205,11 +191,12 @@ def label_evidence(directory: Path, dataset: str = None, uuid: str = None) -> No
     if not evidence_path.exists():
         sys.exit(f"Evidence {uuid} in {dataset} does not exist.")
 
-    pdf_files = list(evidence_path.glob("*.pdf"))
-    if not pdf_files:
-        sys.exit("No PDF found in evidence directory.")
-    if len(pdf_files) > 1:
-        logger.warning("Multiple PDFs found, using the first one.")
-    file_path = pdf_files[0]
+    files = list(evidence_path.glob("*.pdf")) + list(evidence_path.glob("*.txt"))
+    if not files:
+        sys.exit("No PDF or TXT found in evidence directory.")
+    if len(files) > 1:
+        logger.warning("Multiple files found, using the first one.")
+    file_path = files[0]
 
     create_label(file_path, dataset, uuid)
+

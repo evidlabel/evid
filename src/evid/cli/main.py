@@ -88,13 +88,16 @@ def list(obj):
     list_datasets(directory)
 
 
-@main.command(help="Generate BibTeX files from label.csv files")
-@click.argument("csv_files", nargs=-1, type=click.Path(exists=True, path_type=Path))
-@click.option("-p", "--parallel", is_flag=True, help="Process CSV files in parallel")
-def bibtex(csv_files: tuple[Path], parallel: bool):
-    if not csv_files:
-        sys.exit("No CSV files provided.")
-    generate_bibtex(list(csv_files), parallel=parallel)
+# this is a path but also tuple, please fix this
+
+
+@main.command(help="Generate BibTeX files from label.typ files")
+@click.argument("typ_file", type=click.Path(exists=True, path_type=Path))
+@click.option("-p", "--parallel", is_flag=True, help="Process Typst files in parallel")
+def bibtex(typ_file: Path, parallel: bool):
+    if not typ_file:
+        sys.exit("No Typst files provided.")
+    generate_bibtex([typ_file], parallel=parallel)
 
 
 @main.command(help="Launch the evid GUI")

@@ -3,67 +3,48 @@ import logging
 import bibtexparser as bib
 import subprocess
 
+from evid import CONFIG
+from evid.core.bibtex import generate_bib_from_typ
+
 logger = logging.getLogger(__name__)
 
-REBUT_TEMPLATE = r"""\documentclass[12pt]{article}
-    \usepackage{tabularx}
-    \usepackage{hyperref}
-    \usepackage[backend=biber,style=numeric,sorting=none]{biblatex}
-    \addbibresource{BIBPATH}
-    \usepackage[breakable]{tcolorbox}
-    \usepackage[danish]{babel}
-    \newcommand{\bcite}[1]{\begin{tcolorbox}[left skip=0cm,   size=fbox, arc=1mm, boxsep=0mm,left=1mm, right=1mm, top=1mm, bottom=1mm, colframe=black, colback=white,box align=base, breakable]
-    {\small \cite{#1}: \fullcite{#1}}
-    \end{tcolorbox}}
-    \usepackage{enumitem}
-    \newcounter{globalenumi}
-    
-    % Custom enumerate environment using the global counter
-    \newenvironment{cenum}
-    {
-        \begin{enumerate}
-            \setcounter{enumi}{\value{globalenumi}} % Set enumi to the global counter
-            }
-            {
-            \setcounter{globalenumi}{\value{enumi}} % Save enumi back to the global counter
-        \end{enumerate}
-    }
+TYPST_TEMPLATE = r"""#set text(lang: "da")
 
-\begin{document}
-\noindent\begin{tabularx}{\textwidth}{l|X}
-      \textbf{Topic}   &       \\
-      \textbf{Reference}&        \\
-      \textbf{Author}&        \\
-      \textbf{Date}  & \today \\
-\end{tabularx}
+#grid(
+  columns: (auto, 1fr),
+  gutter: 1em,
+  strong("Topic"),   "",
+  strong("Reference"), "",
+  strong("Author"),   "",
+  strong("Date"), datetime.today().display("[day]-[month]-[year]"),
+)
 
-\begin{cenum}
 POINTS
-\end{cenum}
 
-\printbibliography[title={Referencer}]
-
-\end{document}
+#bibliography("BIBPATH", title: "Referencer", style: "ieee", full: true)
 """
 
+
 def base_rebuttal(bibfile: Path) -> str:
-    """Generate LaTeX rebuttal content from a BibTeX file."""
+    """Generate Typst rebuttal content from a BibTeX file."""
     try:
         bibdb = bib.load(open(bibfile))
     except Exception as e:
         logger.error(f"Failed to load BibTeX file {bibfile}: {str(e)}")
         raise ValueError(f"Invalid BibTeX file: {str(e)}")
 
-    latex_body = ""
+    body = ""
     for row in bibdb.entries:
-        note_key = 'nonote' if 'nonote' in row else 'note'
-        latex_body += f"\t% prompt: {row[note_key]}\n"
-        latex_body += f"\t\\item Regarding: \\bcite{{{row['ID']}}} \n"
+        note_key = "nonote" if "nonote" in row else "note"
+        note = row[note_key]
+        prompt = "\n".join(f"// {line}" for line in note.splitlines())
+        body += f"{prompt}\n+ Regarding: #cite(<{row['ID']}>, form: \"full\")\n\n"
 
-    rebuttal_body = REBUT_TEMPLATE.replace("POINTS", latex_body).replace(
-        "BIBPATH", str(bibfile.absolute())
+    rebuttal_body = TYPST_TEMPLATE.replace("POINTS", body).replace(
+        "BIBPATH", bibfile.name
     )
     return rebuttal_body
+
 
 def write_rebuttal(body: str, output_file: Path):
     """Write rebuttal content to file if it doesn't exist."""
@@ -74,30 +55,23 @@ def write_rebuttal(body: str, output_file: Path):
     else:
         logger.info(f"{output_file} already exists. Not overwriting.")
 
+
 def rebut_doc(workdir: Path):
     """Generate rebuttal document from evidence directory."""
-    from .label_setup import csv_to_bib
-
-    csv_file = workdir / "label.csv"
-    bib_file = workdir / "label_table.bib"
-    rebut_file = workdir / "rebut.tex"
+    typ_file = workdir / "label.typ"
+    rebut_file = workdir / "rebut.typ"
+    bib_file = workdir / "label.bib"
 
     try:
-        if not csv_file.exists():
-            raise FileNotFoundError(f"CSV file {csv_file} not found")
-        if not csv_file.stat().st_size:
-            raise ValueError(f"CSV file {csv_file} is empty")
+        success, msg = generate_bib_from_typ(typ_file)
+        if not success:
+            raise RuntimeError(msg)
 
-        csv_to_bib(csv_file, bib_file, exclude_note=True)
         rebut_body = base_rebuttal(bib_file)
         write_rebuttal(rebut_body, rebut_file)
 
         if rebut_file.exists():
-            try:
-                subprocess.run(["xdg-open", str(rebut_file)], check=True)
-            except subprocess.SubprocessError as e:
-                logger.error(f"Failed to open {rebut_file}: {str(e)}")
-                raise RuntimeError(f"Failed to open rebuttal file: {str(e)}")
+            subprocess.run([CONFIG["editor"], str(rebut_file)], check=True)
         else:
             logger.warning(f"Rebuttal file {rebut_file} was not generated")
             raise RuntimeError("Rebuttal file was not generated")
@@ -105,3 +79,5 @@ def rebut_doc(workdir: Path):
     except Exception as e:
         logger.error(f"Failed to generate rebuttal: {str(e)}")
         raise
+
+

@@ -1,4 +1,4 @@
-# evid - PDF labeller
+# evid - pdf labeller
 
 `evid` is a GUI application for labelling text from PDF files, aimed at the legal industry. 
 With `evid` you can label snippets and add remarks on read-through, which will then be citable in LaTeX or typst documents. 

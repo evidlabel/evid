@@ -59,3 +59,4 @@ def test_database_with_invalid_entry(tmp_path):
     db = Database(tmp_path, ["dataset"])
     assert "dataset" in db.db
     assert len(db.db["dataset"]) == 0  # Invalid entry skipped
+
