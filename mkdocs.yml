@@ -1,9 +1,9 @@
-site_name: evid docs
+site_name: evid
 repo_url: https://github.com/evidlabel/evid
 theme:
   name: material
   font:
-    text: Ubuntu
+    text: Ubuntu Sans
     code: Ubuntu Mono
   palette:
     scheme: slate

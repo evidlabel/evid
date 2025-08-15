@@ -3,3 +3,4 @@
 __pycache__
 *txt
 *.lock
+codefold.json
