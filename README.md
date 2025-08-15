@@ -1,6 +1,6 @@
 ![Deploy](https://github.com/evidlabel/evid/actions/workflows/ci.yml/badge.svg)![Version](https://img.shields.io/github/v/release/evidlabel/evid)
 # evid - PDF Labeler
-`evid` is an application, aimed at the legal industry, for labelling PDF text content and making the labels citeable (for use in e.g. LaTeX or Typst). 
+`evid` is an application, aimed at the legal industry, for labelling PDF text content and making the labels citeable (for use in e.g.  or Typst). 
 
 ## Workflow
 - Create a dataset
@@ -71,18 +71,19 @@ For more detailed information, visit the [documentation page](https://evidlabel.
 
 ## Labelling
 - When selecting a document and pressing the "Label" button, a typst document is generated that contains the extracted text from the PDF. 
-The LaTeX document is saved in the same folder as the PDF. 
+    
+    The typst document is saved in the same folder as the PDF. 
 
 - The user can now label using their text editor inside the typst document. For VS Code, the following keybinding will allow labelling by selecting text and pressing `ctrl+l`:
-```json 
-{
-    "key": "ctrl+L",
-    "command": "editor.action.insertSnippet",
-    "when": "editorTextFocus && editorLangId == 'typst'",
-    "args": {"snippet": "#lab(\"$1\",\"${TM_SELECTED_TEXT}\",\"$2\")"}
-}
-```
-The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).
+    ```json 
+    {
+        "key": "ctrl+L",
+        "command": "editor.action.insertSnippet",
+        "when": "editorTextFocus && editorLangId == 'typst'",
+        "args": {"snippet": "#lab(\"$1\",\"${TM_SELECTED_TEXT}\",\"$2\")"}
+    }
+    ```
+    The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).
 
 - The header in the typst document causes `typst query` to write the labels to `label.json`. 
 - The JSON file is translated to `label.bib` upon exiting the label editor (i.e., closing VS Code).  
