@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ![Deploy](https://github.com/evidlabel/evid/actions/workflows/ci.yml/badge.svg)![Version](https://img.shields.io/github/v/release/evidlabel/evid)
 # evid - PDF Labeler
 `evid` is an application, aimed at the legal industry, for labelling PDF text content and making the labels citeable (for use in e.g.  or Typst). 
@@ -8,6 +9,17 @@
 - Label the text, extracted from the PDF, using a text editor, surrounding labelled text with `#lab(key,text,note)` in typst
 - Use `generate bibtex` to create a BibTeX file, this will use `typst query` in the background. 
 - Use `rebut` to create a line-by-line rebuttal, that can be used in an LLM (the remarks are line prompts for the LLM).  
+=======
+# evid - PDF Evidence Manager
+
+`evid` is a Python-based tool for managing PDF evidence files with metadata extraction and organization capabilities, featuring a PyQt6-based GUI.
+
+## Features
+- PDF logging with metadata (title, authors, tags, dates)
+- Automatic date extraction from PDFs
+- PyQt6 GUI with tabs for adding and browsing evidence
+- LaTeX document generation for labels and rebuttals
+>>>>>>> master
 
 ## Installation
 To install the latest version of `evid`:
@@ -16,12 +28,16 @@ uv pip install https://github.com/evidlabel/evid.git
 ```
 
 ## Usage
+<<<<<<< HEAD
 ### GUI
 Launch the GUI using:
 ```bash
 evid 
 ```
 Which gives access to a two-pane app, one for adding files, and one for browsing datasets. 
+=======
+Launch with `poetry run evid` to access the GUI for adding and browsing evidence.
+>>>>>>> master
 
 <img src="docs/assets/image.png" alt="drawing" width="50%"/><img src="docs/assets/browse.png" alt="drawing" width="50%"/>
 

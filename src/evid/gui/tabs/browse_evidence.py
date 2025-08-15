@@ -288,6 +288,7 @@ class BrowseEvidenceTab(QWidget):
             typ_file = file_path.parent / "label.typ"
             bib_file = file_path.parent / "label.bib"
 
+<<<<<<< HEAD
             if typ_file.exists():
                 success, msg = generate_bib_from_typ(typ_file)
                 if success:
@@ -300,6 +301,15 @@ class BrowseEvidenceTab(QWidget):
                         "BibTeX Generation Error",
                         f"Failed to generate BibTeX for row {row + 1}: {msg}",
                     )
+=======
+            # Open the labeller and wait for it to close
+            subprocess.run(["xdg-open", str(label_file)], check=True)
+
+            # After labeller closes, check for CSV and generate BibTeX
+            if csv_file.exists():
+                csv_to_bib(csv_file, bib_file, exclude_note=True)
+                logger.info(f"Generated BibTeX file: {bib_file}")
+>>>>>>> master
             else:
                 logger.warning(f"Typst file {typ_file} not found")
                 QMessageBox.warning(
@@ -307,12 +317,24 @@ class BrowseEvidenceTab(QWidget):
                     "Typst Missing",
                     f"No label.typ found for entry in row {row + 1}. BibTeX generation skipped.",
                 )
+<<<<<<< HEAD
 
         if success_count > 0:
             QMessageBox.information(
                 self,
                 "BibTeX Generation Complete",
                 f"Successfully generated BibTeX files for {success_count} entries.",
+=======
+        except subprocess.SubprocessError as e:
+            logger.error(f"Error opening labeller: {str(e)}")
+            QMessageBox.critical(
+                self, "Error Opening Labeller", f"Failed to open labeller: {str(e)}"
+            )
+        except Exception as e:
+            logger.error(f"Error during label workflow: {str(e)}")
+            QMessageBox.critical(
+                self, "Label Workflow Error", f"An unexpected error occurred: {str(e)}"
+>>>>>>> master
             )
 
     def run_rebut(self):
