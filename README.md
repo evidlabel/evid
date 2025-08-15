@@ -70,25 +70,21 @@ evid rc
 For more detailed information, visit the [documentation page](https://evidlabel.github.io/evid/).
 
 ## Labelling
-- When selecting a document and pressing the "Label" button, a LaTeX document is generated that contains the extracted text from the PDF. 
+- When selecting a document and pressing the "Label" button, a typst document is generated that contains the extracted text from the PDF. 
 The LaTeX document is saved in the same folder as the PDF. 
 
-- The user can now label using their text editor inside the LaTeX document. For VS Code, the following keybinding will allow labelling by selecting text and pressing `ctrl+l`:
+- The user can now label using their text editor inside the typst document. For VS Code, the following keybinding will allow labelling by selecting text and pressing `ctrl+l`:
 ```json 
-[
 {
-"key": "ctrl+l",
-"command": "editor.action.insertSnippet",
-"when": "editorTextFocus && editorLangId == 'latex'",
-"args": {
-"snippet": "\\lb{$1}{${TM_SELECTED_TEXT}}{$2}"
+    "key": "ctrl+L",
+    "command": "editor.action.insertSnippet",
+    "when": "editorTextFocus && editorLangId == 'typst'",
+    "args": {"snippet": "#lab(\"$1\",\"${TM_SELECTED_TEXT}\",\"$2\")"}
 }
-}
-]
 ```
 The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).
 
-- The header in the LaTeX document causes LaTeX compilation to write the labels to `label.csv`. 
-- The CSV file is translated to `label_table.bib` upon exiting the label editor (i.e., closing VS Code).  
+- The header in the typst document causes `typst query` to write the labels to `label.json`. 
+- The JSON file is translated to `label.bib` upon exiting the label editor (i.e., closing VS Code).  
 - The `label_table.bib` files for each PDF can be concatenated and used to formulate a rebuttal. 
 - Note that the first 4 characters of the PDF's UUID are used as a prefix for the BibTeX label, this means that the labels only have to have a unique ID for the same PDF, not across all PDFs in the dataset.
