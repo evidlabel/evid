@@ -1,6 +1,7 @@
+<<<<<<< HEAD
 ![Deploy](https://github.com/evidlabel/evid/actions/workflows/ci.yml/badge.svg)![Version](https://img.shields.io/github/v/release/evidlabel/evid)
 # evid - PDF Labeler
-`evid` is an application, aimed at the legal industry, for labelling PDF text content and making the labels citeable (for use in e.g. LaTeX or Typst). 
+`evid` is an application, aimed at the legal industry, for labelling PDF text content and making the labels citeable (for use in e.g.  or Typst). 
 
 ## Workflow
 - Create a dataset
@@ -8,20 +9,35 @@
 - Label the text, extracted from the PDF, using a text editor, surrounding labelled text with `#lab(key,text,note)` in typst
 - Use `generate bibtex` to create a BibTeX file, this will use `typst query` in the background. 
 - Use `rebut` to create a line-by-line rebuttal, that can be used in an LLM (the remarks are line prompts for the LLM).  
+=======
+# evid - PDF Evidence Manager
+
+`evid` is a Python-based tool for managing PDF evidence files with metadata extraction and organization capabilities, featuring a PyQt6-based GUI.
+
+## Features
+- PDF logging with metadata (title, authors, tags, dates)
+- Automatic date extraction from PDFs
+- PyQt6 GUI with tabs for adding and browsing evidence
+- LaTeX document generation for labels and rebuttals
+>>>>>>> master
 
 ## Installation
-
+To install the latest version of `evid`:
 ```bash
 uv pip install https://github.com/evidlabel/evid.git
 ```
 
 ## Usage
+<<<<<<< HEAD
 ### GUI
 Launch the GUI using:
 ```bash
 evid 
 ```
 Which gives access to a two-pane app, one for adding files, and one for browsing datasets. 
+=======
+Launch with `poetry run evid` to access the GUI for adding and browsing evidence.
+>>>>>>> master
 
 <img src="docs/assets/image.png" alt="drawing" width="50%"/><img src="docs/assets/browse.png" alt="drawing" width="50%"/>
 
@@ -30,40 +46,40 @@ Which gives access to a two-pane app, one for adding files, and one for browsing
 Use the CLI to manage datasets and evidence:
 
 - **Add a PDF** (from URL or local file):
-```bash
-evid add <url_or_path> [-s|--dataset <dataset>] [-l|--label] [-d|--directory <custom_dir>]
-```
-If `-s` or `--dataset` is not specified, the CLI prompts you to select or create a dataset. Use `-l` or `--label` to open the labeler after adding.
+    ```bash
+    evid add <url_or_path> [-s|--dataset <dataset>] [-l|--label] [-d|--directory <custom_dir>]
+    ```
+    If `-s` or `--dataset` is not specified, the CLI prompts you to select or create a dataset. Use `-l` or `--label` to open the labeler after adding.
 
 - **List Datasets**:
-```bash
-evid list [-d|--directory <custom_dir>]
-```
+    ```bash
+    evid list [-d|--directory <custom_dir>]
+    ```
 
 - **Create a Dataset**:
-```bash
-evid set create <dataset_name> [-d|--directory <custom_dir>]
-```
+    ```bash
+    evid set create <dataset_name> [-d|--directory <custom_dir>]
+    ```
 
 - **Track a Dataset with Git**:
-```bash
-evid set track [<dataset_name>] [-d|--directory <custom_dir>]
-```
+    ```bash
+    evid set track [<dataset_name>] [-d|--directory <custom_dir>]
+    ```
 
 - **Generate BibTeX Files**:
-```bash
-evid bibtex <csv_files>... [-p|--parallel]
-```
+    ```bash
+    evid bibtex <csv_files>... [-p|--parallel]
+    ```
 
 - **Label Evidence**:
-```bash
-evid label [-s|--dataset <dataset>] [-u|--uuid <uuid>] [-d|--directory <custom_dir>]
-```
+    ```bash
+    evid label [-s|--dataset <dataset>] [-u|--uuid <uuid>] [-d|--directory <custom_dir>]
+    ```
 
 - **Initialize Configuration**:
-```bash
-evid rc
-```
+    ```bash
+    evid rc
+    ```
 
 ## Documentation 
 
@@ -71,18 +87,19 @@ For more detailed information, visit the [documentation page](https://evidlabel.
 
 ## Labelling
 - When selecting a document and pressing the "Label" button, a typst document is generated that contains the extracted text from the PDF. 
-The LaTeX document is saved in the same folder as the PDF. 
+    
+    The typst document is saved in the same folder as the PDF. 
 
 - The user can now label using their text editor inside the typst document. For VS Code, the following keybinding will allow labelling by selecting text and pressing `ctrl+l`:
-```json 
-{
-    "key": "ctrl+L",
-    "command": "editor.action.insertSnippet",
-    "when": "editorTextFocus && editorLangId == 'typst'",
-    "args": {"snippet": "#lab(\"$1\",\"${TM_SELECTED_TEXT}\",\"$2\")"}
-}
-```
-The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).
+    ```json 
+    {
+        "key": "ctrl+L",
+        "command": "editor.action.insertSnippet",
+        "when": "editorTextFocus && editorLangId == 'typst'",
+        "args": {"snippet": "#lab(\"$1\",\"${TM_SELECTED_TEXT}\",\"$2\")"}
+    }
+    ```
+    The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).
 
 - The header in the typst document causes `typst query` to write the labels to `label.json`. 
 - The JSON file is translated to `label.bib` upon exiting the label editor (i.e., closing VS Code).  
