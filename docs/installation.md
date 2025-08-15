@@ -1,13 +1,13 @@
 # Installation
 
-This guide covers how to install `evid` on your system using `uv`, the recommended tool for dependency management. For Windows users, we also provide instructions for setting up `evid` using Windows Subsystem for Linux (WSL2), which is recommended for a smoother experience with GUI and LaTeX features.
+This guide covers how to install `evid` on your system using `uv`, the recommended tool for dependency management. For Windows users, we also provide instructions for setting up `evid` using Windows Subsystem for Linux (WSL2), which is recommended for a smoother experience with GUI and Typst features.
 
 ## Prerequisites
 
 - **Python**: Version 3.11 or higher (but less than 4.0).
 - **uv**: For dependency management and installation.
 - **Git**: To clone the repository and enable optional Git-based version control for datasets.
-- **Optional**: A LaTeX distribution (e.g., TeX Live) for generating LaTeX documents.
+- **Optional**: Typst for generating Typst documents.
 - **For WSL2 (Windows)**: A Linux distribution (e.g., Ubuntu) installed via WSL2, plus additional system dependencies for GUI support.
 
 ## Installation Options
@@ -83,7 +83,7 @@ This should open the `evid` GUI with a dark theme.
 
 ## WSL2 Installation for Windows
 
-For Windows users, we recommend using Windows Subsystem for Linux (WSL2) to run `evid`. WSL2 provides a Linux environment that simplifies GUI and LaTeX support. These instructions are designed for beginners who have never used WSL2 before.
+For Windows users, we recommend using Windows Subsystem for Linux (WSL2) to run `evid`. WSL2 provides a Linux environment that simplifies GUI and Typst support. These instructions are designed for beginners who have never used WSL2 before.
 
 ### Step 1: Set Up WSL2
 
@@ -142,12 +142,12 @@ sudo apt install -y git python3 python3-pip python3-dev qt6-base-dev libx11-xcb1
 ```
 - These packages ensure that the GUI and graphical components work correctly in WSL2.
 
-4. **Optional: Install LaTeX**:
-- To generate LaTeX documents (e.g., for labels and rebuttals), install TeX Live:
+4. **Optional: Install Typst**:
+- To generate Typst documents (e.g., for labels and rebuttals), install Typst:
 ```bash
-sudo apt install -y texlive-full
+sh -c "$(curl --proto '=https' --tlsv1.2 -sSf https://sh.typst.app)"
 ```
-- Note: This is a large package (several GB), so you can skip it if you don't need LaTeX features.
+- Note: This is a small installation compared to full LaTeX distributions.
 
 ### Step 4: Clone and Install evid
 
@@ -206,12 +206,13 @@ evid
 - **GUI Doesn't Appear**: Ensure XLaunch is running and the `DISPLAY` variable is set correctly. Try restarting XLaunch and running `export DISPLAY=:0` in the Ubuntu terminal.
 - **Dependency Errors**: If `uv pip install` fails, ensure all system dependencies were installed (`qt6-base-dev`, `git`, etc.). Re-run `sudo apt install` for missing packages.
 - **Slow Performance**: Ensure your WSL2 instance has enough memory (check via `wsl --list --verbose`). You can allocate more resources in a `.wslconfig` file (search online for WSL2 performance tuning).
-- **LaTeX Issues**: If LaTeX documents fail to generate, verify that `texlive-full` is installed or install specific LaTeX packages as needed.
+- **Typst Issues**: If Typst documents fail to generate, verify that Typst is installed or install it as needed.
 
 ## Troubleshooting (General)
 
 - **uv errors**: Ensure Python 3.11+ is installed and `uv` is correctly configured. Try `uv python use 3.11` if `uv` uses the wrong Python version.
-- **Missing LaTeX**: If LaTeX documents fail to generate, install a LaTeX distribution like TeX Live (included in WSL2 instructions above).
+- **Missing Typst**: If Typst documents fail to generate, install Typst (included in WSL2 instructions above).
 - **GUI issues**: Verify that `PyQt6` is installed correctly. Check for Qt-related errors in the terminal output. For WSL2, ensure the X server is running.
 
 For further help, check the [Development](development.md) section or file an issue on the repository.
+
