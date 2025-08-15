@@ -10,7 +10,7 @@
 - Use `rebut` to create a line-by-line rebuttal, that can be used in an LLM (the remarks are line prompts for the LLM).  
 
 ## Installation
-
+To install the latest version of `evid`:
 ```bash
 uv pip install https://github.com/evidlabel/evid.git
 ```
@@ -30,40 +30,40 @@ Which gives access to a two-pane app, one for adding files, and one for browsing
 Use the CLI to manage datasets and evidence:
 
 - **Add a PDF** (from URL or local file):
-```bash
-evid add <url_or_path> [-s|--dataset <dataset>] [-l|--label] [-d|--directory <custom_dir>]
-```
-If `-s` or `--dataset` is not specified, the CLI prompts you to select or create a dataset. Use `-l` or `--label` to open the labeler after adding.
+    ```bash
+    evid add <url_or_path> [-s|--dataset <dataset>] [-l|--label] [-d|--directory <custom_dir>]
+    ```
+    If `-s` or `--dataset` is not specified, the CLI prompts you to select or create a dataset. Use `-l` or `--label` to open the labeler after adding.
 
 - **List Datasets**:
-```bash
-evid list [-d|--directory <custom_dir>]
-```
+    ```bash
+    evid list [-d|--directory <custom_dir>]
+    ```
 
 - **Create a Dataset**:
-```bash
-evid set create <dataset_name> [-d|--directory <custom_dir>]
-```
+    ```bash
+    evid set create <dataset_name> [-d|--directory <custom_dir>]
+    ```
 
 - **Track a Dataset with Git**:
-```bash
-evid set track [<dataset_name>] [-d|--directory <custom_dir>]
-```
+    ```bash
+    evid set track [<dataset_name>] [-d|--directory <custom_dir>]
+    ```
 
 - **Generate BibTeX Files**:
-```bash
-evid bibtex <csv_files>... [-p|--parallel]
-```
+    ```bash
+    evid bibtex <csv_files>... [-p|--parallel]
+    ```
 
 - **Label Evidence**:
-```bash
-evid label [-s|--dataset <dataset>] [-u|--uuid <uuid>] [-d|--directory <custom_dir>]
-```
+    ```bash
+    evid label [-s|--dataset <dataset>] [-u|--uuid <uuid>] [-d|--directory <custom_dir>]
+    ```
 
 - **Initialize Configuration**:
-```bash
-evid rc
-```
+    ```bash
+    evid rc
+    ```
 
 ## Documentation 
 
