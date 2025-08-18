@@ -114,7 +114,7 @@ def setup_bibtex_typs(tmp_path):
     entry2.mkdir(parents=True)
     entry3.mkdir(parents=True)
 
-    typ_data = """#import "@local/labtyp:0.1.0": lablist, lab, mset
+    typ_data = """#import "@preview/labtyp:0.1.0": lablist, lab, mset
 
 #mset(values: (title: "Test Title", date: "2023-01-01"))
 

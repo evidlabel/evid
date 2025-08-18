@@ -77,7 +77,7 @@ def textpdf_to_typst(pdfname: Path, outputfile: Path = None) -> str:
         body += f"#mset(values: (opage: {i + 1}))\n== Page {i + 1}\n{text}\n\n"
     pdf.close()
 
-    typst_content = f"""#import "@local/labtyp:0.1.0": lablist, lab, mset
+    typst_content = f"""#import "@preview/labtyp:0.1.0": lablist, lab, mset
 
 #mset(values: (
   title: "{name.replace("_", " ")}",
@@ -121,7 +121,7 @@ def text_to_typst(txtname: Path, outputfile: Path = None) -> str:
     with txtname.open("r", encoding="utf-8") as f:
         body = clean_text_for_typst(f.read())
 
-    typst_content = f"""#import "@local/labtyp:0.1.0": lablist, lab, mset
+    typst_content = f"""#import "@preview/labtyp:0.1.0": lablist, lab, mset
 
 #mset(values: (
   title: "{name.replace("_", " ")}",
