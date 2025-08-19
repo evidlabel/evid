@@ -1,81 +1,70 @@
-from pathlib import Path
-import logging
-import bibtexparser as bib
-import subprocess
-
-from evid import CONFIG
-from evid.core.bibtex import generate_bib_from_typ
-
-logger = logging.getLogger(__name__)
-
-TYPST_TEMPLATE = r"""#set text(lang: "da")
-
-#grid(
-  columns: (auto, 1fr),
-  gutter: 1em,
-  strong("Topic"),   "",
-  strong("Reference"), "",
-  strong("Author"),   "",
-  strong("Date"), datetime.today().display("[day]-[month]-[year]"),
-)
-
-POINTS
-
-#bibliography("BIBPATH", title: "Referencer", style: "ieee", full: true)
-"""
+import pytest
+from unittest.mock import patch
+from evid.core.rebut_doc import base_rebuttal, write_rebuttal, rebut_doc
 
 
-def base_rebuttal(bibfile: Path) -> str:
-    """Generate Typst rebuttal content from a BibTeX file."""
-    try:
-        bibdb = bib.load(open(bibfile))
-    except Exception as e:
-        logger.error(f"Failed to load BibTeX file {bibfile}: {str(e)}")
-        raise ValueError(f"Invalid BibTeX file: {str(e)}")
-
-    body = ""
-    for row in bibdb.entries:
-        note_key = "nonote" if "nonote" in row else "note"
-        note = row[note_key]
-        prompt = "\n".join(f"// {line}" for line in note.splitlines())
-        body += f'{prompt}\n+ Regarding: #cite(<{row["ID"]}>, form: "full")\n\n'
-
-    rebuttal_body = TYPST_TEMPLATE.replace("POINTS", body).replace(
-        "BIBPATH", bibfile.name
-    )
-    return rebuttal_body
+@pytest.fixture
+def temp_dir(tmp_path):
+    return tmp_path
 
 
-def write_rebuttal(body: str, output_file: Path):
-    """Write rebuttal content to file if it doesn't exist."""
-    if not output_file.exists():
-        with open(output_file, "w", encoding="utf-8") as rebuttal_file:
-            rebuttal_file.write(body)
-            logger.info(f"Written a new {output_file}")
-    else:
-        logger.info(f"{output_file} already exists. Not overwriting.")
+def test_base_rebuttal(temp_dir):
+    bib_file = temp_dir / "label.bib"
+    bib_content = """@article{test_uuid:test_label,
+        nonote = {Test note},
+        title = {Test quote},
+        journal = {Section 1},
+        date = {2023-01-01},
+        pages = {1},
+        url = {},
+    }"""
+    bib_file.write_text(bib_content)
+    result = base_rebuttal(bib_file)
+    assert "// Test note" in result
+    assert "#bcite(<test_uuid:test_label>)" in result
 
 
-def rebut_doc(workdir: Path):
-    """Generate rebuttal document from evidence directory."""
+def test_write_rebuttal(temp_dir):
+    output_file = temp_dir / "rebut.typ"
+    body = "Test body"
+    write_rebuttal(body, output_file)
+    assert output_file.exists()
+    assert output_file.read_text() == body
+
+
+def test_write_rebuttal_existing_file(temp_dir):
+    output_file = temp_dir / "rebut.typ"
+    output_file.write_text("Existing content")
+    body = "New body"
+    write_rebuttal(body, output_file)
+    assert output_file.read_text() == "Existing content"
+
+
+@patch("evid.core.rebut_doc.generate_bib_from_typ", return_value=(True, ""))
+@patch("evid.core.rebut_doc.subprocess.run")
+def test_rebut_doc_success(mock_run, mock_gen, temp_dir):
+    workdir = temp_dir / "workdir"
+    workdir.mkdir()
     typ_file = workdir / "label.typ"
+    typ_file.write_text("content")
     rebut_file = workdir / "rebut.typ"
-    bib_file = workdir / "label.bib"
+    rebut_doc(workdir)
+    assert rebut_file.exists()
+    mock_run.assert_called_with([CONFIG["editor"], str(rebut_file)], check=True)
+    mock_gen.assert_called_with(typ_file)
 
-    try:
-        success, msg = generate_bib_from_typ(typ_file)
-        if not success:
-            raise RuntimeError(msg)
 
-        rebut_body = base_rebuttal(bib_file)
-        write_rebuttal(rebut_body, rebut_file)
+def test_rebut_doc_no_label(temp_dir):
+    workdir = temp_dir / "workdir"
+    workdir.mkdir()
+    with pytest.raises(RuntimeError):
+        rebut_doc(workdir)
 
-        if rebut_file.exists():
-            subprocess.run([CONFIG["editor"], str(rebut_file)], check=True)
-        else:
-            logger.warning(f"Rebuttal file {rebut_file} was not generated")
-            raise RuntimeError("Rebuttal file was not generated")
 
-    except Exception as e:
-        logger.error(f"Failed to generate rebuttal: {str(e)}")
-        raise
+def test_rebut_doc_empty_label(temp_dir):
+    workdir = temp_dir / "workdir"
+    workdir.mkdir()
+    typ_file = workdir / "label.typ"
+    typ_file.write_text("")
+    with pytest.raises(RuntimeError):
+        rebut_doc(workdir)
