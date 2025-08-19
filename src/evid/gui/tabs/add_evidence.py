@@ -22,6 +22,7 @@ from evid import DEFAULT_DIR
 from evid.utils.text import normalize_text
 import logging
 from evid.core.models import InfoModel  # Added for validation
+import hashlib
 
 logger = logging.getLogger(__name__)
 
@@ -214,19 +215,53 @@ class AddEvidenceTab(QWidget):
             )
             return
 
-        unique_dir = self.directory / dataset / str(uuid.uuid4())
+        # Get content bytes
+        if hasattr(self, "memory_pdf_file") and self.memory_pdf_file:
+            content_bytes = self.memory_pdf_file.getvalue()
+            file_name = self.memory_file_name
+        else:
+            file_path_str = self.file_input.text()
+            file_path = Path(file_path_str)
+            with open(file_path, "rb") as f:
+                content_bytes = f.read()
+            file_name = file_path.name
+
+        # Compute content-based UUID
+        digest = hashlib.sha256(content_bytes).digest()[:16]
+        unique_id = uuid.UUID(bytes=digest)
+        unique_dir = self.directory / dataset / unique_id.hex
+
+        if unique_dir.exists():
+            QMessageBox.information(
+                self,
+                "Already Added",
+                f"This document is already added in {dataset} at {unique_id.hex}. Opening directory.",
+            )
+            try:
+                subprocess.run(["code", str(unique_dir)], check=True)
+            except subprocess.SubprocessError as e:
+                QMessageBox.critical(
+                    self,
+                    "Error Opening Directory",
+                    f"Failed to open directory: {str(e)}",
+                )
+            return
+
         unique_dir.mkdir(parents=True)
 
-        file_path = Path(self.file_input.text())
-        file_name = (
-            self.memory_file_name
-            if hasattr(self, "memory_file_name")
-            else file_path.name
-        )
+        target_path = unique_dir / file_name
+        if hasattr(self, "memory_pdf_file") and self.memory_pdf_file:
+            self.memory_pdf_file.seek(0)
+            with target_path.open("wb") as f:
+                f.write(self.memory_pdf_file.getvalue())
+            del self.memory_pdf_file
+            del self.memory_file_name
+        else:
+            shutil.copy2(file_path_str, target_path)
 
         info = {
             "original_name": file_name,
-            "uuid": unique_dir.name,
+            "uuid": unique_id.hex,
             "time_added": arrow.now().format("YYYY-MM-DD"),
             "dates": self.dates_input.text(),
             "title": self.title_input.text(),
@@ -244,15 +279,6 @@ class AddEvidenceTab(QWidget):
             logger.error(f"Validation error for info.yml: {e}")
             QMessageBox.critical(self, "Validation Error", f"Validation failed: {e}")
             return
-
-        target_path = unique_dir / file_name
-        if hasattr(self, "memory_pdf_file") and self.memory_pdf_file:
-            with target_path.open("wb") as f:
-                f.write(self.memory_pdf_file.getvalue())
-            del self.memory_pdf_file
-            del self.memory_file_name
-        else:
-            shutil.copy2(file_path, target_path)
 
         with (unique_dir / "info.yml").open("w", encoding="utf-8") as f:
             yaml.dump(info, f, allow_unicode=True)
