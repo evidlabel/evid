@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch
 from evid.core.rebut_doc import base_rebuttal, write_rebuttal, rebut_doc
+from evid import CONFIG
 
 
 @pytest.fixture
@@ -40,13 +41,21 @@ def test_write_rebuttal_existing_file(temp_dir):
     assert output_file.read_text() == "Existing content"
 
 
-@patch("evid.core.rebut_doc.generate_bib_from_typ", return_value=(True, ""))
+@patch("evid.core.bibtex.generate_bib_from_typ", return_value=(True, ""))
 @patch("evid.core.rebut_doc.subprocess.run")
 def test_rebut_doc_success(mock_run, mock_gen, temp_dir):
     workdir = temp_dir / "workdir"
     workdir.mkdir()
     typ_file = workdir / "label.typ"
     typ_file.write_text("content")
+    bib_file = workdir / "label.bib"
+    bib_file.write_text("""@article{test_id,
+        nonote = {Test note},
+        title = {quote},
+        journal = {journal},
+        date = {2023-01-01},
+        pages = {1},
+    }""")
     rebut_file = workdir / "rebut.typ"
     rebut_doc(workdir)
     assert rebut_file.exists()
