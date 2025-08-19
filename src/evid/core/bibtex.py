@@ -26,7 +26,7 @@ def generate_bib_from_typ(
                 "typst",
                 "query",
                 str(typ_file),
-                "<lab>",
+                '"<lab>"',
                 "--package-path",
                 os.path.expanduser("~/.cache/typst"),
             ],
