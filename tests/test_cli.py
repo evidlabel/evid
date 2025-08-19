@@ -39,7 +39,7 @@ def test_create_dataset(temp_dir):
     assert (temp_dir / "new_dataset").exists()
 
 
-@patch("evid.core.label.generate_bib_from_typ", return_value=(True, ""))
+@patch("evid.core.bibtex.generate_bib_from_typ", return_value=(True, ""))
 @patch("evid.core.label.subprocess.run")
 def test_add_evidence_local_pdf_with_label(mock_run, mock_gen, temp_dir):
     pdf_path = temp_dir / "test.pdf"
@@ -84,14 +84,14 @@ def test_generate_bibtex_multiple_typ_sequential(mock_run, temp_dir):
 
     def side_effect(*args, **kwargs):
         if args[0][0] == "typst":
-            json_file = kwargs["stdout"]
-            json_file.write(
+            json_file_obj = kwargs["stdout"]
+            json_file_obj.write(
                 json.dumps(
                     [
                         {
                             "value": {
                                 "key": "test_label",
-                                "quote": "Test quote",
+                                "text": "Test quote",
                                 "title": "Section 1",
                                 "date": "2023-01-01",
                                 "opage": 1,
@@ -101,8 +101,10 @@ def test_generate_bibtex_multiple_typ_sequential(mock_run, temp_dir):
                     ]
                 )
             )
-            json_file.flush()
-            return MagicMock(returncode=0, stderr=b"")
+            json_file_obj.flush()
+            mock_result = MagicMock(returncode=0, stderr=b"")
+            mock_result.args = args[0]
+            return mock_result
         return MagicMock(returncode=0)
 
     mock_run.side_effect = side_effect
