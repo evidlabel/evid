@@ -14,7 +14,7 @@ def sample_pdf_content():
     return b"%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 3 3]>>endobj xref 0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer<</Size 4/Root 1 0 R>>\nstartxref 149 %EOF"
 
 
-def test_add_duplicate_evidence(temp_directory, sample_pdf_content):
+def test_add_duplicate_evidence(temp_directory, sample_pdf_content, capsys):
     dataset = "test_dataset"
     source_path = temp_directory / "sample.pdf"
     with open(source_path, "wb") as f:
@@ -32,12 +32,9 @@ def test_add_duplicate_evidence(temp_directory, sample_pdf_content):
     assert (unique_dir / "info.yml").exists()
 
     # Second add (duplicate)
-    with pytest.raises(
-        SystemExit
-    ):  # Since sys.exit is called in CLI, but function prints and returns
-        add_evidence(temp_directory, dataset, str(source_path))
-    # Note: The function prints a message and returns, doesn't sys.exit, so adjust if needed
-    # But in the code, it prints and returns, so perhaps capture stdout
+    add_evidence(temp_directory, dataset, str(source_path))
+    captured = capsys.readouterr()
+    assert f"This document is already added in {dataset} at {unique_id}" in captured.out
 
     # Verify no new directory created, still only one
     assert len(list((temp_directory / dataset).iterdir())) == 1
