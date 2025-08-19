@@ -41,7 +41,7 @@ def test_write_rebuttal_existing_file(temp_dir):
     assert output_file.read_text() == "Existing content"
 
 
-@patch("evid.core.rebut_doc.generate_bib_from_typ", return_value=(True, ""))
+@patch("evid.core.bibtex.generate_bib_from_typ", return_value=(True, ""))
 @patch("evid.core.rebut_doc.subprocess.run")
 def test_rebut_doc_success(mock_run, mock_gen, temp_dir):
     workdir = temp_dir / "workdir"
