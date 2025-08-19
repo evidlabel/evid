@@ -14,6 +14,7 @@ from evid.core.label import create_label  # Moved to new file
 import arrow
 import yaml
 from evid.core.models import InfoModel  # Added for validation
+import hashlib
 
 
 # Configure Rich handler for colored logging
@@ -25,13 +26,11 @@ def add_evidence(
     directory: Path, dataset: str, source: str, label: bool = False
 ) -> None:
     """Add a PDF or text content to the specified dataset."""
-    unique_dir = directory / dataset / str(uuid.uuid4())
-    unique_dir.mkdir(parents=True)
-
     is_url = source.startswith("http://") or source.startswith("https://")
+    file_name = None
+    is_pdf = False
     pdf_file = None
     text_content = None
-    is_pdf = False
 
     if is_url:
         try:
@@ -44,6 +43,7 @@ def add_evidence(
                 pdf_file = BytesIO(response.content)
                 file_name = Path(file_name).stem + ".pdf"
                 is_pdf = True
+                content_bytes = pdf_file.getvalue()
             else:
                 soup = BeautifulSoup(response.text, "html.parser")
                 for elem in soup(["script", "style", "head", "nav", "footer"]):
@@ -52,6 +52,7 @@ def add_evidence(
                 text_content = clean_text_for_typst(normalize_text(text_content))
                 file_name = Path(file_name).stem + ".txt"
                 is_pdf = False
+                content_bytes = text_content.encode("utf-8")
         except requests.RequestException as e:
             sys.exit(f"Failed to download content: {str(e)}")
     else:
@@ -61,11 +62,26 @@ def add_evidence(
         if file_path.suffix.lower() != ".pdf":
             sys.exit("File must be a PDF.")
         file_name = file_path.name
+        with open(file_path, "rb") as f:
+            content_bytes = f.read()
         pdf_file = file_path
         is_pdf = True
 
+    # Compute content-based UUID
+    digest = hashlib.sha256(content_bytes).digest()[:16]
+    unique_id = uuid.UUID(bytes=digest)
+    unique_dir = directory / dataset / unique_id.hex
+
+    if unique_dir.exists():
+        print(f"This document is already added in {dataset} at {unique_id.hex}")
+        return
+
+    unique_dir.mkdir(parents=True)
+
     # Extract metadata if PDF, else set defaults
     if is_pdf:
+        if is_url:
+            pdf_file.seek(0)
         pdf_source = pdf_file if is_url else pdf_file
         title, authors, date = extract_pdf_metadata(pdf_source, file_name)
     else:
@@ -78,8 +94,8 @@ def add_evidence(
     target_path = unique_dir / file_name
     if is_url:
         if is_pdf:
+            pdf_file.seek(0)
             with target_path.open("wb") as f:
-                pdf_file.seek(0)
                 f.write(pdf_file.getvalue())
         else:
             with target_path.open("w", encoding="utf-8") as f:
@@ -89,7 +105,7 @@ def add_evidence(
 
     info = {
         "original_name": file_name,
-        "uuid": unique_dir.name,
+        "uuid": unique_id.hex,
         "time_added": arrow.now().format("YYYY-MM-DD"),
         "dates": date,
         "title": title,
@@ -117,7 +133,7 @@ def add_evidence(
 
     if label:
         logger.info(f"Generating and opening label file for {file_name}...")
-        create_label(target_path, dataset, unique_dir.name)
+        create_label(target_path, dataset, unique_id.hex)
 
 
 def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
