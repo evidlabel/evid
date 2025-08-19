@@ -41,9 +41,9 @@ def test_create_dataset(temp_dir):
     assert (temp_dir / "new_dataset").exists()
 
 
-@patch("evid.core.label.generate_bib_from_typ", return_value=(True, ""))
+@patch("evid.core.bibtex.generate_bib_from_typ", return_value=(True, ""))
 @patch("evid.core.label.subprocess.run")
-@patch("evid.core.label.textpdf_to_typst")
+@patch("evid.core.label_setup.textpdf_to_typst")
 def test_add_evidence_local_pdf_with_label(mock_textpdf, mock_run, mock_gen, temp_dir):
     pdf_path = temp_dir / "test.pdf"
     pdf_path.write_bytes(MINIMAL_PDF)
