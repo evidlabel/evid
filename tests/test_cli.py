@@ -6,6 +6,8 @@ from evid.core.bibtex import generate_bibtex
 from evid import CONFIG
 import json
 
+MINIMAL_PDF = b"%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 3 3]>>endobj xref 0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer<</Size 4/Root 1 0 R>>\nstartxref 149 %%EOF"
+
 
 @pytest.fixture
 def temp_dir(tmp_path):
@@ -39,13 +41,21 @@ def test_create_dataset(temp_dir):
     assert (temp_dir / "new_dataset").exists()
 
 
+@patch("evid.core.label_setup.textpdf_to_typst")
 @patch("evid.core.bibtex.generate_bib_from_typ", return_value=(True, ""))
 @patch("evid.core.label.subprocess.run")
-def test_add_evidence_local_pdf_with_label(mock_run, mock_gen, temp_dir):
+def test_add_evidence_local_pdf_with_label(mock_run, mock_gen, mock_textpdf, temp_dir):
     pdf_path = temp_dir / "test.pdf"
-    pdf_path.write_bytes(b"fake pdf content")
+    pdf_path.write_bytes(MINIMAL_PDF)
     dataset = "dataset1"
     (temp_dir / dataset).mkdir()
+
+    def textpdf_side_effect(pdfname, outputfile):
+        if outputfile:
+            outputfile.write_text("dummy typst content")
+        return "dummy typst content"
+
+    mock_textpdf.side_effect = textpdf_side_effect
     add_evidence(temp_dir, dataset, str(pdf_path), label=True)
     unique_dirs = list((temp_dir / dataset).iterdir())
     assert len(unique_dirs) == 1
@@ -57,7 +67,7 @@ def test_add_evidence_local_pdf_with_label(mock_run, mock_gen, temp_dir):
 
 def test_add_evidence_custom_directory(temp_dir):
     pdf_path = temp_dir / "test.pdf"
-    pdf_path.write_bytes(b"fake pdf content")
+    pdf_path.write_bytes(MINIMAL_PDF)
     dataset = "dataset1"
     (temp_dir / dataset).mkdir()
     add_evidence(temp_dir, dataset, str(pdf_path))
