@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 import logging
 from rich.logging import RichHandler
+from rich.console import Console
 import rich_click as click
 from evid import CONFIG
 from evid.cli.dataset import (
@@ -10,11 +11,19 @@ from evid.cli.dataset import (
     create_dataset,
     track_dataset,
 )
-from evid.cli.evidence import add_evidence, label_evidence
+from evid.cli.evidence import add_evidence, label_evidence, select_evidence
 from evid.core.bibtex import generate_bibtex
 from evid.gui.main import main as gui_main
 from evid.core.models import ConfigModel  # For rc command
 import yaml
+
+# Configure rich-click for better formatting
+click.rich_click.USE_RICH_MARKUP = True
+click.rich_click.SHOW_ARGUMENTS = True
+click.rich_click.GROUP_ARGUMENTS_OPTIONS = True
+
+# Initialize console for rich output
+console = Console()
 
 # Set up logging with Rich handler
 logging.basicConfig(handlers=[RichHandler()], level=logging.DEBUG, rich_tracebacks=True)
@@ -92,12 +101,24 @@ def list(obj):
 
 
 @main.command(help="Generate BibTeX files from label.typ files")
-@click.argument("typ_file", type=click.Path(exists=True, path_type=Path))
-@click.option("-p", "--parallel", is_flag=True, help="Process Typst files in parallel")
-def bibtex(typ_file: Path, parallel: bool):
-    if not typ_file:
-        sys.exit("No Typst files provided.")
-    generate_bibtex([typ_file], parallel=parallel)
+@click.option("-s", "--dataset", help="Dataset name")
+@click.option("-u", "--uuid", help="UUID of the evidence")
+@click.pass_obj
+def bibtex(obj, dataset: str, uuid: str):
+    directory = obj["directory"]
+    if not dataset:
+        dataset = select_dataset(
+            directory, "Select dataset for BibTeX generation", allow_create=False
+        )
+
+    if not uuid:
+        uuid = select_evidence(directory, dataset)
+
+    typ_file = directory / dataset / uuid / "label.typ"
+    if not typ_file.exists():
+        sys.exit(f"label.typ not found in {dataset}/{uuid}")
+
+    generate_bibtex([typ_file])
 
 
 @main.command(help="Launch the evid GUI")
@@ -148,6 +169,47 @@ def rc():
     action = "updated" if config_path.exists() else "created"
     print(f".evidrc {action} at {config_path} with complete default fields.")
 
+
+# Custom top-level help
+def print_full_help(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    console.print(
+        f"\n[bold]Usage:[/bold] {ctx.command_path} [OPTIONS] COMMAND [ARGS]...\n"
+    )
+    console.print("[bold]Options:[/bold]")
+    console.print("  --help  Show this message and exit.\n")
+    console.print(f"[bold]Description:[/bold] {ctx.command.help}\n")
+    console.print("[bold]Commands:[/bold]")
+    for group_name, group_cmd in sorted(ctx.command.commands.items()):
+        console.print(f"  [bold green]{group_name}[/bold green]  {group_cmd.help}")
+        if isinstance(group_cmd, click.Group):
+            for sub_name, sub_cmd in sorted(group_cmd.commands.items()):
+                console.print(f"    [cyan]{sub_name}[/cyan]  {sub_cmd.help}")
+                for param in sub_cmd.params:
+                    if isinstance(param, click.Option):
+                        opts = ", ".join(param.opts)
+                        console.print(
+                            f"      [yellow]{opts}[/yellow]  {param.help or ''}"
+                        )
+                    elif isinstance(param, click.Argument):
+                        console.print(
+                            f"      [yellow]{param.name}[/yellow]  {param.human_readable_name}"
+                        )
+    console.print()
+    ctx.exit()
+
+
+# Replace default --help
+main.params.append(
+    click.Option(
+        ["--help"],
+        is_flag=True,
+        expose_value=False,
+        is_eager=True,
+        callback=print_full_help,
+    )
+)
 
 if __name__ == "__main__":
     main()
