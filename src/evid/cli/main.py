@@ -77,7 +77,7 @@ def track(obj, dataset: str):
     track_dataset(directory, dataset)
 
 
-@main.command(help="List all available datasets")
+@set.command(help="List all available datasets")
 @click.pass_obj
 def list(obj):
     directory = obj["directory"]
@@ -147,9 +147,25 @@ def gui(obj):
 
 
 @main.command(help="Initialize or update .evidrc with default settings")
-def rc():
+@click.option(
+    "--print",
+    is_flag=True,
+    help="Print the config file path and content without modifying it",
+)
+def rc(print: bool):
     """Initialize or update ~/.evidrc by adding missing fields from defaults."""
     config_path = Path.home() / ".evidrc"
+    if print:
+        if config_path.exists():
+            with config_path.open("r") as f:
+                content = f.read()
+            print(f"Config file: {config_path}")
+            print("Content:")
+            print(content)
+        else:
+            print(f"Config file does not exist: {config_path}")
+        return
+
     if config_path.exists():
         try:
             with config_path.open("r") as f:
