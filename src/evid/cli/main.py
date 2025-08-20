@@ -11,9 +11,6 @@ from evid.cli.dataset import (
     create_dataset,
     track_dataset,
 )
-from rich.console import Console
-from rich.table import Table
-from rich.text import Text
 
 
 from evid.cli.evidence import add_evidence, label_evidence, select_evidence
@@ -59,25 +56,6 @@ def main(ctx, directory: str):
         gui_main(ctx.obj["directory"])
 
 
-@main.command(help="Add a PDF from a URL or local file")
-@click.argument("source")
-@click.option("-s", "--dataset", help="Target dataset name")
-@click.option(
-    "-l", "--label", is_flag=True, help="Open the labeler after adding the PDF"
-)
-@click.pass_obj
-def add(obj, source: str, dataset: str, label: bool):
-    directory = obj["directory"]
-    if dataset:
-        if not (directory / dataset).exists():
-            sys.exit(
-                f"Dataset '{dataset}' does not exist. Create it with 'evid set create'."
-            )
-    else:
-        dataset = select_dataset(directory, "Select dataset for adding evidence")
-    add_evidence(directory, dataset, source, label)
-
-
 @main.group(help="Manage datasets")
 def set():
     pass
@@ -106,28 +84,59 @@ def list(obj):
     list_datasets(directory)
 
 
-# this is a path but also tuple, please fix this
-
-
-@main.command(help="Generate BibTeX files from label.typ files")
+@main.group(help="Manage evidence documents")
 @click.option("-s", "--dataset", help="Dataset name")
 @click.option("-u", "--uuid", help="UUID of the evidence")
 @click.pass_obj
-def bibtex(obj, dataset: str, uuid: str):
+def doc(obj, dataset: str, uuid: str):
+    obj["dataset"] = dataset
+    obj["uuid"] = uuid
+
+
+@doc.command(help="Add a PDF from a URL or local file")
+@click.argument("source")
+@click.option(
+    "-l", "--label", is_flag=True, help="Open the labeler after adding the PDF"
+)
+@click.pass_obj
+def add(obj, source: str, label: bool):
     directory = obj["directory"]
+    dataset = obj.get("dataset")
+    if dataset:
+        if not (directory / dataset).exists():
+            sys.exit(
+                f"Dataset '{dataset}' does not exist. Create it with 'evid set create'."
+            )
+    else:
+        dataset = select_dataset(directory, "Select dataset for adding evidence")
+    add_evidence(directory, dataset, source, label)
+
+
+@doc.command(help="Generate BibTeX files from label.typ files")
+@click.pass_obj
+def bibtex(obj):
+    directory = obj["directory"]
+    dataset = obj.get("dataset")
     if not dataset:
         dataset = select_dataset(
             directory, "Select dataset for BibTeX generation", allow_create=False
         )
-
+    uuid = obj.get("uuid")
     if not uuid:
         uuid = select_evidence(directory, dataset)
-
     typ_file = directory / dataset / uuid / "label.typ"
     if not typ_file.exists():
         sys.exit(f"label.typ not found in {dataset}/{uuid}")
-
     generate_bibtex([typ_file])
+
+
+@doc.command(help="Label an evidence in a dataset")
+@click.pass_obj
+def label(obj):
+    directory = obj["directory"]
+    dataset = obj.get("dataset")
+    uuid = obj.get("uuid")
+    label_evidence(directory, dataset, uuid)
 
 
 @main.command(help="Launch the evid GUI")
@@ -135,15 +144,6 @@ def bibtex(obj, dataset: str, uuid: str):
 def gui(obj):
     directory = obj["directory"]
     gui_main(directory)
-
-
-@main.command(help="Label an evidence in a dataset")
-@click.option("-s", "--dataset", help="Dataset name")
-@click.option("-u", "--uuid", help="UUID of the evidence")
-@click.pass_obj
-def label(obj, dataset: str, uuid: str):
-    directory = obj["directory"]
-    label_evidence(directory, dataset, uuid)
 
 
 @main.command(help="Initialize or update .evidrc with default settings")
