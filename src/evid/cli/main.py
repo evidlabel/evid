@@ -11,6 +11,11 @@ from evid.cli.dataset import (
     create_dataset,
     track_dataset,
 )
+from rich.console import Console
+from rich.table import Table
+from rich.text import Text
+
+
 from evid.cli.evidence import add_evidence, label_evidence, select_evidence
 from evid.core.bibtex import generate_bibtex
 from evid.gui.main import main as gui_main
@@ -18,9 +23,13 @@ from evid.core.models import ConfigModel  # For rc command
 import yaml
 
 # Configure rich-click for better formatting
-click.rich_click.USE_RICH_MARKUP = True
-click.rich_click.SHOW_ARGUMENTS = True
-click.rich_click.GROUP_ARGUMENTS_OPTIONS = True
+# click.rich_click.USE_RICH_MARKUP = True
+# click.rich_click.SHOW_ARGUMENTS = True
+# click.rich_click.GROUP_ARGUMENTS_OPTIONS = True
+# click.rich_click.COLOR
+
+
+from .help import print_full_help
 
 # Initialize console for rich output
 console = Console()
@@ -170,40 +179,9 @@ def rc():
     print(f".evidrc {action} at {config_path} with complete default fields.")
 
 
-# Custom top-level help
-def print_full_help(ctx, param, value):
-    if not value or ctx.resilient_parsing:
-        return
-    console.print(
-        f"\n[bold]Usage:[/bold] {ctx.command_path} [OPTIONS] COMMAND [ARGS]...\n"
-    )
-    console.print("[bold]Options:[/bold]")
-    console.print("  --help  Show this message and exit.\n")
-    console.print(f"[bold]Description:[/bold] {ctx.command.help}\n")
-    console.print("[bold]Commands:[/bold]")
-    for group_name, group_cmd in sorted(ctx.command.commands.items()):
-        console.print(f"  [bold green]{group_name}[/bold green]  {group_cmd.help}")
-        if isinstance(group_cmd, click.Group):
-            for sub_name, sub_cmd in sorted(group_cmd.commands.items()):
-                console.print(f"    [cyan]{sub_name}[/cyan]  {sub_cmd.help}")
-                for param in sub_cmd.params:
-                    if isinstance(param, click.Option):
-                        opts = ", ".join(param.opts)
-                        console.print(
-                            f"      [yellow]{opts}[/yellow]  {param.help or ''}"
-                        )
-                    elif isinstance(param, click.Argument):
-                        console.print(
-                            f"      [yellow]{param.name}[/yellow]  {param.human_readable_name}"
-                        )
-    console.print()
-    ctx.exit()
-
-
-# Replace default --help
 main.params.append(
     click.Option(
-        ["--help"],
+        ["--help", "-h"],
         is_flag=True,
         expose_value=False,
         is_eager=True,

@@ -59,7 +59,7 @@ def generate_bib_from_typ(
         return False, f"Unexpected error during Typst query: {str(e)}"
 
 
-def generate_bibtex(typ_files: List[Path], parallel: bool = False) -> None:
+def generate_bibtex(typ_files: List[Path]) -> None:
     """Generate BibTeX files from a list of label.typ files."""
     if not typ_files:
         print("No Typst files provided.")
