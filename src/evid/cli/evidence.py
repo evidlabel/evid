@@ -198,7 +198,9 @@ def label_evidence(directory: Path, dataset: str = None, uuid: str = None) -> No
     from evid.cli.dataset import select_dataset
 
     if not dataset:
-        dataset = select_dataset(directory, "Select dataset to label")
+        dataset = select_dataset(
+            directory, "Select dataset to label", allow_create=False
+        )
 
     if not uuid:
         uuid = select_evidence(directory, dataset)
