@@ -148,14 +148,14 @@ def gui(obj):
 
 @main.command(help="Initialize or update .evidrc with default settings")
 @click.option(
-    "--print",
+    "--show",
     is_flag=True,
     help="Print the config file path and content without modifying it",
 )
-def rc(print: bool):
+def rc(show: bool):
     """Initialize or update ~/.evidrc by adding missing fields from defaults."""
     config_path = Path.home() / ".evidrc"
-    if print:
+    if show:
         if config_path.exists():
             with config_path.open("r") as f:
                 content = f.read()
