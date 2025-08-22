@@ -173,7 +173,7 @@ def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
 def select_evidence(
     directory: Path, dataset: str, prompt_message: str = "Select evidence"
 ) -> str:
-    """Prompt user to select an evidence from the dataset."""
+    """Prompt user to select a document from the dataset."""
     evidences = get_evidence_list(directory, dataset)
     if not evidences:
         sys.exit("No evidences found in dataset.")
@@ -194,7 +194,7 @@ def select_evidence(
 
 
 def label_evidence(directory: Path, dataset: str = None, uuid: str = None) -> None:
-    """Label an evidence in the specified dataset."""
+    """Label a document in the specified dataset."""
     from evid.cli.dataset import select_dataset
 
     if not dataset:
