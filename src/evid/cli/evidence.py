@@ -15,11 +15,23 @@ import arrow
 import yaml
 from evid.core.models import InfoModel  # Added for validation
 import hashlib
+from rich.console import Console
+from rich.table import Table
 
 
 # Configure Rich handler for colored logging
 logging.basicConfig(handlers=[RichHandler(rich_tracebacks=True)], level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def to_plain_dict(data):
+    """Recursively convert data to plain dict with string values."""
+    if isinstance(data, dict):
+        return {k: to_plain_dict(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [to_plain_dict(v) for v in data]
+    else:
+        return str(data)
 
 
 def add_evidence(
@@ -129,7 +141,7 @@ def add_evidence(
 
     yaml.dump(info, sys.stdout, allow_unicode=True)
 
-    logger.info(f"Added evidence to {unique_dir}")
+    logger.info(f"Added document to {unique_dir}")
 
     if label:
         logger.info(f"Generating and opening label file for {file_name}...")
@@ -137,56 +149,69 @@ def add_evidence(
 
 
 def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
-    """Return a list of evidence metadata in the dataset."""
+    """Return a list of document metadata in the dataset."""
     dataset_path = directory / dataset
-    evidences = []
+    documents = []
     for d in dataset_path.iterdir():
         if d.is_dir() and not d.name.startswith("."):
             info_path = d / "info.yml"
             if info_path.exists():
-                with info_path.open("r") as f:
-                    info = yaml.safe_load(f)
-                    # Validate with Pydantic
-                    try:
-                        validated_info = InfoModel(**info)
-                        info = validated_info.model_dump()
-                    except ValueError as e:
-                        logger.warning(
-                            f"Validation error for {info_path}: {e}. Skipping."
-                        )
+                try:
+                    with info_path.open("r") as f:
+                        info = yaml.load(f, Loader=yaml.FullLoader)
+                    if info is None:
+                        logger.warning(f"Empty or invalid YAML in {info_path}. Skipping.")
                         continue
-                    evidences.append(
-                        {
-                            "uuid": d.name,
-                            "title": info.get("title", d.name),
-                            "authors": info.get("authors", ""),
-                            "date": info.get("time_added", ""),
-                        }
+                    info = to_plain_dict(info)
+                    # Validate with Pydantic
+                    validated_info = InfoModel(**info)
+                    info = validated_info.model_dump()
+                except (yaml.YAMLError, ValueError, TypeError) as e:
+                    logger.warning(
+                        f"Error loading or validating {info_path}: {e}. Skipping."
                     )
+                    continue
+                documents.append(
+                    {
+                        "uuid": d.name,
+                        "title": info.get("title", d.name),
+                        "authors": info.get("authors", ""),
+                        "date": info.get("time_added", ""),
+                    }
+                )
             else:
-                evidences.append(
+                documents.append(
                     {"uuid": d.name, "title": d.name, "authors": "", "date": ""}
                 )
-    return evidences
+    return documents
 
 
 def select_evidence(
-    directory: Path, dataset: str, prompt_message: str = "Select evidence"
+    directory: Path, dataset: str, prompt_message: str = "Select document"
 ) -> str:
     """Prompt user to select a document from the dataset."""
-    evidences = get_evidence_list(directory, dataset)
-    if not evidences:
-        sys.exit("No evidences found in dataset.")
+    documents = get_evidence_list(directory, dataset)
+    if not documents:
+        sys.exit("No documents found in dataset.")
 
-    print(f"{prompt_message}:")
-    for i, ev in enumerate(evidences, 1):
-        print(f"{i}. {ev['title']} by {ev['authors']} ({ev['date']}) - {ev['uuid']}")
+    console = Console()
+    table = Table(title=prompt_message)
+    table.add_column("Nr", justify="right")
+    table.add_column("Title")
+    table.add_column("Authors")
+    table.add_column("Date")
+    table.add_column("UUID")
 
-    choice = input("Select evidence (number): ").strip()
+    for i, ev in enumerate(documents, 1):
+        table.add_row(str(i), ev['title'], ev['authors'], ev['date'], ev['uuid'])
+
+    console.print(table)
+
+    choice = input("Select document (number): ").strip()
     try:
         choice_num = int(choice)
-        if 1 <= choice_num <= len(evidences):
-            return evidences[choice_num - 1]["uuid"]
+        if 1 <= choice_num <= len(documents):
+            return documents[choice_num - 1]["uuid"]
         else:
             sys.exit("Invalid number.")
     except ValueError:
@@ -207,13 +232,14 @@ def label_evidence(directory: Path, dataset: str = None, uuid: str = None) -> No
 
     evidence_path = directory / dataset / uuid
     if not evidence_path.exists():
-        sys.exit(f"Evidence {uuid} in {dataset} does not exist.")
+        sys.exit(f"Document {uuid} in {dataset} does not exist.")
 
     files = list(evidence_path.glob("*.pdf")) + list(evidence_path.glob("*.txt"))
     if not files:
-        sys.exit("No PDF or TXT found in evidence directory.")
+        sys.exit("No PDF or TXT found in document directory.")
     if len(files) > 1:
         logger.warning("Multiple files found, using the first one.")
     file_path = files[0]
 
     create_label(file_path, dataset, uuid)
+

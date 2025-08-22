@@ -25,7 +25,7 @@ def test_get_datasets(temp_dir):
 def test_select_dataset_existing(mock_input, temp_dir):
     (temp_dir / "dataset2").mkdir()  # Create in order to match output
     (temp_dir / "dataset1").mkdir()
-    assert select_dataset(temp_dir, "Select dataset") == "dataset2"
+    assert select_dataset(temp_dir, "Select dataset") == "dataset1"
 
 
 @patch("builtins.input", side_effect=["3", "new_dataset"])
@@ -131,3 +131,4 @@ def test_generate_bibtex_nonexistent_typ(temp_dir):
     with patch("sys.stdout", new_callable=MagicMock()):
         generate_bibtex(typ_files)
     # Assertions on logged errors can be added if needed
+

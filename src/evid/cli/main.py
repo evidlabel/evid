@@ -10,14 +10,22 @@ from evid.cli.dataset import (
     select_dataset,
     create_dataset,
     track_dataset,
+    get_datasets,
 )
 
 
-from evid.cli.evidence import add_evidence, label_evidence, select_evidence
+from evid.cli.evidence import (
+    add_evidence,
+    label_evidence,
+    select_evidence,
+    get_evidence_list,
+)
 from evid.core.bibtex import generate_bibtex
 from evid.gui.main import main as gui_main
-from evid.core.models import ConfigModel  # For rc command
+from evid.core.models import ConfigModel  # For config commands
 import yaml
+from rich.console import Console
+from rich.table import Table
 
 # Set up logging with Rich handler
 logging.basicConfig(handlers=[RichHandler()], level=logging.DEBUG, rich_tracebacks=True)
@@ -36,7 +44,7 @@ logger = logging.getLogger(__name__)
     "-d",
     "--directory",
     default=CONFIG["default_dir"],
-    help="Directory for storing datasets (default: ~/Documents/evid)",
+    help=f"Directory for storing datasets (default: {CONFIG['default_dir']})",
 )
 @click.pass_context
 def main(ctx, directory: str):
@@ -45,6 +53,13 @@ def main(ctx, directory: str):
     ctx.obj["directory"] = Path(directory).expanduser()
     if ctx.invoked_subcommand is None:
         gui_main(ctx.obj["directory"])
+
+
+@main.command(name="gui", cls=TreeCommand, help="Launch the evid GUI")
+@click.pass_obj
+def gui(obj):
+    directory = obj["directory"]
+    gui_main(directory)
 
 
 # Dataset management group
@@ -75,11 +90,11 @@ def list_cmd(obj):
     list_datasets(directory)
 
 
-# Evidence management group
+# Document management group
 @main.group(
     cls=TreeGroup,
     name="doc",
-    help="Manage evidence documents",
+    help="Manage documents",
 )
 @click.option("-s", "--dataset", help="Dataset name")
 @click.pass_obj
@@ -102,11 +117,13 @@ def add(obj, source: str, label: bool):
                 f"Dataset '{dataset}' does not exist. Create it with 'evid set create'."
             )
     else:
-        dataset = select_dataset(directory, "Select dataset for adding evidence")
+        dataset = select_dataset(directory, "Select dataset for adding document")
     add_evidence(directory, dataset, source, label)
 
 
-@doc.command(name="bibtex", cls=TreeCommand, help="Generate BibTeX files from label.typ files")
+@doc.command(
+    name="bibtex", cls=TreeCommand, help="Generate BibTeX files from label.typ files"
+)
 @click.pass_obj
 def bibtex(obj):
     directory = obj["directory"]
@@ -124,43 +141,92 @@ def bibtex(obj):
     generate_bibtex([typ_file])
 
 
-@doc.command(name="label", cls=TreeCommand, help="Label an evidence in a dataset")
+@doc.command(name="label", cls=TreeCommand, help="Label a document in a dataset")
 @click.pass_obj
 def label(obj):
     directory = obj["directory"]
     dataset = obj.get("dataset")
+    if dataset and dataset.isdigit():
+        # Interpret as index from sorted dataset list
+        datasets = sorted(get_datasets(directory))
+        try:
+            index = int(dataset) - 1
+            if 0 <= index < len(datasets):
+                dataset = datasets[index]
+            else:
+                sys.exit(
+                    f"Invalid dataset number: {dataset}. Use 'evid set list' to see available datasets."
+                )
+        except ValueError:
+            sys.exit(f"Invalid dataset number: {dataset}")
+
+    if not dataset:
+        dataset = select_dataset(
+            directory, "Select dataset to label", allow_create=False
+        )
+    elif not (directory / dataset).exists():
+        sys.exit(f"Dataset '{dataset}' does not exist.")
+
     uuid = obj.get("uuid")
     label_evidence(directory, dataset, uuid)
 
 
-@main.command(name="gui", cls=TreeCommand, help="Launch the evid GUI")
+@doc.command(name="list", cls=TreeCommand, help="List documents in the dataset")
 @click.pass_obj
-def gui(obj):
+def list_docs(obj):
     directory = obj["directory"]
-    gui_main(directory)
+    dataset = obj.get("dataset")
+    if dataset and dataset.isdigit():
+        # Interpret as index from sorted dataset list
+        datasets = sorted(get_datasets(directory))
+        try:
+            index = int(dataset) - 1
+            if 0 <= index < len(datasets):
+                dataset = datasets[index]
+            else:
+                sys.exit(
+                    f"Invalid dataset number: {dataset}. Use 'evid set list' to see available datasets."
+                )
+        except ValueError:
+            sys.exit(f"Invalid dataset number: {dataset}")
 
+    if not dataset:
+        dataset = select_dataset(
+            directory, "Select dataset to list", allow_create=False
+        )
+    elif not (directory / dataset).exists():
+        sys.exit(f"Dataset '{dataset}' does not exist.")
 
-@main.command(name="rc", cls=TreeCommand, help="Initialize or update .evidrc with default settings")
-@click.option(
-    "-s",
-    "--show",
-    is_flag=True,
-    help="Print the config file path and content without modifying it",
-)
-def rc(show: bool):
-    """Initialize or update ~/.evidrc by adding missing fields from defaults."""
-    config_path = Path.home() / ".evidrc"
-    if show:
-        if config_path.exists():
-            with config_path.open("r") as f:
-                content = f.read()
-            print(f"Config file: {config_path}")
-            print("Content:")
-            print(content)
-        else:
-            print(f"Config file does not exist: {config_path}")
+    documents = get_evidence_list(directory, dataset)
+    if not documents:
+        print("No documents found.")
         return
 
+    console = Console()
+    table = Table(title=f"Documents in {dataset}")
+    table.add_column("Nr", justify="right")
+    table.add_column("Date")
+    table.add_column("UUID")
+    table.add_column("Label")
+
+    for i, ev in enumerate(documents, 1):
+        table.add_row(str(i), ev["date"], ev["uuid"], ev["title"])
+
+    console.print(table)
+
+
+# Config management group
+config = TreeGroup(name="config", help="Deal with configuration of evid")
+main.add_command(config)
+
+
+@config.command(
+    name="update",
+    cls=TreeCommand,
+    help="Initialize or update .evidrc with default settings",
+)
+def update():
+    config_path = Path.home() / ".evidrc"
     if config_path.exists():
         try:
             with config_path.open("r") as f:
@@ -190,6 +256,43 @@ def rc(show: bool):
     print(f".evidrc {action} at {config_path} with complete default fields.")
 
 
+@config.command(
+    name="show",
+    cls=TreeCommand,
+    help="Show the current config settings and where they are defined",
+)
+def show():
+    config_path = Path.home() / ".evidrc"
+    defaults = ConfigModel().model_dump()
+    user_config = {}
+    if config_path.exists():
+        try:
+            with config_path.open("r") as f:
+                user_config = yaml.safe_load(f) or {}
+        except yaml.YAMLError:
+            print("Invalid YAML in .evidrc, using defaults.")
+            user_config = {}
+
+    # Merged config (similar to load_config)
+    try:
+        config_model = ConfigModel(**user_config)
+        merged = config_model.model_dump()
+    except ValueError:
+        merged = {**defaults, **user_config}
+        config_model = ConfigModel(**merged)
+        merged = config_model.model_dump()
+
+    print(
+        f"Config file: {config_path if config_path.exists() else 'Not found, using defaults'}"
+    )
+    print("Current settings:")
+    for key, value in merged.items():
+        if key in user_config and user_config[key] != defaults.get(key):
+            source = f"overridden in {config_path}"
+        else:
+            source = "default"
+        print(f"  {key}: {value} ({source})")
+
+
 if __name__ == "__main__":
     main()
-

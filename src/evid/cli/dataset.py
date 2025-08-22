@@ -1,6 +1,8 @@
 from pathlib import Path
 import sys
 import logging
+from rich.console import Console
+from rich.table import Table
 
 try:
     from git import Repo
@@ -25,20 +27,27 @@ def get_datasets(directory: Path) -> list[str]:
 
 def list_datasets(directory: Path) -> None:
     """List all available datasets."""
-    datasets = get_datasets(directory)
+    datasets = sorted(get_datasets(directory))
     if not datasets:
         print("No datasets found.")
         return
-    print("Available datasets:")
+
+    console = Console()
+    table = Table(title="Available datasets")
+    table.add_column("Nr", justify="right")
+    table.add_column("Dataset")
+
     for i, dataset in enumerate(datasets, 1):
-        print(f"{i}. {dataset}")
+        table.add_row(str(i), dataset)
+
+    console.print(table)
 
 
 def select_dataset(
     directory: Path, prompt_message: str = "Select dataset", allow_create: bool = True
 ) -> str:
     """Prompt user to select a dataset or create a new one if allowed."""
-    datasets = get_datasets(directory)
+    datasets = sorted(get_datasets(directory))
     if not datasets:
         if not allow_create:
             sys.exit("No datasets found and creation is not allowed.")
@@ -48,9 +57,15 @@ def select_dataset(
             return dataset_name
         sys.exit("No dataset name provided.")
 
-    print(f"{prompt_message}:")
+    console = Console()
+    table = Table(title=prompt_message)
+    table.add_column("Nr", justify="right")
+    table.add_column("Dataset")
+
     for i, dataset in enumerate(datasets, 1):
-        print(f"{i}. {dataset}")
+        table.add_row(str(i), dataset)
+
+    console.print(table)
 
     choice = input(
         "Select dataset (number)"
@@ -134,3 +149,4 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
             f"Failed to initialize Git repository for {dataset_path}: {str(e)}"
         )
         sys.exit(f"Failed to initialize Git repository: {str(e)}")
+
