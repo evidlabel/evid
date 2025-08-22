@@ -118,7 +118,7 @@ def test_generate_bibtex_multiple_typ_sequential(mock_run, temp_dir):
         return MagicMock(returncode=0)
 
     mock_run.side_effect = side_effect
-    generate_bibtex(typ_files, parallel=False)
+    generate_bibtex(typ_files)
     for i in range(1, 3):
         bib_file = dataset_dir / f"uuid{i}" / "label.bib"
         assert bib_file.exists()

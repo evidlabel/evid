@@ -2,8 +2,8 @@ import sys
 from pathlib import Path
 import logging
 from rich.logging import RichHandler
-from rich.console import Console
-import rich_click as click
+import click
+from treeclick import TreeGroup, TreeCommand
 from evid import CONFIG
 from evid.cli.dataset import (
     list_datasets,
@@ -19,27 +19,18 @@ from evid.gui.main import main as gui_main
 from evid.core.models import ConfigModel  # For rc command
 import yaml
 
-# Configure rich-click for better formatting
-# click.rich_click.USE_RICH_MARKUP = True
-# click.rich_click.SHOW_ARGUMENTS = True
-# click.rich_click.GROUP_ARGUMENTS_OPTIONS = True
-# click.rich_click.COLOR
-
-
-from .help import print_full_help
-
-# Initialize console for rich output
-console = Console()
-
 # Set up logging with Rich handler
 logging.basicConfig(handlers=[RichHandler()], level=logging.DEBUG, rich_tracebacks=True)
 logger = logging.getLogger(__name__)
 
 
 @click.group(
+    cls=TreeGroup,
     invoke_without_command=True,
     help="evid CLI for managing PDF documents",
     context_settings={"help_option_names": ["-h", "--help"]},
+    use_tree=True,
+    max_width=120,
 )
 @click.option(
     "-d",
@@ -56,12 +47,12 @@ def main(ctx, directory: str):
         gui_main(ctx.obj["directory"])
 
 
-@main.group(help="Manage datasets")
-def set():
-    pass
+# Dataset management group
+set = TreeGroup(name="set", help="Manage datasets")
+main.add_command(set)
 
 
-@set.command(help="Create a new dataset")
+@set.command(name="create", cls=TreeCommand, help="Create a new dataset")
 @click.argument("dataset")
 @click.pass_obj
 def create(obj, dataset: str):
@@ -69,7 +60,7 @@ def create(obj, dataset: str):
     create_dataset(directory, dataset)
 
 
-@set.command(help="Track a dataset with Git")
+@set.command(name="track", cls=TreeCommand, help="Track a dataset with Git")
 @click.argument("dataset", required=False)
 @click.pass_obj
 def track(obj, dataset: str):
@@ -77,23 +68,26 @@ def track(obj, dataset: str):
     track_dataset(directory, dataset)
 
 
-@set.command(help="List all available datasets")
+@set.command(name="list", cls=TreeCommand, help="List all available datasets")
 @click.pass_obj
-def list(obj):
+def list_cmd(obj):
     directory = obj["directory"]
     list_datasets(directory)
 
 
-@main.group(help="Manage evidence documents")
+# Evidence management group
+@main.group(
+    cls=TreeGroup,
+    name="doc",
+    help="Manage evidence documents",
+)
 @click.option("-s", "--dataset", help="Dataset name")
-@click.option("-u", "--uuid", help="UUID of the evidence")
 @click.pass_obj
-def doc(obj, dataset: str, uuid: str):
+def doc(obj, dataset: str):
     obj["dataset"] = dataset
-    obj["uuid"] = uuid
 
 
-@doc.command(help="Add a PDF from a URL or local file")
+@doc.command(name="add", cls=TreeCommand, help="Add a PDF from a URL or local file")
 @click.argument("source")
 @click.option(
     "-l", "--label", is_flag=True, help="Open the labeler after adding the PDF"
@@ -112,7 +106,7 @@ def add(obj, source: str, label: bool):
     add_evidence(directory, dataset, source, label)
 
 
-@doc.command(help="Generate BibTeX files from label.typ files")
+@doc.command(name="bibtex", cls=TreeCommand, help="Generate BibTeX files from label.typ files")
 @click.pass_obj
 def bibtex(obj):
     directory = obj["directory"]
@@ -130,7 +124,7 @@ def bibtex(obj):
     generate_bibtex([typ_file])
 
 
-@doc.command(help="Label an evidence in a dataset")
+@doc.command(name="label", cls=TreeCommand, help="Label an evidence in a dataset")
 @click.pass_obj
 def label(obj):
     directory = obj["directory"]
@@ -139,15 +133,16 @@ def label(obj):
     label_evidence(directory, dataset, uuid)
 
 
-@main.command(help="Launch the evid GUI")
+@main.command(name="gui", cls=TreeCommand, help="Launch the evid GUI")
 @click.pass_obj
 def gui(obj):
     directory = obj["directory"]
     gui_main(directory)
 
 
-@main.command(help="Initialize or update .evidrc with default settings")
+@main.command(name="rc", cls=TreeCommand, help="Initialize or update .evidrc with default settings")
 @click.option(
+    "-s",
     "--show",
     is_flag=True,
     help="Print the config file path and content without modifying it",
@@ -195,15 +190,6 @@ def rc(show: bool):
     print(f".evidrc {action} at {config_path} with complete default fields.")
 
 
-main.params.append(
-    click.Option(
-        ["--help", "-h"],
-        is_flag=True,
-        expose_value=False,
-        is_eager=True,
-        callback=print_full_help,
-    )
-)
-
 if __name__ == "__main__":
     main()
+

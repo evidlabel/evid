@@ -1,6 +1,6 @@
 [project]
 name = "evid"
-version = "0.2.0"
+version = "0.2.1"
 description = "document logger, adder of metadata"
 authors = [{ name = "evid 210122431+evidlabel@users.noreply.github.com" }]
 requires-python = ">=3.11,<4.0"
@@ -21,6 +21,7 @@ dependencies = [
     "rich-click>=1.8.3,<2",  # Added for enhanced CLI
     "pydantic>=2.9.2,<3",  # Added for validation
     "numpy>=2.1.2,<3",  # Added for vectorization
+    "treeclick @ git+https://github.com/wr1/treeclick.git@master",
 ]
 
 [project.scripts]
@@ -48,3 +49,6 @@ include = ["src/evid"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
