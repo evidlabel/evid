@@ -131,4 +131,3 @@ def test_generate_bibtex_nonexistent_typ(temp_dir):
     with patch("sys.stdout", new_callable=MagicMock()):
         generate_bibtex(typ_files)
     # Assertions on logged errors can be added if needed
-

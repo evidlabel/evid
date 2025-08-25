@@ -160,7 +160,9 @@ def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
                     with info_path.open("r") as f:
                         info = yaml.load(f, Loader=yaml.FullLoader)
                     if info is None:
-                        logger.warning(f"Empty or invalid YAML in {info_path}. Skipping.")
+                        logger.warning(
+                            f"Empty or invalid YAML in {info_path}. Skipping."
+                        )
                         continue
                     info = to_plain_dict(info)
                     # Validate with Pydantic
@@ -203,7 +205,7 @@ def select_evidence(
     table.add_column("UUID")
 
     for i, ev in enumerate(documents, 1):
-        table.add_row(str(i), ev['title'], ev['authors'], ev['date'], ev['uuid'])
+        table.add_row(str(i), ev["title"], ev["authors"], ev["date"], ev["uuid"])
 
     console.print(table)
 
@@ -242,4 +244,3 @@ def label_evidence(directory: Path, dataset: str = None, uuid: str = None) -> No
     file_path = files[0]
 
     create_label(file_path, dataset, uuid)
-
