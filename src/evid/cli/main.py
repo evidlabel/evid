@@ -14,15 +14,12 @@ from evid.cli.dataset import (
 )
 
 
-from evid.cli.evidence import (
-    add_evidence,
-    label_evidence,
-    select_evidence,
-    get_evidence_list,
-)
+from evid.cli.evidence import label_evidence, select_evidence, get_evidence_list
 from evid.core.bibtex import generate_bibtex
 from evid.gui.main import main as gui_main
 from evid.core.models import ConfigModel  # For config commands
+from evid.core.rebut_doc import rebut_doc  # For rebut command
+from evid.cli.evidence import add_evidence  # Import add_evidence for set add
 import yaml
 from rich.console import Console
 from rich.table import Table
@@ -55,31 +52,49 @@ def main(ctx, directory: str):
         gui_main(ctx.obj["directory"])
 
 
-@main.command(name="gui", cls=TreeCommand, help="Launch the evid GUI")
-@click.pass_obj
-def gui(obj):
-    directory = obj["directory"]
-    gui_main(directory)
-
-
 # Dataset management group
-set = TreeGroup(name="set", help="Manage datasets")
+set = TreeGroup(
+    name="set",
+    help="Manage datasets",
+    params=[
+        click.Option(
+            ["-s", "--dataset"],
+            help="Dataset name or number",
+        )
+    ],
+)
 main.add_command(set)
 
 
 @set.command(name="create", cls=TreeCommand, help="Create a new dataset")
-@click.argument("dataset")
 @click.pass_obj
-def create(obj, dataset: str):
+def create(obj):
     directory = obj["directory"]
+    dataset = obj.get("dataset")
+    if not dataset:
+        dataset = input("Enter new dataset name: ").strip()
+        if not dataset:
+            sys.exit("No dataset name provided.")
     create_dataset(directory, dataset)
 
 
 @set.command(name="track", cls=TreeCommand, help="Track a dataset with Git")
-@click.argument("dataset", required=False)
 @click.pass_obj
-def track(obj, dataset: str):
+def track(obj):
     directory = obj["directory"]
+    dataset = obj.get("dataset")
+    if not dataset:
+        dataset = select_dataset(directory, "Select dataset to track")
+    elif dataset.isdigit():
+        datasets = sorted(get_datasets(directory))
+        try:
+            index = int(dataset) - 1
+            if 0 <= index < len(datasets):
+                dataset = datasets[index]
+            else:
+                sys.exit(f"Invalid dataset number: {dataset}")
+        except ValueError:
+            sys.exit(f"Invalid dataset number: {dataset}")
     track_dataset(directory, dataset)
 
 
@@ -90,27 +105,27 @@ def list_cmd(obj):
     list_datasets(directory)
 
 
-# Document management group
-@main.group(
-    cls=TreeGroup,
-    name="doc",
-    help="Manage documents",
+@set.command(
+    name="add", cls=TreeCommand, help="Add a PDF from a URL or local file to a dataset"
 )
-@click.option("-s", "--dataset", help="Dataset name")
-@click.pass_obj
-def doc(obj, dataset: str):
-    obj["dataset"] = dataset
-
-
-@doc.command(name="add", cls=TreeCommand, help="Add a PDF from a URL or local file")
 @click.argument("source")
 @click.option(
     "-l", "--label", is_flag=True, help="Open the labeler after adding the PDF"
 )
 @click.pass_obj
-def add(obj, source: str, label: bool):
+def set_add(obj, source: str, label: bool):
     directory = obj["directory"]
     dataset = obj.get("dataset")
+    if dataset and dataset.isdigit():
+        datasets = sorted(get_datasets(directory))
+        try:
+            index = int(dataset) - 1
+            if 0 <= index < len(datasets):
+                dataset = datasets[index]
+            else:
+                sys.exit(f"Invalid dataset number: {dataset}")
+        except ValueError:
+            sys.exit(f"Invalid dataset number: {dataset}")
     if dataset:
         if not (directory / dataset).exists():
             sys.exit(
@@ -119,6 +134,20 @@ def add(obj, source: str, label: bool):
     else:
         dataset = select_dataset(directory, "Select dataset for adding document")
     add_evidence(directory, dataset, source, label)
+
+
+# Document management group
+@main.group(
+    cls=TreeGroup,
+    name="doc",
+    help="Manage documents",
+)
+@click.option("-s", "--dataset", help="Dataset name")
+@click.option("-u", "--uuid", help="UUID of the document")
+@click.pass_obj
+def doc(obj, dataset: str, uuid: str):
+    obj["dataset"] = dataset
+    obj["uuid"] = uuid
 
 
 @doc.command(
@@ -171,6 +200,49 @@ def label(obj):
     label_evidence(directory, dataset, uuid)
 
 
+@doc.command(
+    name="rebut", cls=TreeCommand, help="Generate rebuttal for a document in a dataset"
+)
+@click.pass_obj
+def rebut(obj):
+    directory = obj["directory"]
+    dataset = obj.get("dataset")
+    if dataset and dataset.isdigit():
+        # Interpret as index from sorted dataset list
+        datasets = sorted(get_datasets(directory))
+        try:
+            index = int(dataset) - 1
+            if 0 <= index < len(datasets):
+                dataset = datasets[index]
+            else:
+                sys.exit(
+                    f"Invalid dataset number: {dataset}. Use 'evid set list' to see available datasets."
+                )
+        except ValueError:
+            sys.exit(f"Invalid dataset number: {dataset}")
+
+    if not dataset:
+        dataset = select_dataset(
+            directory, "Select dataset for rebuttal", allow_create=False
+        )
+    elif not (directory / dataset).exists():
+        sys.exit(f"Dataset '{dataset}' does not exist.")
+
+    uuid = obj.get("uuid")
+    if not uuid:
+        uuid = select_evidence(directory, dataset, "Select document for rebuttal")
+
+    workdir = directory / dataset / uuid
+    if not workdir.exists():
+        sys.exit(f"Document directory {workdir} does not exist.")
+
+    try:
+        rebut_doc(workdir)
+        print(f"Rebuttal generated for {dataset}/{uuid}")
+    except Exception as e:
+        sys.exit(f"Failed to generate rebuttal: {str(e)}")
+
+
 @doc.command(name="list", cls=TreeCommand, help="List documents in the dataset")
 @click.pass_obj
 def list_docs(obj):
@@ -197,6 +269,14 @@ def list_docs(obj):
     elif not (directory / dataset).exists():
         sys.exit(f"Dataset '{dataset}' does not exist.")
 
+    uuid = obj.get("uuid")
+    if uuid:
+        # If UUID provided, perhaps show details, but for now, ignore or handle
+        print(
+            f"Listing specific document {uuid} in {dataset} (details not implemented)"
+        )
+        return
+
     documents = get_evidence_list(directory, dataset)
     if not documents:
         print("No documents found.")
@@ -213,6 +293,13 @@ def list_docs(obj):
         table.add_row(str(i), ev["date"], ev["uuid"], ev["title"])
 
     console.print(table)
+
+
+@main.command(name="gui", cls=TreeCommand, help="Launch the evid GUI")
+@click.pass_obj
+def gui(obj):
+    directory = obj["directory"]
+    gui_main(directory)
 
 
 # Config management group

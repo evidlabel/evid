@@ -149,4 +149,3 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
             f"Failed to initialize Git repository for {dataset_path}: {str(e)}"
         )
         sys.exit(f"Failed to initialize Git repository: {str(e)}")
-
