@@ -19,7 +19,8 @@ def test_list_datasets(temp_dir, capsys):
     list_datasets(temp_dir)
     captured = capsys.readouterr()
     assert "Available datasets" in captured.out
-    assert "ds" in captured.out
+    assert "ds1" in captured.out
+    assert "ds2" in captured.out
 
 def test_select_dataset_no_datasets_allow_create(temp_dir):
     with patch("builtins.input", return_value="new_ds"):

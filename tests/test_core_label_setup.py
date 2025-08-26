@@ -39,7 +39,8 @@ def test_json_to_bib(tmp_path):
             json_to_bib(json_path, bib_path, True)
     assert bib_path.exists()
     content = bib_path.read_text()
-    assert "@article{uuid:key1" in content
+    assert "uuid:key1" in content
+    assert "nonote = {note}" in content
 
 def test_load_uuid_prefix(tmp_path):
     info_path = tmp_path / "info.yml"
