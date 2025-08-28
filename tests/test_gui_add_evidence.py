@@ -1,21 +1,26 @@
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from evid.gui.tabs.add_evidence import AddEvidenceTab
-from pathlib import Path
+
 
 @pytest.fixture
-def add_tab(qt_app, tmp_path):
+def add_tab(qtbot, tmp_path):
     tab = AddEvidenceTab(tmp_path)
     yield tab
+
 
 def test_init_ui(add_tab):
     assert add_tab.dataset_combo is not None
     assert add_tab.file_input is not None
 
+
 def test_create_dataset(add_tab, tmp_path):
     add_tab.new_dataset_input.setText("new_ds")
     add_tab.create_dataset()
-    assert "new_ds" in [add_tab.dataset_combo.itemText(i) for i in range(add_tab.dataset_combo.count())]
+    assert "new_ds" in [
+        add_tab.dataset_combo.itemText(i) for i in range(add_tab.dataset_combo.count())
+    ]
+
 
 def test_add_evidence(add_tab, tmp_path):
     add_tab.dataset_combo.addItem("test_ds")
