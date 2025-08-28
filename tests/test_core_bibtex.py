@@ -1,7 +1,7 @@
 import pytest
 from evid.core.bibtex import generate_bib_from_typ, generate_bibtex
 import json
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 
 @pytest.fixture
@@ -15,23 +15,31 @@ def temp_typ_file(tmp_path):
 
 def test_generate_bib_from_typ(temp_typ_file):
     typ_file, json_file, bib_file = temp_typ_file
-    # Simulate typst query output
-    mock_data = [
-        {
-            "value": {
-                "key": "key1",
-                "text": "quote",
-                "title": "title",
-                "date": "2023-01-01",
-                "opage": 1,
-                "note": "note",
+    mock_data = json.dumps(
+        [
+            {
+                "value": {
+                    "key": "key1",
+                    "text": "quote",
+                    "title": "title",
+                    "date": "2023-01-01",
+                    "opage": 1,
+                    "note": "note",
+                }
             }
-        }
-    ]
-    json_file.write_text(json.dumps(mock_data))
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value.returncode = 0
-        mock_run.return_value.stderr = b""
+        ]
+    )
+
+    def mock_run(args, stdout, stderr, check):
+        stdout.write(mock_data)
+        stdout.flush()
+        result = MagicMock()
+        result.returncode = 0
+        result.stderr = b""
+        result.args = args
+        return result
+
+    with patch("subprocess.run", side_effect=mock_run):
         with patch("evid.core.label_setup.json_to_bib") as mock_json_to_bib:
             success, msg = generate_bib_from_typ(typ_file)
             assert success
