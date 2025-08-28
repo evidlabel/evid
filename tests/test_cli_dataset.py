@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from evid.cli.dataset import (
     get_datasets,
     list_datasets,
@@ -7,6 +7,7 @@ from evid.cli.dataset import (
     create_dataset,
     track_dataset,
 )
+from git import InvalidGitRepositoryError
 
 
 @pytest.fixture
@@ -51,6 +52,13 @@ def test_create_dataset(temp_dir):
 
 def test_track_dataset(temp_dir):
     (temp_dir / "ds1").mkdir()
-    with patch("evid.cli.dataset.Repo") as mock_repo:
+    with patch("evid.cli.dataset.Repo") as mock_repo_class:
+        mock_repo_instance = MagicMock()
+
+        def constructor_side_effect(path):
+            raise InvalidGitRepositoryError
+
+        mock_repo_class.side_effect = constructor_side_effect
+        mock_repo_class.init.return_value = mock_repo_instance
         track_dataset(temp_dir, "ds1")
-        mock_repo.init.assert_called_with(temp_dir / "ds1")
+        mock_repo_class.init.assert_called_with(temp_dir / "ds1")
