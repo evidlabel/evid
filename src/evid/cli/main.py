@@ -3,7 +3,7 @@ from pathlib import Path
 import logging
 from rich.logging import RichHandler
 import click
-from treeclick import TreeGroup, TreeCommand
+from treeparse import TreeGroup, TreeCommand
 from evid import CONFIG
 from evid.cli.dataset import (
     list_datasets,
