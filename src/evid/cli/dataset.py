@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.table import Table
 
 try:
-    from git import Repo
+    from git import Repo, InvalidGitRepositoryError
 except ImportError:
     Repo = None
 
@@ -120,7 +120,7 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
     try:
         Repo(dataset_path)
         sys.exit(f"Dataset '{dataset}' is already tracked as a Git repository.")
-    except:
+    except InvalidGitRepositoryError:
         pass  # Not a Git repository, proceed with initialization
 
     try:
