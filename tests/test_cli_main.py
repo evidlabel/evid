@@ -1,21 +1,27 @@
 import pytest
-from click.testing import CliRunner
-from evid.cli.main import main
+import sys
+from unittest.mock import patch
+from evid.cli.main import app
 
-@pytest.fixture
-def runner():
-    return CliRunner()
 
-def test_main_help(runner):
-    result = runner.invoke(main, ["--help"])
-    assert result.exit_code == 0
-    assert "evid CLI for managing PDF documents" in result.output
+def test_main_help(capsys):
+    with patch.object(sys, "argv", ["evid", "--help"]):
+        with pytest.raises(SystemExit):
+            app.run()
+    captured = capsys.readouterr()
+    assert "evid CLI for managing PDF documents" in captured.out
 
-def test_set_list(runner):
-    result = runner.invoke(main, ["set", "list"])
-    assert result.exit_code == 0
-    assert "No datasets found." in result.output
 
-def test_doc_list(runner):
-    result = runner.invoke(main, ["doc", "list"])
-    assert result.exit_code != 0  # Expect failure without dataset
+def test_set_list(capsys):
+    with patch.object(sys, "argv", ["evid", "set", "list"]):
+        with pytest.raises(SystemExit):
+            app.run()
+    captured = capsys.readouterr()
+    assert "No datasets found." in captured.out
+
+
+def test_doc_list():
+    with patch.object(sys, "argv", ["evid", "doc", "list"]):
+        with pytest.raises(SystemExit) as exc:
+            app.run()
+    assert exc.value.code != 0  # Expect failure without dataset
