@@ -12,15 +12,18 @@ def test_main_help(capsys):
     assert "evid CLI for managing PDF documents" in captured.out
 
 
-def test_set_list(capsys):
+def test_set_list(capsys, tmp_path):
+    global DIRECTORY
+    DIRECTORY = tmp_path
     with patch.object(sys, "argv", ["evid", "set", "list"]):
-        with pytest.raises(SystemExit):
-            app.run()
+        app.run()
     captured = capsys.readouterr()
     assert "No datasets found." in captured.out
 
 
-def test_doc_list():
+def test_doc_list(tmp_path):
+    global DIRECTORY
+    DIRECTORY = tmp_path
     with patch.object(sys, "argv", ["evid", "doc", "list"]):
         with pytest.raises(SystemExit) as exc:
             app.run()
