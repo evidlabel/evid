@@ -40,7 +40,7 @@ def test_generate_bib_from_typ(temp_typ_file):
         return result
 
     with patch("subprocess.run", side_effect=mock_run):
-        with patch("evid.core.label_setup.json_to_bib") as mock_json_to_bib:
+        with patch("evid.core.bibtex.json_to_bib") as mock_json_to_bib:
             success, msg = generate_bib_from_typ(typ_file)
             assert success
             assert msg == ""
