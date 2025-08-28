@@ -21,7 +21,7 @@ dependencies = [
     "rich-click>=1.8.3,<2",  # Added for enhanced CLI
     "pydantic>=2.9.2,<3",  # Added for validation
     "numpy>=2.1.2,<3",  # Added for vectorization
-    "treeclick @ git+https://github.com/wr1/treeclick.git@master",
+    "treeparse",
     "pytest-cov"
 ]
 
