@@ -4,6 +4,7 @@ from evid import load_config, CONFIG, DEFAULT_DIR
 from pathlib import Path
 import yaml
 
+
 @pytest.fixture
 def mock_config(tmp_path):
     config_path = Path.home() / ".evidrc"
@@ -14,25 +15,45 @@ def mock_config(tmp_path):
     else:
         config_path.write_text(original_config)
 
+
 def test_load_config_defaults():
     config = load_config()
-    assert config == {'default_dir': str(Path("~/Documents/evid").expanduser()), 'editor': 'code', 'directory': 'code', 'latex': 'pdflatex {file}'}
+    assert config == {
+        "default_dir": str(Path("~/Documents/evid").expanduser()),
+        "editor": "code",
+        "directory": "code",
+        "latex": "pdflatex {file}",
+    }
+
 
 def test_load_config_with_file(mock_config):
-    mock_config.write_text(yaml.dump({'editor': 'vim'}))
+    mock_config.write_text(yaml.dump({"editor": "vim"}))
     config = load_config()
-    assert config['editor'] == 'vim'
-    assert 'default_dir' in config
+    assert config["editor"] == "vim"
+    assert "default_dir" in config
+
 
 def test_load_config_invalid_yaml(mock_config):
     mock_config.write_text("invalid: yaml: here")
     config = load_config()
-    assert config == {'default_dir': str(Path("~/Documents/evid").expanduser()), 'editor': 'code', 'directory': 'code', 'latex': 'pdflatex {file}'}
+    assert config == {
+        "default_dir": str(Path("~/Documents/evid").expanduser()),
+        "editor": "code",
+        "directory": "code",
+        "latex": "pdflatex {file}",
+    }
+
 
 def test_load_config_validation_error(mock_config):
-    mock_config.write_text(yaml.dump({'editor': 123}))
+    mock_config.write_text(yaml.dump({"editor": 123}))
     config = load_config()
-    assert config == {'default_dir': str(Path("~/Documents/evid").expanduser()), 'editor': 'code', 'directory': 'code', 'latex': 'pdflatex {file}'}
+    assert config == {
+        "default_dir": str(Path("~/Documents/evid").expanduser()),
+        "editor": "code",
+        "directory": "code",
+        "latex": "pdflatex {file}",
+    }
+
 
 def test_config_and_default_dir():
     assert isinstance(CONFIG, dict)

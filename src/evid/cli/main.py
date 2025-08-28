@@ -2,8 +2,7 @@ import sys
 from pathlib import Path
 import logging
 from rich.logging import RichHandler
-import click
-from treeparse import TreeGroup, TreeCommand
+from treeparse import cli, group, command, argument, option
 from evid import CONFIG
 from evid.cli.dataset import (
     list_datasets,
@@ -12,7 +11,6 @@ from evid.cli.dataset import (
     track_dataset,
     get_datasets,
 )
-
 
 from evid.cli.evidence import label_evidence, select_evidence, get_evidence_list
 from evid.core.bibtex import generate_bibtex
@@ -23,70 +21,38 @@ from evid.cli.evidence import add_evidence  # Import add_evidence for set add
 import yaml
 from rich.console import Console
 from rich.table import Table
+import argparse
 
 # Set up logging with Rich handler
 logging.basicConfig(handlers=[RichHandler()], level=logging.DEBUG, rich_tracebacks=True)
 logger = logging.getLogger(__name__)
 
-
-@click.group(
-    cls=TreeGroup,
-    invoke_without_command=True,
-    help="evid CLI for managing PDF documents",
-    context_settings={"help_option_names": ["-h", "--help"]},
-    use_tree=True,
-    max_width=120,
-)
-@click.option(
-    "-d",
-    "--directory",
-    default=CONFIG["default_dir"],
-    help=f"Directory for storing datasets (default: {CONFIG['default_dir']})",
-)
-@click.pass_context
-def main(ctx, directory: str):
-    """evid CLI for managing PDF documents."""
-    ctx.ensure_object(dict)
-    ctx.obj["directory"] = Path(directory).expanduser()
-    if ctx.invoked_subcommand is None:
-        gui_main(ctx.obj["directory"])
+DIRECTORY = None
 
 
-# Dataset management group
-set = TreeGroup(
-    name="set",
-    help="Manage datasets",
-    params=[
-        click.Option(
-            ["-s", "--dataset"],
-            help="Dataset name or number",
-        )
-    ],
-)
-main.add_command(set)
+def set_directory():
+    global DIRECTORY
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("-d", "--directory", default=CONFIG["default_dir"])
+    args, unknown = parser.parse_known_args()
+    DIRECTORY = Path(args.directory).expanduser()
+    sys.argv = [sys.argv[0]] + unknown
 
 
-@set.command(name="create", cls=TreeCommand, help="Create a new dataset")
-@click.pass_obj
-def create(obj):
-    directory = obj["directory"]
-    dataset = obj.get("dataset")
+# Define callbacks
+def create_callback(dataset: str = None):
     if not dataset:
         dataset = input("Enter new dataset name: ").strip()
         if not dataset:
             sys.exit("No dataset name provided.")
-    create_dataset(directory, dataset)
+    create_dataset(DIRECTORY, dataset)
 
 
-@set.command(name="track", cls=TreeCommand, help="Track a dataset with Git")
-@click.pass_obj
-def track(obj):
-    directory = obj["directory"]
-    dataset = obj.get("dataset")
+def track_callback(dataset: str = None):
     if not dataset:
-        dataset = select_dataset(directory, "Select dataset to track")
+        dataset = select_dataset(DIRECTORY, "Select dataset to track")
     elif dataset.isdigit():
-        datasets = sorted(get_datasets(directory))
+        datasets = sorted(get_datasets(DIRECTORY))
         try:
             index = int(dataset) - 1
             if 0 <= index < len(datasets):
@@ -95,29 +61,16 @@ def track(obj):
                 sys.exit(f"Invalid dataset number: {dataset}")
         except ValueError:
             sys.exit(f"Invalid dataset number: {dataset}")
-    track_dataset(directory, dataset)
+    track_dataset(DIRECTORY, dataset)
 
 
-@set.command(name="list", cls=TreeCommand, help="List all available datasets")
-@click.pass_obj
-def list_cmd(obj):
-    directory = obj["directory"]
-    list_datasets(directory)
+def list_datasets_callback():
+    list_datasets(DIRECTORY)
 
 
-@set.command(
-    name="add", cls=TreeCommand, help="Add a PDF from a URL or local file to a dataset"
-)
-@click.argument("source")
-@click.option(
-    "-l", "--label", is_flag=True, help="Open the labeler after adding the PDF"
-)
-@click.pass_obj
-def set_add(obj, source: str, label: bool):
-    directory = obj["directory"]
-    dataset = obj.get("dataset")
+def add_callback(source: str, label: bool = False, dataset: str = None):
     if dataset and dataset.isdigit():
-        datasets = sorted(get_datasets(directory))
+        datasets = sorted(get_datasets(DIRECTORY))
         try:
             index = int(dataset) - 1
             if 0 <= index < len(datasets):
@@ -127,57 +80,31 @@ def set_add(obj, source: str, label: bool):
         except ValueError:
             sys.exit(f"Invalid dataset number: {dataset}")
     if dataset:
-        if not (directory / dataset).exists():
+        if not (DIRECTORY / dataset).exists():
             sys.exit(
                 f"Dataset '{dataset}' does not exist. Create it with 'evid set create'."
             )
     else:
-        dataset = select_dataset(directory, "Select dataset for adding document")
-    add_evidence(directory, dataset, source, label)
+        dataset = select_dataset(DIRECTORY, "Select dataset for adding document")
+    add_evidence(DIRECTORY, dataset, source, label)
 
 
-# Document management group
-@main.group(
-    cls=TreeGroup,
-    name="doc",
-    help="Manage documents",
-)
-@click.option("-s", "--dataset", help="Dataset name")
-@click.option("-u", "--uuid", help="UUID of the document")
-@click.pass_obj
-def doc(obj, dataset: str, uuid: str):
-    obj["dataset"] = dataset
-    obj["uuid"] = uuid
-
-
-@doc.command(
-    name="bibtex", cls=TreeCommand, help="Generate BibTeX files from label.typ files"
-)
-@click.pass_obj
-def bibtex(obj):
-    directory = obj["directory"]
-    dataset = obj.get("dataset")
+def bibtex_callback(dataset: str = None, uuid: str = None):
     if not dataset:
         dataset = select_dataset(
-            directory, "Select dataset for BibTeX generation", allow_create=False
+            DIRECTORY, "Select dataset for BibTeX generation", allow_create=False
         )
-    uuid = obj.get("uuid")
     if not uuid:
-        uuid = select_evidence(directory, dataset)
-    typ_file = directory / dataset / uuid / "label.typ"
+        uuid = select_evidence(DIRECTORY, dataset)
+    typ_file = DIRECTORY / dataset / uuid / "label.typ"
     if not typ_file.exists():
         sys.exit(f"label.typ not found in {dataset}/{uuid}")
     generate_bibtex([typ_file])
 
 
-@doc.command(name="label", cls=TreeCommand, help="Label a document in a dataset")
-@click.pass_obj
-def label(obj):
-    directory = obj["directory"]
-    dataset = obj.get("dataset")
+def label_callback(dataset: str = None, uuid: str = None):
     if dataset and dataset.isdigit():
-        # Interpret as index from sorted dataset list
-        datasets = sorted(get_datasets(directory))
+        datasets = sorted(get_datasets(DIRECTORY))
         try:
             index = int(dataset) - 1
             if 0 <= index < len(datasets):
@@ -191,25 +118,17 @@ def label(obj):
 
     if not dataset:
         dataset = select_dataset(
-            directory, "Select dataset to label", allow_create=False
+            DIRECTORY, "Select dataset to label", allow_create=False
         )
-    elif not (directory / dataset).exists():
+    elif not (DIRECTORY / dataset).exists():
         sys.exit(f"Dataset '{dataset}' does not exist.")
 
-    uuid = obj.get("uuid")
-    label_evidence(directory, dataset, uuid)
+    label_evidence(DIRECTORY, dataset, uuid)
 
 
-@doc.command(
-    name="rebut", cls=TreeCommand, help="Generate rebuttal for a document in a dataset"
-)
-@click.pass_obj
-def rebut(obj):
-    directory = obj["directory"]
-    dataset = obj.get("dataset")
+def rebut_callback(dataset: str = None, uuid: str = None):
     if dataset and dataset.isdigit():
-        # Interpret as index from sorted dataset list
-        datasets = sorted(get_datasets(directory))
+        datasets = sorted(get_datasets(DIRECTORY))
         try:
             index = int(dataset) - 1
             if 0 <= index < len(datasets):
@@ -223,16 +142,15 @@ def rebut(obj):
 
     if not dataset:
         dataset = select_dataset(
-            directory, "Select dataset for rebuttal", allow_create=False
+            DIRECTORY, "Select dataset for rebuttal", allow_create=False
         )
-    elif not (directory / dataset).exists():
+    elif not (DIRECTORY / dataset).exists():
         sys.exit(f"Dataset '{dataset}' does not exist.")
 
-    uuid = obj.get("uuid")
     if not uuid:
-        uuid = select_evidence(directory, dataset, "Select document for rebuttal")
+        uuid = select_evidence(DIRECTORY, dataset, "Select document for rebuttal")
 
-    workdir = directory / dataset / uuid
+    workdir = DIRECTORY / dataset / uuid
     if not workdir.exists():
         sys.exit(f"Document directory {workdir} does not exist.")
 
@@ -243,14 +161,9 @@ def rebut(obj):
         sys.exit(f"Failed to generate rebuttal: {str(e)}")
 
 
-@doc.command(name="list", cls=TreeCommand, help="List documents in the dataset")
-@click.pass_obj
-def list_docs(obj):
-    directory = obj["directory"]
-    dataset = obj.get("dataset")
+def list_docs_callback(dataset: str = None, uuid: str = None):
     if dataset and dataset.isdigit():
-        # Interpret as index from sorted dataset list
-        datasets = sorted(get_datasets(directory))
+        datasets = sorted(get_datasets(DIRECTORY))
         try:
             index = int(dataset) - 1
             if 0 <= index < len(datasets):
@@ -264,20 +177,18 @@ def list_docs(obj):
 
     if not dataset:
         dataset = select_dataset(
-            directory, "Select dataset to list", allow_create=False
+            DIRECTORY, "Select dataset to list", allow_create=False
         )
-    elif not (directory / dataset).exists():
+    elif not (DIRECTORY / dataset).exists():
         sys.exit(f"Dataset '{dataset}' does not exist.")
 
-    uuid = obj.get("uuid")
     if uuid:
-        # If UUID provided, perhaps show details, but for now, ignore or handle
         print(
             f"Listing specific document {uuid} in {dataset} (details not implemented)"
         )
         return
 
-    documents = get_evidence_list(directory, dataset)
+    documents = get_evidence_list(DIRECTORY, dataset)
     if not documents:
         print("No documents found.")
         return
@@ -295,24 +206,11 @@ def list_docs(obj):
     console.print(table)
 
 
-@main.command(name="gui", cls=TreeCommand, help="Launch the evid GUI")
-@click.pass_obj
-def gui(obj):
-    directory = obj["directory"]
-    gui_main(directory)
+def gui_callback():
+    gui_main(DIRECTORY)
 
 
-# Config management group
-config = TreeGroup(name="config", help="Deal with configuration of evid")
-main.add_command(config)
-
-
-@config.command(
-    name="update",
-    cls=TreeCommand,
-    help="Initialize or update .evidrc with default settings",
-)
-def update():
+def update_callback():
     config_path = Path.home() / ".evidrc"
     if config_path.exists():
         try:
@@ -343,12 +241,7 @@ def update():
     print(f".evidrc {action} at {config_path} with complete default fields.")
 
 
-@config.command(
-    name="show",
-    cls=TreeCommand,
-    help="Show the current config settings and where they are defined",
-)
-def show():
+def show_callback():
     config_path = Path.home() / ".evidrc"
     defaults = ConfigModel().model_dump()
     user_config = {}
@@ -379,6 +272,162 @@ def show():
         else:
             source = "default"
         print(f"  {key}: {value} ({source})")
+
+
+# Build the CLI structure
+app = cli(
+    name="evid",
+    help="evid CLI for managing PDF documents",
+    max_width=120,
+    show_types=True,
+    show_defaults=True,
+    line_connect=True,
+    # theme="monochrome",
+)
+
+set_group = group(name="set", help="Manage datasets")
+app.subgroups.append(set_group)
+
+set_group.commands.append(
+    command(
+        name="create",
+        help="Create a new dataset",
+        callback=create_callback,
+        options=[
+            option(
+                flags=["-s", "--dataset"], arg_type=str, help="Dataset name or number"
+            ),
+        ],
+    )
+)
+
+set_group.commands.append(
+    command(
+        name="track",
+        help="Track a dataset with Git",
+        callback=track_callback,
+        options=[
+            option(
+                flags=["-s", "--dataset"], arg_type=str, help="Dataset name or number"
+            ),
+        ],
+    )
+)
+
+set_group.commands.append(
+    command(
+        name="list",
+        help="List all available datasets",
+        callback=list_datasets_callback,
+    )
+)
+
+set_group.commands.append(
+    command(
+        name="add",
+        help="Add a PDF from a URL or local file to a dataset",
+        callback=add_callback,
+        arguments=[
+            argument(name="source", arg_type=str),
+        ],
+        options=[
+            option(
+                flags=["-l", "--label"],
+                is_flag=True,
+                help="Open the labeler after adding the PDF",
+            ),
+            option(
+                flags=["-s", "--dataset"], arg_type=str, help="Dataset name or number"
+            ),
+        ],
+    )
+)
+
+doc_group = group(name="doc", help="Manage documents")
+app.subgroups.append(doc_group)
+
+doc_group.commands.append(
+    command(
+        name="bibtex",
+        help="Generate BibTeX files from label.typ files",
+        callback=bibtex_callback,
+        options=[
+            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
+            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
+        ],
+    )
+)
+
+doc_group.commands.append(
+    command(
+        name="label",
+        help="Label a document in a dataset",
+        callback=label_callback,
+        options=[
+            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
+            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
+        ],
+    )
+)
+
+doc_group.commands.append(
+    command(
+        name="rebut",
+        help="Generate rebuttal for a document in a dataset",
+        callback=rebut_callback,
+        options=[
+            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
+            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
+        ],
+    )
+)
+
+doc_group.commands.append(
+    command(
+        name="list",
+        help="List documents in the dataset",
+        callback=list_docs_callback,
+        options=[
+            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
+            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
+        ],
+    )
+)
+
+app.commands.append(
+    command(
+        name="gui",
+        help="Launch the evid GUI",
+        callback=gui_callback,
+    )
+)
+
+config_group = group(name="config", help="Deal with configuration of evid")
+app.subgroups.append(config_group)
+
+config_group.commands.append(
+    command(
+        name="update",
+        help="Initialize or update .evidrc with default settings",
+        callback=update_callback,
+    )
+)
+
+config_group.commands.append(
+    command(
+        name="show",
+        help="Show the current config settings and where they are defined",
+        callback=show_callback,
+    )
+)
+
+
+def main():
+    set_directory()
+    if len(sys.argv) == 1:
+        gui_main(DIRECTORY)
+    else:
+        app.run()
 
 
 if __name__ == "__main__":
