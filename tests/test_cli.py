@@ -50,7 +50,7 @@ def test_add_evidence_local_pdf_with_label(mock_textpdf, mock_run, mock_gen, tem
     dataset = "dataset1"
     (temp_dir / dataset).mkdir()
 
-    def textpdf_side_effect(pdfname, outputfile):
+    def textpdf_side_effect(pdfname, outputfile, autolabel=False):
         if outputfile:
             outputfile.write_text("dummy typst content")
         return "dummy typst content"
