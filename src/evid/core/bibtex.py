@@ -20,7 +20,7 @@ def generate_bib_from_typ(
     json_file = typ_file.parent / "label.json"
     bib_file = typ_file.parent / "label.bib"
     try:
-        with open(json_file, "w") as json_out:
+        with open(json_file, "w", encoding="utf-8") as json_out:
             result = subprocess.run(
                 [
                     "typst",

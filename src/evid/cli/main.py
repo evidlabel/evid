@@ -68,7 +68,9 @@ def list_datasets_callback():
     list_datasets(DIRECTORY)
 
 
-def add_callback(source: str, label: bool = False, dataset: str = None):
+def add_callback(
+    source: str, label: bool = False, autolabel: bool = False, dataset: str = None
+):
     if dataset and dataset.isdigit():
         datasets = sorted(get_datasets(DIRECTORY))
         try:
@@ -86,7 +88,7 @@ def add_callback(source: str, label: bool = False, dataset: str = None):
             )
     else:
         dataset = select_dataset(DIRECTORY, "Select dataset for adding document")
-    add_evidence(DIRECTORY, dataset, source, label)
+    add_evidence(DIRECTORY, dataset, source, label, autolabel)
 
 
 def bibtex_callback(dataset: str = None, uuid: str = None):
@@ -337,13 +339,25 @@ set_group.commands.append(
                 help="Open the labeler after adding the PDF",
             ),
             option(
+                flags=["-a", "--autolabel"],
+                is_flag=True,
+                help="Auto-label paragraphs when labelling",
+            ),
+            option(
                 flags=["-s", "--dataset"], arg_type=str, help="Dataset name or number"
             ),
         ],
     )
 )
 
-doc_group = group(name="doc", help="Manage documents")
+doc_group = group(
+    name="doc",
+    help="Manage documents",
+    options=[
+        option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
+        option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
+    ],
+)
 app.subgroups.append(doc_group)
 
 doc_group.commands.append(
@@ -351,10 +365,6 @@ doc_group.commands.append(
         name="bibtex",
         help="Generate BibTeX files from label.typ files",
         callback=bibtex_callback,
-        options=[
-            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
-            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
-        ],
     )
 )
 
@@ -363,10 +373,6 @@ doc_group.commands.append(
         name="label",
         help="Label a document in a dataset",
         callback=label_callback,
-        options=[
-            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
-            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
-        ],
     )
 )
 
@@ -375,10 +381,6 @@ doc_group.commands.append(
         name="rebut",
         help="Generate rebuttal for a document in a dataset",
         callback=rebut_callback,
-        options=[
-            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
-            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
-        ],
     )
 )
 
@@ -387,10 +389,6 @@ doc_group.commands.append(
         name="list",
         help="List documents in the dataset",
         callback=list_docs_callback,
-        options=[
-            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
-            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
-        ],
     )
 )
 

@@ -35,7 +35,11 @@ def to_plain_dict(data):
 
 
 def add_evidence(
-    directory: Path, dataset: str, source: str, label: bool = False
+    directory: Path,
+    dataset: str,
+    source: str,
+    label: bool = False,
+    autolabel: bool = False,
 ) -> None:
     """Add a PDF or text content to the specified dataset."""
     is_url = source.startswith("http://") or source.startswith("https://")
@@ -145,7 +149,7 @@ def add_evidence(
 
     if label:
         logger.info(f"Generating and opening label file for {file_name}...")
-        create_label(target_path, dataset, unique_id.hex)
+        create_label(target_path, dataset, unique_id.hex, autolabel=autolabel)
 
 
 def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
@@ -157,7 +161,7 @@ def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
             info_path = d / "info.yml"
             if info_path.exists():
                 try:
-                    with info_path.open("r") as f:
+                    with info_path.open("r", encoding="utf-8") as f:
                         info = yaml.load(f, Loader=yaml.FullLoader)
                     if info is None:
                         logger.warning(
