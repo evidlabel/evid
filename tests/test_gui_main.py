@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import patch
 from PyQt6.QtWidgets import QApplication
 from evid.gui.main import EvidenceManagerApp, main
 
@@ -31,3 +32,4 @@ def test_main(tmp_path):
         with patch("PyQt6.QtWidgets.QApplication.exec") as mock_exec:
             main(tmp_path)
         mock_exec.assert_called_once()
+        mock_exit.assert_not_called()
