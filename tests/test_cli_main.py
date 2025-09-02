@@ -42,7 +42,7 @@ def test_set_add(mock_add, mock_directory):
     ):
         main()
     mock_add.assert_called_once_with(
-        mock_directory, "test_ds", "source.pdf", False, False
+        mock_directory, "test_ds", "source.pdf", None, None
     )
 
 

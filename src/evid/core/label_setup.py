@@ -48,7 +48,9 @@ def clean_text_for_typst(text: str) -> str:
     return text
 
 
-def textpdf_to_typst(pdfname: Path, outputfile: Path = None) -> str:
+def textpdf_to_typst(
+    pdfname: Path, outputfile: Path = None, autolabel: bool = False
+) -> str:
     info_file = pdfname.with_name("info.yml")
     if info_file.exists():
         with info_file.open() as f:
@@ -72,9 +74,21 @@ def textpdf_to_typst(pdfname: Path, outputfile: Path = None) -> str:
 
     pdf = fitz.open(pdfname)
     body = ""
+    para_num = 1
     for i, page in enumerate(pdf):
         text = clean_text_for_typst(page.get_text())
-        body += f"#mset(values: (opage: {i + 1}))\n== Page {i + 1}\n{text}\n\n"
+        page_body = f"#mset(values: (opage: {i + 1}))\n== Page {i + 1}\n"
+        if autolabel:
+            paragraphs = [p for p in text.split("\n\n") if p.strip()]
+            for para in paragraphs:
+                escaped_para = para.replace("\\", "\\\\").replace('"', '\\"')
+                labelled = f'#lab("lab{para_num}", "{escaped_para}", "")'
+                commented = "\n".join(f"// {line}" for line in para.split("\n"))
+                page_body += labelled + "\n\n" + commented + "\n\n"
+                para_num += 1
+        else:
+            page_body += text + "\n\n"
+        body += page_body
     pdf.close()
 
     typst_content = f"""#import "@preview/labtyp:0.1.0": lablist, lab, mset
@@ -96,7 +110,9 @@ def textpdf_to_typst(pdfname: Path, outputfile: Path = None) -> str:
     return typst_content
 
 
-def text_to_typst(txtname: Path, outputfile: Path = None) -> str:
+def text_to_typst(
+    txtname: Path, outputfile: Path = None, autolabel: bool = False
+) -> str:
     info_file = txtname.with_name("info.yml")
     if info_file.exists():
         with info_file.open() as f:
@@ -119,7 +135,18 @@ def text_to_typst(txtname: Path, outputfile: Path = None) -> str:
         date, name = "DATE", "NAME"
 
     with txtname.open("r", encoding="utf-8") as f:
-        body = clean_text_for_typst(f.read())
+        text = clean_text_for_typst(f.read())
+
+    body = ""
+    if autolabel:
+        paragraphs = [p for p in text.split("\n\n") if p.strip()]
+        for para_num, para in enumerate(paragraphs, 1):
+            escaped_para = para.replace("\\", "\\\\").replace('"', '\\"')
+            labelled = f'#lab("lab{para_num}", "{escaped_para}", "")'
+            commented = "\n".join(f"// {line}" for line in para.split("\n"))
+            body += labelled + "\n\n" + commented + "\n\n"
+    else:
+        body = text + "\n\n"
 
     typst_content = f"""#import "@preview/labtyp:0.1.0": lablist, lab, mset
 
@@ -230,7 +257,7 @@ def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
         )
         uuid_prefix = load_uuid_prefix(json_file)
         df["latex_label"] = [f"{uuid_prefix}:{label.strip()}" for label in df["label"]]
-        with open(output_file, "w") as bibtex_file:
+        with open(output_file, "w", encoding="utf-8") as bibtex_file:
             for index, row in df.iterrows():
                 bibtex_entry = f"""@article{{ {row["latex_label"]}  ,
     note = {{{row.get("note", "")}}},

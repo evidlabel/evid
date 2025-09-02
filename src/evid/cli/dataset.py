@@ -137,7 +137,7 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
 !*.txt
 */label.pdf
 """
-        with (dataset_path / ".gitignore").open("w") as f:
+        with (dataset_path / ".gitignore").open("w", encoding="utf-8") as f:
             f.write(gitignore_content)
         # Add .gitignore to the repository
         repo.index.add([".gitignore"])
