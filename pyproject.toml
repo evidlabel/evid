@@ -1,6 +1,6 @@
 [project]
 name = "evid"
-version = "0.2.0"
+version = "0.2.1"
 description = "document logger, adder of metadata"
 authors = [{ name = "evid 210122431+evidlabel@users.noreply.github.com" }]
 requires-python = ">=3.11,<4.0"
@@ -21,6 +21,8 @@ dependencies = [
     "rich-click>=1.8.3,<2",  # Added for enhanced CLI
     "pydantic>=2.9.2,<3",  # Added for validation
     "numpy>=2.1.2,<3",  # Added for vectorization
+    "treeparse",
+    "pytest-cov"
 ]
 
 [project.scripts]
@@ -30,6 +32,7 @@ evid = "evid.cli.main:main"
 dev = [
     "pytest~=7.0",
     "pytest-qt>=4.2.0,<5",
+    "pytest-cov~=4.1",
     "fitz>=0.0.1.dev2,<0.0.2",
     "mkdocs>=1.6.1,<2",  # Added for documentation
     "mkdocs-material",
@@ -48,3 +51,24 @@ include = ["src/evid"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.coverage.run]
+source = ["src/evid", "tests"]
+branch = true
+
+[tool.coverage.paths]
+source = ["src/evid", "tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "raise AssertionError",
+]
+
+[tool.pytest.ini_options]
+addopts = "--cov --cov-report=term-missing --cov-config=pyproject.toml"

@@ -9,6 +9,15 @@ from evid.core.bibtex import generate_bib_from_typ
 logger = logging.getLogger(__name__)
 
 TYPST_TEMPLATE = r"""#set text(lang: "da")
+#set text(font: "New Computer Modern", size: 12pt)
+
+#let bcite(key) = {
+  block(
+    stroke: (left: 0.5pt + black),
+    inset: (left: 1em, right: 1em, top: 0.5em, bottom: 0.5em),
+    [#cite(key, form: "full")]
+  )
+}
 
 #grid(
   columns: (auto, 1fr),
@@ -38,7 +47,7 @@ def base_rebuttal(bibfile: Path) -> str:
         note_key = "nonote" if "nonote" in row else "note"
         note = row[note_key]
         prompt = "\n".join(f"// {line}" for line in note.splitlines())
-        body += f'{prompt}\n+ Regarding: #cite(<{row["ID"]}>, form: "full")\n\n'
+        body += f"{prompt}\n+ Regarding: #bcite(<{row['ID']}>)\n\n"
 
     rebuttal_body = TYPST_TEMPLATE.replace("POINTS", body).replace(
         "BIBPATH", bibfile.name

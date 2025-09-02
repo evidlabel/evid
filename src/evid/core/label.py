@@ -13,15 +13,17 @@ logging.basicConfig(handlers=[RichHandler(rich_tracebacks=True)], level=logging.
 logger = logging.getLogger(__name__)
 
 
-def create_label(file_path: Path, dataset: str, uuid: str) -> None:
+def create_label(
+    file_path: Path, dataset: str, uuid: str, autolabel: bool = False
+) -> None:
     """Generate a label file and open it in the configured editor."""
     label_file = file_path.parent / "label.typ"
     try:
         if not label_file.exists():
             if file_path.suffix.lower() == ".pdf":
-                textpdf_to_typst(file_path, label_file)
+                textpdf_to_typst(file_path, label_file, autolabel)
             elif file_path.suffix.lower() == ".txt":
-                text_to_typst(file_path, label_file)
+                text_to_typst(file_path, label_file, autolabel)
             else:
                 logger.warning(f"Unsupported file type: {file_path.suffix}")
                 return
