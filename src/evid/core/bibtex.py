@@ -20,20 +20,20 @@ def generate_bib_from_typ(
     json_file = typ_file.parent / "label.json"
     bib_file = typ_file.parent / "label.bib"
     try:
-        result = subprocess.run(
-            # replace $HOME by actual home dir
-            [
-                "typst",
-                "query",
-                str(typ_file),
-                "<lab>",
-                "--package-path",
-                os.path.expanduser("~/.cache/typst"),
-            ],
-            stdout=open(json_file, "w"),
-            stderr=subprocess.PIPE,
-            check=False,
-        )
+        with open(json_file, "w", encoding="utf-8") as json_out:
+            result = subprocess.run(
+                [
+                    "typst",
+                    "query",
+                    str(typ_file),
+                    "<lab>",
+                    "--package-path",
+                    os.path.expanduser("~/.cache/typst"),
+                ],
+                stdout=json_out,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
 
         # print the command in pastable form for debugging in shell
         cmd_for_shell = " ".join(
@@ -59,7 +59,7 @@ def generate_bib_from_typ(
         return False, f"Unexpected error during Typst query: {str(e)}"
 
 
-def generate_bibtex(typ_files: List[Path], parallel: bool = False) -> None:
+def generate_bibtex(typ_files: List[Path]) -> None:
     """Generate BibTeX files from a list of label.typ files."""
     if not typ_files:
         print("No Typst files provided.")

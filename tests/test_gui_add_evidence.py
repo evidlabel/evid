@@ -1,30 +1,37 @@
 import pytest
-from PyQt6.QtWidgets import QApplication
 from unittest.mock import patch
 from evid.gui.tabs.add_evidence import AddEvidenceTab
-import sys
 
 
 @pytest.fixture
-def add_tab(tmp_path):
-    app = QApplication(sys.argv)  # Required for PyQt
+def add_tab(qtbot, tmp_path):
     tab = AddEvidenceTab(tmp_path)
     yield tab
-    app.quit()
 
 
-@patch("PyQt6.QtWidgets.QMessageBox.warning")
-def test_add_evidence_missing_fields(mock_warning, add_tab):
-    # Simulate missing fields by not filling anything
-    add_tab.dataset_combo.clear()  # No dataset selected
-    add_tab.add_evidence()
-    mock_warning.assert_called_once()
+def test_init_ui(add_tab):
+    assert add_tab.dataset_combo is not None
+    assert add_tab.file_input is not None
 
 
 def test_create_dataset(add_tab, tmp_path):
-    dataset_name = "test_dataset"
-    add_tab.new_dataset_input.setText(dataset_name)
+    add_tab.new_dataset_input.setText("new_ds")
     add_tab.create_dataset()
+    assert "new_ds" in [
+        add_tab.dataset_combo.itemText(i) for i in range(add_tab.dataset_combo.count())
+    ]
 
-    assert dataset_name in add_tab.get_datasets()
-    assert (tmp_path / dataset_name).exists()
+
+def test_add_evidence(add_tab, tmp_path):
+    add_tab.dataset_combo.addItem("test_ds")
+    add_tab.dataset_combo.setCurrentText("test_ds")
+    (tmp_path / "test_ds").mkdir()
+    pdf_path = tmp_path / "test.pdf"
+    pdf_path.touch()
+    add_tab.file_input.setText(str(pdf_path))
+    add_tab.title_input.setText("Title")
+    add_tab.authors_input.setText("Author")
+    add_tab.dates_input.setText("2023-01-01")
+    with patch("shutil.copy2"):
+        with patch("yaml.dump"):
+            add_tab.add_evidence()

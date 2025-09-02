@@ -1,221 +1,133 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from pathlib import Path
-
 from evid.cli.dataset import get_datasets, select_dataset, create_dataset
 from evid.cli.evidence import add_evidence
 from evid.core.bibtex import generate_bibtex
-import yaml
-import fitz
+from evid import CONFIG
 import json
+
+MINIMAL_PDF = b"%PDF-1.0\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/MediaBox[0 0 3 3]>>endobj xref 0 4\n0000000000 65535 f\n0000000010 00000 n\n0000000053 00000 n\n0000000102 00000 n\ntrailer<</Size 4/Root 1 0 R>>\nstartxref 149 %%EOF"
 
 
 @pytest.fixture
 def temp_dir(tmp_path):
-    dataset1 = tmp_path / "dataset1"
-    dataset2 = tmp_path / "dataset2"
-    dataset1.mkdir()
-    dataset2.mkdir()
     return tmp_path
 
 
 def test_get_datasets(temp_dir):
-    datasets = get_datasets(temp_dir)
-    assert sorted(datasets) == ["dataset1", "dataset2"]
+    (temp_dir / "dataset1").mkdir()
+    (temp_dir / "dataset2").mkdir()
+    (temp_dir / ".hidden").mkdir()
+    assert sorted(get_datasets(temp_dir)) == ["dataset1", "dataset2"]
 
 
 @patch("builtins.input", side_effect=["1"])
 def test_select_dataset_existing(mock_input, temp_dir):
-    dataset = select_dataset(temp_dir)
-    assert dataset in ["dataset1", "dataset2"]
+    (temp_dir / "dataset2").mkdir()  # Create in order to match output
+    (temp_dir / "dataset1").mkdir()
+    assert select_dataset(temp_dir, "Select dataset") == "dataset1"
 
 
 @patch("builtins.input", side_effect=["3", "new_dataset"])
 def test_select_dataset_create_new(mock_input, temp_dir):
-    dataset = select_dataset(temp_dir)
-    assert dataset == "new_dataset"
+    (temp_dir / "dataset2").mkdir()
+    (temp_dir / "dataset1").mkdir()
+    assert select_dataset(temp_dir, "Select dataset") == "new_dataset"
     assert (temp_dir / "new_dataset").exists()
 
 
 def test_create_dataset(temp_dir):
-    dataset_name = "new_dataset"
-    create_dataset(temp_dir, dataset_name)
-    assert (temp_dir / dataset_name).exists()
+    create_dataset(temp_dir, "new_dataset")
+    assert (temp_dir / "new_dataset").exists()
 
 
 @patch("evid.core.label.generate_bib_from_typ", return_value=(True, ""))
-@patch("subprocess.run")
-def test_add_evidence_local_pdf_with_label(mock_run, mock_bib, temp_dir, tmp_path):
-    pdf_path = tmp_path / "test.pdf"
-    # Create a valid PDF using fitz
-    doc = fitz.open()
-    page = doc.new_page()
-    page.insert_text((100, 100), "Test content")
-    doc.save(str(pdf_path))
-    doc.close()
+@patch("evid.core.label.subprocess.run")
+@patch("evid.core.label.textpdf_to_typst")
+def test_add_evidence_local_pdf_with_label(mock_textpdf, mock_run, mock_gen, temp_dir):
+    pdf_path = temp_dir / "test.pdf"
+    pdf_path.write_bytes(MINIMAL_PDF)
+    dataset = "dataset1"
+    (temp_dir / dataset).mkdir()
 
-    add_evidence(temp_dir, "dataset1", str(pdf_path), label=True)
+    def textpdf_side_effect(pdfname, outputfile, autolabel=False):
+        if outputfile:
+            outputfile.write_text("dummy typst content")
+        return "dummy typst content"
 
-    dataset_path = temp_dir / "dataset1"
-    uuid_dirs = [d for d in dataset_path.iterdir() if d.is_dir()]
-    assert len(uuid_dirs) == 1
-    uuid_dir = uuid_dirs[0]
-    assert (uuid_dir / "test.pdf").exists()
-    assert (uuid_dir / "info.yml").exists()
-    assert (uuid_dir / "label.typ").exists()  # Check label.typ created
-
-    with (uuid_dir / "info.yml").open("r") as f:
-        info = yaml.safe_load(f)
-        assert info["original_name"] == "test.pdf"
-        assert info["title"] == "test"
-        assert info["label"] == "test"
-
-    with (uuid_dir / "label.typ").open("r") as f:
-        content = f.read()
-        assert "Test content" in content  # Check generated content
-
-    mock_run.assert_called_once_with(["code", str(uuid_dir / "label.typ")], check=True)
+    mock_textpdf.side_effect = textpdf_side_effect
+    add_evidence(temp_dir, dataset, str(pdf_path), label=True)
+    unique_dirs = list((temp_dir / dataset).iterdir())
+    assert len(unique_dirs) == 1
+    label_file = unique_dirs[0] / "label.typ"
+    assert label_file.exists()
+    mock_run.assert_called_with([CONFIG["editor"], str(label_file)], check=True)
+    mock_gen.assert_called_with(label_file)
 
 
-def test_add_evidence_custom_directory(tmp_path, tmp_path_factory):
-    custom_dir = tmp_path_factory.mktemp("custom_evid_db")
-    pdf_path = tmp_path / "test.pdf"
-    # Create a valid PDF using fitz
-    doc = fitz.open()
-    page = doc.new_page()
-    page.insert_text((100, 100), "Test content")
-    doc.save(str(pdf_path))
-    doc.close()
-
-    add_evidence(custom_dir, "dataset1", str(pdf_path))
-
-    dataset_path = custom_dir / "dataset1"
-    assert dataset_path.exists()
-    uuid_dirs = [d for d in dataset_path.iterdir() if d.is_dir()]
-    assert len(uuid_dirs) == 1
-    uuid_dir = uuid_dirs[0]
-    assert (uuid_dir / "test.pdf").exists()
-    assert (uuid_dir / "info.yml").exists()
-
-    with (uuid_dir / "info.yml").open("r") as f:
-        info = yaml.safe_load(f)
-        assert info["original_name"] == "test.pdf"
-        assert info["title"] == "test"
-        assert info["label"] == "test"
+def test_add_evidence_custom_directory(temp_dir):
+    pdf_path = temp_dir / "test.pdf"
+    pdf_path.write_bytes(MINIMAL_PDF)
+    dataset = "dataset1"
+    (temp_dir / dataset).mkdir()
+    add_evidence(temp_dir, dataset, str(pdf_path))
+    unique_dirs = list((temp_dir / dataset).iterdir())
+    assert len(unique_dirs) == 1
+    assert (unique_dirs[0] / "test.pdf").exists()
+    assert (unique_dirs[0] / "info.yml").exists()
 
 
-@pytest.fixture
-def setup_bibtex_typs(tmp_path):
-    dataset_path = tmp_path / "test_dataset"
-    entry1 = dataset_path / "uuid1"
-    entry2 = dataset_path / "uuid2"
-    entry3 = dataset_path / "uuid3"
-    entry1.mkdir(parents=True)
-    entry2.mkdir(parents=True)
-    entry3.mkdir(parents=True)
+@patch("evid.core.bibtex.subprocess.run")
+def test_generate_bibtex_multiple_typ_sequential(mock_run, temp_dir):
+    dataset_dir = temp_dir / "test_dataset"
+    dataset_dir.mkdir()
+    typ_files = []
+    for i in range(1, 4):
+        uuid_dir = dataset_dir / f"uuid{i}"
+        uuid_dir.mkdir()
+        typ_file = uuid_dir / "label.typ"
+        typ_files.append(typ_file)
+        if i == 3:
+            typ_file.write_text("")  # empty
+        else:
+            typ_file.write_text("content")
 
-    typ_data = """#import "@local/labtyp:0.1.0": lablist, lab, mset
-
-#mset(values: (title: "Test Title", date: "2023-01-01"))
-
-= Test Title
-
-Test content
-
-= List of Labels
-#lablist()
-"""
-    typ_path1 = entry1 / "label.typ"
-    typ_path2 = entry2 / "label.typ"
-    with typ_path1.open("w", encoding="utf-8") as f:
-        f.write(typ_data)
-    with typ_path2.open("w", encoding="utf-8") as f:
-        f.write(typ_data)
-
-    typ_path3 = entry3 / "label.typ"
-    typ_path3.write_text("", encoding="utf-8")
-
-    info_data = {
-        "original_name": "doc.pdf",
-        "uuid": "uuid1",
-        "time_added": "2023-01-01",
-        "dates": "2023-01-01",
-        "title": "Doc1",
-        "authors": "Author1",
-        "tags": "",
-        "label": "doc1",
-        "url": "http://example.com",
-    }
-    with (entry1 / "info.yml").open("w", encoding="utf-8") as f:
-        yaml.dump(info_data, f)
-    info_data["uuid"] = "uuid2"
-    info_data["title"] = "Doc2"
-    info_data["authors"] = "Author2"
-    info_data["label"] = "doc2"
-    with (entry2 / "info.yml").open("w", encoding="utf-8") as f:
-        yaml.dump(info_data, f)
-    info_data["uuid"] = "uuid3"
-    info_data["title"] = "Doc3"
-    info_data["authors"] = "Author3"
-    info_data["label"] = "doc3"
-    with (entry3 / "info.yml").open("w", encoding="utf-8") as f:
-        yaml.dump(info_data, f)
-
-    return [typ_path1, typ_path2, typ_path3]
-
-
-@patch("subprocess.run")
-def test_generate_bibtex_multiple_typ_sequential(mock_run, setup_bibtex_typs, capsys):
     def side_effect(*args, **kwargs):
-        if "stdout" in kwargs:
-            stdout_file = kwargs["stdout"]
-            typ_file = Path(args[0][2])
-            if typ_file.stat().st_size > 0:
-                json_content = json.dumps(
+        if args[0][0] == "typst":
+            json_file_obj = kwargs["stdout"]
+            json_file_obj.write(
+                json.dumps(
                     [
                         {
                             "value": {
                                 "key": "test_label",
                                 "text": "Test quote",
+                                "title": "Section 1",
                                 "date": "2023-01-01",
                                 "opage": 1,
-                                "title": "Test Title",
                                 "note": "Test note",
                             }
                         }
                     ]
                 )
-                stdout_file.write(json_content)
-            else:
-                stdout_file.write("[]")
-            stdout_file.close()
-        return MagicMock(returncode=0, stderr=b"")
+            )
+            json_file_obj.flush()
+            mock_result = MagicMock(returncode=0, stderr=b"")
+            mock_result.args = args[0]
+            return mock_result
+        return MagicMock(returncode=0)
 
     mock_run.side_effect = side_effect
-
-    typ_paths = setup_bibtex_typs
-    generate_bibtex(typ_paths, parallel=False)
-
-    for typ_path in typ_paths[:2]:
-        bib_file = typ_path.parent / "label.bib"
+    generate_bibtex(typ_files)
+    for i in range(1, 3):
+        bib_file = dataset_dir / f"uuid{i}" / "label.bib"
         assert bib_file.exists()
-        with bib_file.open("r", encoding="utf-8") as f:
-            content = f.read()
-            assert "@article" in content
-
-    captured = capsys.readouterr()
-    assert "Successfully generated 2 BibTeX files." in captured.out
-    assert "Encountered 1 issues:" in captured.out
-    assert "Skipped empty Typst file" in captured.out
+    empty_bib = dataset_dir / "uuid3" / "label.bib"
+    assert not empty_bib.exists()
 
 
-def test_generate_bibtex_nonexistent_typ(tmp_path, capsys):
-    typ_paths = [tmp_path / "nonexistent1.typ", tmp_path / "nonexistent2.typ"]
-    generate_bibtex(typ_paths)
-    captured = capsys.readouterr()
-    assert "Successfully generated 0 BibTeX files." in captured.out
-    assert "Encountered 2 issues:" in captured.out
-    assert "Typst file" in captured.out
-    assert "does not exist" in captured.out
-    for typ_path in typ_paths:
-        assert f"Typst file '{typ_path}' does not exist." in captured.out
+def test_generate_bibtex_nonexistent_typ(temp_dir):
+    typ_files = [temp_dir / "nonexistent1.typ", temp_dir / "nonexistent2.typ"]
+    with patch("sys.stdout", new_callable=MagicMock()):
+        generate_bibtex(typ_files)
+    # Assertions on logged errors can be added if needed

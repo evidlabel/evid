@@ -1,9 +1,11 @@
 from pathlib import Path
 import sys
 import logging
+from rich.console import Console
+from rich.table import Table
 
 try:
-    from git import Repo
+    from git import Repo, InvalidGitRepositoryError
 except ImportError:
     Repo = None
 
@@ -25,41 +27,66 @@ def get_datasets(directory: Path) -> list[str]:
 
 def list_datasets(directory: Path) -> None:
     """List all available datasets."""
-    datasets = get_datasets(directory)
+    datasets = sorted(get_datasets(directory))
     if not datasets:
         print("No datasets found.")
         return
-    print("Available datasets:")
+
+    console = Console()
+    table = Table(title="Available datasets")
+    table.add_column("Nr", justify="right")
+    table.add_column("Dataset")
+
     for i, dataset in enumerate(datasets, 1):
-        print(f"{i}. {dataset}")
+        table.add_row(str(i), dataset)
+
+    console.print(table)
 
 
-def select_dataset(directory: Path, prompt_message: str = "Select dataset") -> str:
-    """Prompt user to select a dataset or create a new one."""
-    datasets = get_datasets(directory)
+def select_dataset(
+    directory: Path, prompt_message: str = "Select dataset", allow_create: bool = True
+) -> str:
+    """Prompt user to select a dataset or create a new one if allowed."""
+    datasets = sorted(get_datasets(directory))
     if not datasets:
+        if not allow_create:
+            sys.exit("No datasets found and creation is not allowed.")
         dataset_name = input("No datasets found. Enter new dataset name: ").strip()
         if dataset_name:
             create_dataset(directory, dataset_name)
             return dataset_name
         sys.exit("No dataset name provided.")
 
-    print(f"{prompt_message}:")
-    for i, dataset in enumerate(datasets, 1):
-        print(f"{i}. {dataset}")
+    console = Console()
+    table = Table(title=prompt_message)
+    table.add_column("Nr", justify="right")
+    table.add_column("Dataset")
 
-    choice = input("Select dataset (number) or enter a new dataset name: ").strip()
+    for i, dataset in enumerate(datasets, 1):
+        table.add_row(str(i), dataset)
+
+    console.print(table)
+
+    choice = input(
+        "Select dataset (number)"
+        + (" or enter a new dataset name" if allow_create else "")
+        + ": "
+    ).strip()
     try:
         choice_num = int(choice)
         if 1 <= choice_num <= len(datasets):
             return datasets[choice_num - 1]
         else:
+            if not allow_create:
+                sys.exit("Invalid number and creation is not allowed.")
             dataset_name = input("Invalid number. Enter new dataset name: ").strip()
             if dataset_name:
                 create_dataset(directory, dataset_name)
                 return dataset_name
             sys.exit("No dataset name provided.")
     except ValueError:
+        if not allow_create:
+            sys.exit("Invalid selection and creation is not allowed.")
         if choice:
             create_dataset(directory, choice)
             return choice
@@ -93,7 +120,7 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
     try:
         Repo(dataset_path)
         sys.exit(f"Dataset '{dataset}' is already tracked as a Git repository.")
-    except:
+    except InvalidGitRepositoryError:
         pass  # Not a Git repository, proceed with initialization
 
     try:
@@ -110,7 +137,7 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
 !*.txt
 */label.pdf
 """
-        with (dataset_path / ".gitignore").open("w") as f:
+        with (dataset_path / ".gitignore").open("w", encoding="utf-8") as f:
             f.write(gitignore_content)
         # Add .gitignore to the repository
         repo.index.add([".gitignore"])

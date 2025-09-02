@@ -15,7 +15,7 @@ def load_config() -> dict:
     config_path = Path.home() / ".evidrc"
     if config_path.exists():
         try:
-            with config_path.open("r") as f:
+            with config_path.open("r", encoding="utf-8") as f:
                 user_config = yaml.safe_load(f) or {}
             config_model = ConfigModel(**user_config)
             return config_model.model_dump()
