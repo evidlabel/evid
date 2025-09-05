@@ -237,6 +237,23 @@ def load_url(file_path: Path) -> str:
                 return info_data["url"]
     return ""
 
+def load_authors(file_path: Path) -> str:
+    """Load authors from info.yml."""
+    info_file = file_path.with_name("info.yml")
+    if info_file.exists():
+        with info_file.open("r") as info_file:
+            info_data = yaml.safe_load(info_file)
+            # Validate with Pydantic
+            try:
+                validated_info = InfoModel(**info_data)
+                info_data = validated_info.model_dump()
+            except ValueError as e:
+                logger.warning(f"Validation error for {info_file}: {e}")
+                return ""
+            if "authors" in info_data:
+                return info_data["authors"]
+    return ""
+
 
 def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
     try:
@@ -263,6 +280,7 @@ def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
     note = {{{row.get("note", "")}}},
     title = {{{replace_underscores(replace_multiple_spaces(remove_backslash_substrings(row.get("quote", ""))))}}},
     journal = {{{replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row.get("title", "")))))}}},
+    author = {{{load_authors(json_file)}}},
     date = {{{row["date"].strftime("%Y-%m-%d") if not pd.isnull(row["date"]) else ""}}},
     pages = {{{int(row.get("opage", "")) if "opage" in row and not pd.isnull(row.get("opage", "")) else ""}}},
     url = {{{load_url(json_file)}}},
