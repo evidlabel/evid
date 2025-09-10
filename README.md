@@ -30,7 +30,9 @@ Which gives access to a two-pane app, one for adding files, and one for browsing
 
 Use the CLI to manage datasets and evidence:
 
-- **Add a PDF** (from URL or local file):
+![help](docs/assets/help.svg)
+
+<!-- - **Add a PDF** (from URL or local file):
     ```bash
     evid add <url_or_path> [-s|--dataset <dataset>] [-l|--label] [-d|--directory <custom_dir>]
     ```
@@ -64,7 +66,7 @@ Use the CLI to manage datasets and evidence:
 - **Initialize Configuration**:
     ```bash
     evid rc
-    ```
+    ``` -->
 
 ## Documentation 
 
