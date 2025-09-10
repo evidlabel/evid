@@ -1,0 +1,976 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../installation/">
+      
+      
+        <link rel="next" href="../development/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.19">
+    
+    
+      
+        <title>Usage - evid</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.7e37652d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Ubuntu+Sans:300,300i,400,400i,700,700i%7CUbuntu+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Ubuntu Sans";--md-code-font:"Ubuntu Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="orange" data-md-color-accent="green">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#usage-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="evid" class="md-header__button md-logo" aria-label="evid" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            evid
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Usage
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/evidlabel/evid" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="evid" class="md-nav__button md-logo" aria-label="evid" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    evid
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/evidlabel/evid" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Usage
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Usage
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#launching-the-application" class="md-nav__link">
+    <span class="md-ellipsis">
+      Launching the Application
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#listing-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Listing Datasets
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#managing-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Managing Datasets
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Managing Datasets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Creating Datasets
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Creating Datasets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#via-gui" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via GUI
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#via-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via CLI
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tracking-datasets-with-git" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tracking Datasets with Git
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generating-bibtex-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      Generating BibTeX Files
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Adding Documents
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Adding Documents">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#via-gui_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via GUI
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#via-cli_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via CLI
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#browsing-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Browsing Documents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#labelling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Labelling
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Labelling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#via-cli_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via CLI
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#initializing-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Initializing Configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tips
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../development/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Development
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#launching-the-application" class="md-nav__link">
+    <span class="md-ellipsis">
+      Launching the Application
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#listing-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Listing Datasets
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#managing-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Managing Datasets
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Managing Datasets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Creating Datasets
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Creating Datasets">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#via-gui" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via GUI
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#via-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via CLI
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tracking-datasets-with-git" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tracking Datasets with Git
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generating-bibtex-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      Generating BibTeX Files
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Adding Documents
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Adding Documents">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#via-gui_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via GUI
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#via-cli_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via CLI
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#browsing-documents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Browsing Documents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#labelling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Labelling
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Labelling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#via-cli_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Via CLI
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#initializing-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Initializing Configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tips" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tips
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="usage-guide">Usage Guide</h1>
+<p>This guide explains how to use <code>evid</code> to manage PDF documents through its PyQt6-based GUI or command-line interface (CLI).</p>
+<h2 id="configuration">Configuration</h2>
+<p>You can configure the default database location by creating a <code>~/.evidrc</code> file in YAML format. Example:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">default_dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/my_custom_evid_db</span>
+</code></pre></div>
+<p>If no <code>.evidrc</code> file is found, the default database location is <code>~/Documents/evid</code>. Alternatively, you can specify a custom directory when running CLI commands using the <code>--directory</code> or <code>-d</code> option.</p>
+<h2 id="launching-the-application">Launching the Application</h2>
+<p>Launch the GUI with:</p>
+<div class="highlight"><pre><span></span><code>evid<span class="w"> </span><span class="o">[</span>-d<span class="p">|</span>--directory<span class="w"> </span>&lt;custom_dir&gt;<span class="o">]</span>
+</code></pre></div>
+<p>This opens the GUI with two tabs: Add and Browse. The optional <code>-d</code> or <code>--directory</code> argument allows you to specify a custom database directory (e.g., <code>evid -d ~/my_evid_db</code>).</p>
+<p>Alternatively, use the CLI to view available commands:</p>
+<div class="highlight"><pre><span></span><code>evid<span class="w"> </span>--help
+</code></pre></div>
+<h2 id="listing-datasets">Listing Datasets</h2>
+<p>To see all available datasets, use the CLI:</p>
+<div class="highlight"><pre><span></span><code>evid<span class="w"> </span>list<span class="w"> </span><span class="o">[</span>-d<span class="p">|</span>--directory<span class="w"> </span>&lt;custom_dir&gt;<span class="o">]</span>
+</code></pre></div>
+<p>This displays a numbered list of existing datasets in the specified or default database location.</p>
+<h2 id="managing-datasets">Managing Datasets</h2>
+<h3 id="creating-datasets">Creating Datasets</h3>
+<h4 id="via-gui">Via GUI</h4>
+<p>In the Add tab, enter a new dataset name in the "New Dataset" field and click Create. If the dataset already exists, a warning will appear.</p>
+<h4 id="via-cli">Via CLI</h4>
+<p>Create a new dataset with:</p>
+<div class="highlight"><pre><span></span><code>evid<span class="w"> </span><span class="nb">set</span><span class="w"> </span>create<span class="w"> </span>&lt;dataset_name&gt;<span class="w"> </span><span class="o">[</span>-d<span class="p">|</span>--directory<span class="w"> </span>&lt;custom_dir&gt;<span class="o">]</span>
+</code></pre></div>
+<p>This creates a new dataset directory in the specified or default database location. If the dataset already exists, the command will fail with an error message.</p>
+<h3 id="tracking-datasets-with-git">Tracking Datasets with Git</h3>
+<p>To enable Git version control for a dataset, use:</p>
+<div class="highlight"><pre><span></span><code>evid<span class="w"> </span><span class="nb">set</span><span class="w"> </span>track<span class="w"> </span><span class="o">[</span>&lt;dataset_name&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>-d<span class="p">|</span>--directory<span class="w"> </span>&lt;custom_dir&gt;<span class="o">]</span>
+</code></pre></div>
+<p>If no dataset name is provided, the CLI will prompt you to select an existing dataset. This command initializes a Git repository in the dataset's top-level directory with a <code>.gitignore</code> file that tracks only <code>label.bib</code>, <code>*.typ</code>, <code>info.yml</code>, <code>*.pdf</code>, and <code>*.txt</code> files, ignoring others (e.g., Typst byproducts like <code>label.pdf</code>). If the dataset is already a Git repository, the command will fail with an error message.</p>
+<h3 id="generating-bibtex-files">Generating BibTeX Files</h3>
+<p>To generate a BibTeX file from a <code>label.typ</code> file, use:</p>
+<div class="highlight"><pre><span></span><code>evid<span class="w"> </span>bibtex<span class="w"> </span>&lt;typ_file&gt;<span class="w"> </span><span class="o">[</span>-p<span class="p">|</span>--parallel<span class="o">]</span>
+</code></pre></div>
+<p>This command processes the specified <code>label.typ</code> file, generating a <code>label.bib</code> file in its respective directory. Use the <code>-p</code> or <code>--parallel</code> flag to process files concurrently (though currently supports single file). If no <code>typ_file</code> is provided, the command will display an error message. Errors are logged without stopping the process.</p>
+<p>Example:</p>
+<div class="highlight"><pre><span></span><code>evid<span class="w"> </span>bibtex<span class="w"> </span>path/to/label.typ<span class="w"> </span>-p
+</code></pre></div>
+<p>This generates a BibTeX file from the specified <code>label.typ</code> file.</p>
+<h2 id="adding-documents">Adding Documents</h2>
+<h3 id="via-gui_1">Via GUI</h3>
+<p>Use the Add tab to log PDFs with metadata.</p>
+<ol>
+<li>
+<p>Select or Create a Dataset:</p>
+</li>
+<li>
+<p>Choose an existing dataset from the dropdown or enter a new dataset name and click Create.</p>
+</li>
+<li>
+<p>Datasets are folders in the default or specified database directory where documents are stored.</p>
+</li>
+<li>
+<p>Add a PDF:</p>
+</li>
+<li>
+<p>Click Browse to select a local PDF or enter a URL and click Quick Add URL.</p>
+</li>
+<li>
+<p>The GUI auto-fills metadata (title, authors, dates) from the PDF if possible.</p>
+</li>
+<li>
+<p>Fill Metadata:</p>
+</li>
+<li>
+<p>Edit fields like Title, Authors, Tags, Dates, Label, and URL.</p>
+</li>
+<li>Preview the metadata in the preview pane.</li>
+<li>
+<p>Note: Metadata fields like title and authors are stored as plain text in <code>info.yml</code> for readability, with Danish characters (Ã¦, Ã¸, Ã¥) preserved.</p>
+</li>
+<li>
+<p>Save Document:</p>
+</li>
+<li>
+<p>Click Add to save the PDF and metadata to a unique folder in the selected dataset.</p>
+</li>
+<li>Metadata is stored in an <code>info.yml</code> file alongside the PDF.</li>
+</ol>
+<h3 id="via-cli_1">Via CLI</h3>
+<p>Add PDFs using the CLI with the following command:</p>
+<ul>
+<li>Add a PDF (from URL or local file):</li>
+</ul>
+<div class="highlight"><pre><span></span><code>evid<span class="w"> </span>add<span class="w"> </span>&lt;url_or_path&gt;<span class="w"> </span><span class="o">[</span>-s<span class="p">|</span>--dataset<span class="w"> </span>&lt;dataset&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>-l<span class="p">|</span>--label<span class="o">]</span><span class="w"> </span><span class="o">[</span>-d<span class="p">|</span>--directory<span class="w"> </span>&lt;custom_dir&gt;<span class="o">]</span>
+</code></pre></div>
+<p>If <code>-s</code> or <code>--dataset</code> is not provided, the CLI prompts you to select an existing dataset. If the specified dataset does not exist, the command will fail with an error. The <code>add</code> command automatically detects whether the input is a URL (starting with <code>http://</code> or <code>https://</code>) or a local file path. After adding, it prints the metadata to stdout. Use <code>-l</code> or <code>--label</code> to open the labeler after adding the PDF. Use <code>-d</code> or <code>--directory</code> to specify a custom database directory.</p>
+<h2 id="browsing-documents">Browsing Documents</h2>
+<p>Use the Browse tab in the GUI to view and manage existing documents.</p>
+<ol>
+<li>Load a Dataset:</li>
+<li>Select a dataset from the dropdown and click Load.</li>
+<li>
+<p>The table displays metadata (Author, Title, Date, File Name, UUID) for each document entry.</p>
+</li>
+<li>
+<p>View Details:</p>
+</li>
+<li>
+<p>Select a row and click Open Dir to open the document folder in Visual Studio Code.</p>
+</li>
+<li>
+<p>Create Labels:</p>
+</li>
+<li>Select one or more entries (hold Ctrl or Shift to select multiple) and click Label Selected to generate Typst documents (<code>label.typ</code>) for each selected PDF.</li>
+<li>Each Typst file opens in a separate Visual Studio Code instance, allowing parallel editing without freezing the main application.</li>
+<li>Edit each Typst file in Visual Studio Code (Ctrl+L inserts a lb snippet) to add labels.</li>
+<li>
+<p>Upon closing the editor, the system extracts labels to JSON and generates <code>label.bib</code>.</p>
+</li>
+<li>
+<p>Generate BibTeX:</p>
+</li>
+<li>Select one or more entries and click Generate BibTeX to generate <code>label.bib</code> from <code>label.typ</code> for each selected entry.</li>
+<li>
+<p>This is useful for updating BibTeX files after edits to Typst files.</p>
+</li>
+<li>
+<p>Generate Responses:</p>
+</li>
+<li>Select an entry and click Rebut to create a response document (<code>rebut.typ</code>) using the BibTeX file.</li>
+<li>The response lists citations with notes, formatted in Typst, suitable for LLM integration.</li>
+</ol>
+<h2 id="labelling">Labelling</h2>
+<ul>
+<li>
+<p>When selecting one or more documents and pressing the "Label Selected" button, a Typst document is generated for each PDF containing the extracted text.
+The Typst documents are saved in the same folder as their respective PDFs and opened in Visual Studio Code for editing.</p>
+</li>
+<li>
+<p>The user can label using their text editor inside the Typst document. For VS Code, the following keybinding allows labelling by selecting text and pressing <code>ctrl+l</code>:</p>
+</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="w">    </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ctrl+L&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;editor.action.insertSnippet&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;when&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;editorTextFocus &amp;&amp; editorLangId == &#39;typst&#39;&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;snippet&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;#lab(\&quot;$1\&quot;,\&quot;${TM_SELECTED_TEXT}\&quot;,\&quot;$2\&quot;)&quot;</span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+</code></pre></div>
+<p>The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).</p>
+<ul>
+<li>After editing and saving the Typst file, upon closing the editor, the system runs a Typst query to extract labels into <code>label.json</code> and converts it to <code>label.bib</code>.</li>
+<li>You can also manually generate or update the <code>label.bib</code> by clicking "Generate BibTeX" in the Browse tab or using the <code>bibtex</code> CLI command.</li>
+<li>The <code>label.bib</code> files for each PDF can be concatenated and used to formulate a rebuttal.</li>
+<li>Note that the first 4 characters of the PDF's UUID are used as a prefix for the BibTeX label, ensuring labels only need to be unique within the same PDF, not across all PDFs in the dataset.</li>
+</ul>
+<h3 id="via-cli_2">Via CLI</h3>
+<p>Label an evidence in a dataset with:</p>
+<div class="highlight"><pre><span></span><code>evid<span class="w"> </span>label<span class="w"> </span><span class="o">[</span>-s<span class="p">|</span>--dataset<span class="w"> </span>&lt;dataset&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>-u<span class="p">|</span>--uuid<span class="w"> </span>&lt;uuid&gt;<span class="o">]</span><span class="w"> </span><span class="o">[</span>-d<span class="p">|</span>--directory<span class="w"> </span>&lt;custom_dir&gt;<span class="o">]</span>
+</code></pre></div>
+<p>If <code>-s</code> or <code>--dataset</code> is not provided, the CLI prompts you to select a dataset. If <code>-u</code> or <code>--uuid</code> is not provided, the CLI prompts you to select an evidence from the dataset. This command generates and opens the label file for the specified evidence.</p>
+<h2 id="initializing-configuration">Initializing Configuration</h2>
+<p>To initialize or update the <code>.evidrc</code> configuration file with default settings, use:</p>
+<div class="highlight"><pre><span></span><code>evid<span class="w"> </span>rc
+</code></pre></div>
+<p>This command creates or updates <code>~/.evidrc</code> by adding missing fields from the default configuration, ensuring all required settings are present.</p>
+<h2 id="tips">Tips</h2>
+<ul>
+<li><strong>Date Extraction</strong>: <code>evid</code> automatically extracts dates from PDFs in various formats (e.g., "12/01/2023", "15. januar 2024").</li>
+<li><strong>Typst Setup</strong>: Ensure Typst is installed for label and response generation.</li>
+<li><strong>VS Code Integration</strong>: Use the provided <code>.vscode/keybindings.json</code> for a Ctrl+L shortcut in Typst files.</li>
+<li><strong>Git Tracking</strong>: After tracking a dataset with <code>evid set track</code>, use standard Git commands (<code>git add</code>, <code>git commit</code>, etc.) to manage changes to tracked files (<code>label.bib</code>, <code>*.typ</code>, <code>info.yml</code>, <code>*.pdf</code>, <code>*.txt</code>).</li>
+<li><strong>Custom Directory</strong>: Use the <code>-d</code> or <code>--directory</code> option with CLI commands to work with datasets in a non-default location (e.g., <code>evid list -d ~/my_evid_db</code>).</li>
+</ul>
+<p>For development details, see the <a href="../development/">Development</a> section.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": [], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.92b07e13.min.js"></script>
+      
+    
+  </body>
+</html>
