@@ -72,6 +72,11 @@ def textpdf_to_typst(
     else:
         date, name = "DATE", "NAME"
 
+    # Escape for Typst string literals
+    name_escaped = name.replace('\\', '\\\\').replace('"', '\\"')
+    date_escaped = date.replace('\\', '\\\\').replace('"', '\\"')
+    title_display = name.replace("_", " ")
+
     pdf = fitz.open(pdfname)
     body = ""
     para_num = 1
@@ -94,10 +99,10 @@ def textpdf_to_typst(
     typst_content = f"""#import "@preview/labtyp:0.1.0": lablist, lab, mset
 
 #mset(values: (
-  title: "{name.replace("_", " ")}",
-  date: "{date}"))
+  title: "{name_escaped}",
+  date: "{date_escaped}"))
 
-= {name.replace("_", " ")}
+= {title_display}
 
 {body}
 
@@ -134,6 +139,11 @@ def text_to_typst(
     else:
         date, name = "DATE", "NAME"
 
+    # Escape for Typst string literals
+    name_escaped = name.replace('\\', '\\\\').replace('"', '\\"')
+    date_escaped = date.replace('\\', '\\\\').replace('"', '\\"')
+    title_display = name.replace("_", " ")
+
     with txtname.open("r", encoding="utf-8") as f:
         text = clean_text_for_typst(f.read())
 
@@ -151,10 +161,10 @@ def text_to_typst(
     typst_content = f"""#import "@preview/labtyp:0.1.0": lablist, lab, mset
 
 #mset(values: (
-  title: "{name.replace("_", " ")}",
-  date: "{date}"))
+  title: "{name_escaped}",
+  date: "{date_escaped}"))
 
-= {name.replace("_", " ")}
+= {title_display}
 
 {body}
 
@@ -204,6 +214,11 @@ def emojis_to_text(s):
     return demoji.replace(s, "(emoji)")
 
 
+def bib_escape(s: str) -> str:
+    """Escape special characters for BibTeX string fields."""
+    return s.replace('\\', '\\\\').replace('"', '\\"')
+
+
 def load_uuid_prefix(file_path: Path) -> str:
     info_file = file_path.with_name("info.yml")
     if info_file.exists():
@@ -234,7 +249,56 @@ def load_url(file_path: Path) -> str:
                 logger.warning(f"Validation error for {info_file}: {e}")
                 return ""
             if "url" in info_data:
-                return info_data["url"]
+                return str(info_data["url"])
+    return ""
+
+def load_authors(file_path: Path) -> str:
+    """Load authors from info.yml."""
+    info_file = file_path.with_name("info.yml")
+    if info_file.exists():
+        with info_file.open("r") as info_file:
+            info_data = yaml.safe_load(info_file)
+            # Validate with Pydantic
+            try:
+                validated_info = InfoModel(**info_data)
+                info_data = validated_info.model_dump()
+            except ValueError as e:
+                logger.warning(f"Validation error for {info_file}: {e}")
+                return ""
+            if "authors" in info_data:
+                return str(info_data["authors"])
+    return ""
+
+def load_title(file_path: Path) -> str:
+    info_file = file_path.with_name("info.yml")
+    if info_file.exists():
+        with info_file.open("r") as info_file:
+            info_data = yaml.safe_load(info_file)
+            # Validate with Pydantic
+            try:
+                validated_info = InfoModel(**info_data)
+                info_data = validated_info.model_dump()
+            except ValueError as e:
+                logger.warning(f"Validation error for {info_file}: {e}")
+                return ""
+            if "title" in info_data:
+                return str(info_data["title"])
+    return ""
+
+def load_dates(file_path: Path) -> str:
+    info_file = file_path.with_name("info.yml")
+    if info_file.exists():
+        with info_file.open("r") as info_file:
+            info_data = yaml.safe_load(info_file)
+            # Validate with Pydantic
+            try:
+                validated_info = InfoModel(**info_data)
+                info_data = validated_info.model_dump()
+            except ValueError as e:
+                logger.warning(f"Validation error for {info_file}: {e}")
+                return ""
+            if "dates" in info_data:
+                return str(info_data["dates"])
     return ""
 
 
@@ -258,18 +322,58 @@ def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
         uuid_prefix = load_uuid_prefix(json_file)
         df["latex_label"] = [f"{uuid_prefix}:{label.strip()}" for label in df["label"]]
         with open(output_file, "w", encoding="utf-8") as bibtex_file:
+            # Write main document entry first
+            main_lines = [f"@article{{ {uuid_prefix}:main  ,"]
+            title_value = replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(load_title(json_file)))))
+            if title_value:
+                main_lines.append(f"    title = {{{title_value}}},")
+            author_value = load_authors(json_file)
+            if author_value:
+                main_lines.append(f"    author = {{{author_value}}},")
+            date_value = load_dates(json_file)
+            if date_value:
+                main_lines.append(f"    date = {{{date_value}}},")
+            url_value = load_url(json_file)
+            if url_value:
+                main_lines.append(f"    url = {{{url_value}}},")
+            main_lines.append("    }")
+            bibtex_file.write(emojis_to_text("\n".join(main_lines)) + "\n")
+
+            # Write snippet entries
             for index, row in df.iterrows():
-                bibtex_entry = f"""@article{{ {row["latex_label"]}  ,
-    note = {{{row.get("note", "")}}},
-    title = {{{replace_underscores(replace_multiple_spaces(remove_backslash_substrings(row.get("quote", ""))))}}},
-    journal = {{{replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row.get("title", "")))))}}},
-    date = {{{row["date"].strftime("%Y-%m-%d") if not pd.isnull(row["date"]) else ""}}},
-    pages = {{{int(row.get("opage", "")) if "opage" in row and not pd.isnull(row.get("opage", "")) else ""}}},
-    url = {{{load_url(json_file)}}},
-    }}
-    """
-                if exclude_note:
-                    bibtex_entry = bibtex_entry.replace("note =", "nonote =")
-                bibtex_file.write(emojis_to_text(bibtex_entry))
+                entry_lines = [f"@article{{ {row['latex_label']}  ,"]
+
+                note_value = row.get("note", "")
+                if note_value:
+                    note_key = "nonote" if exclude_note else "note"
+                    entry_lines.append(f"    {note_key} = {{{note_value}}},")
+
+                title_value = replace_underscores(replace_multiple_spaces(remove_backslash_substrings(row.get("quote", ""))))
+                if title_value:
+                    entry_lines.append(f"    title = {{{title_value}}},")
+
+                journal_value = replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row.get("title", "")))))
+                if journal_value and journal_value != "NAME":
+                    entry_lines.append(f"    journal = {{{journal_value}}},")
+
+                author_value = load_authors(json_file)
+                if author_value:
+                    entry_lines.append(f"    author = {{{author_value}}},")
+
+                date_value = row["date"].strftime("%Y-%m-%d") if not pd.isnull(row["date"]) else ""
+                if date_value:
+                    entry_lines.append(f"    date = {{{date_value}}},")
+
+                pages_value = int(row.get("opage", "")) if "opage" in row and not pd.isnull(row.get("opage", "")) else ""
+                if pages_value:
+                    entry_lines.append(f"    pages = {{{pages_value}}},")
+
+                url_value = load_url(json_file)
+                if url_value:
+                    entry_lines.append(f"    url = {{{url_value}}},")
+
+                entry_lines.append("    }")
+                bibtex_entry = "\n".join(entry_lines)
+                bibtex_file.write(emojis_to_text(bibtex_entry) + "\n")
     except Exception as e:
         raise ValueError(f"Error processing JSON: {e}")
