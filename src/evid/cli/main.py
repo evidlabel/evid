@@ -284,7 +284,6 @@ app = cli(
     show_types=True,
     show_defaults=True,
     line_connect=True,
-    # theme="monochrome",
 )
 
 set_group = group(name="set", help="Manage datasets")
@@ -336,11 +335,13 @@ set_group.commands.append(
             option(
                 flags=["-l", "--label"],
                 is_flag=True,
+                arg_type=bool,
                 help="Open the labeler after adding the PDF",
             ),
             option(
                 flags=["-a", "--autolabel"],
                 is_flag=True,
+                arg_type=bool,
                 help="Auto-label paragraphs when labelling",
             ),
             option(
