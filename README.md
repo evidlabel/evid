@@ -28,45 +28,9 @@ Which gives access to a two-pane app, one for adding files, and one for browsing
 
 ### CLI
 
-Use the CLI to manage datasets and evidence:
+Use the CLI to manage datasets:
 
 ![help](docs/assets/help.svg)
-
-<!-- - **Add a PDF** (from URL or local file):
-    ```bash
-    evid add <url_or_path> [-s|--dataset <dataset>] [-l|--label] [-d|--directory <custom_dir>]
-    ```
-    If `-s` or `--dataset` is not specified, the CLI prompts you to select or create a dataset. Use `-l` or `--label` to open the labeler after adding.
-
-- **List Datasets**:
-    ```bash
-    evid list [-d|--directory <custom_dir>]
-    ```
-
-- **Create a Dataset**:
-    ```bash
-    evid set create <dataset_name> [-d|--directory <custom_dir>]
-    ```
-
-- **Track a Dataset with Git**:
-    ```bash
-    evid set track [<dataset_name>] [-d|--directory <custom_dir>]
-    ```
-
-- **Generate BibTeX Files**:
-    ```bash
-    evid bibtex <csv_files>... [-p|--parallel]
-    ```
-
-- **Label Evidence**:
-    ```bash
-    evid label [-s|--dataset <dataset>] [-u|--uuid <uuid>] [-d|--directory <custom_dir>]
-    ```
-
-- **Initialize Configuration**:
-    ```bash
-    evid rc
-    ``` -->
 
 ## Documentation 
 
