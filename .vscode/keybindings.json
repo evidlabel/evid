@@ -1,10 +1,18 @@
-[
+[   
     {
-        "key": "ctrl+l",
+        "key": "ctrl+L",
         "command": "editor.action.insertSnippet",
-        "when": "editorTextFocus && editorLangId == 'latex'",
+        "when": "editorTextFocus && editorLangId == 'typst'",
         "args": {
-            "snippet": "\\lb{$1}{${TM_SELECTED_TEXT}}{$2}"
+          "snippet": "#lab(\"$1\",\"${TM_SELECTED_TEXT}\",\"$2\")"
+        }
+    }, 
+    {
+        "key": "ctrl+D",
+        "command": "editor.action.insertSnippet",
+        "when": "editorTextFocus && editorLangId == 'typst'",
+        "args": {
+          "snippet": "#mset(values:(date:\"$1\"))"
         }
     }
 ]
