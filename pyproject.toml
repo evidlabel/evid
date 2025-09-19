@@ -1,6 +1,6 @@
 [project]
 name = "evid"
-version = "0.2.2"
+version = "0.2.3"
 description = "document logger, adder of metadata"
 authors = [{ name = "evid 210122431+evidlabel@users.noreply.github.com" }]
 requires-python = ">=3.11,<4.0"
