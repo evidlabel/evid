@@ -50,25 +50,21 @@ def base_rebuttal(bibfile: Path) -> str:
         elif "note" in row:
             note_key = "note"
         else:
-            logger.warning(
-                f"Skipping BibTeX entry {row.get('ID', 'unknown')} as it has no 'note' or 'nonote' field."
-            )
-            continue  # Skip entries without notes
+            note_key = None
 
-        note = row[note_key]
-        if not note.strip():  # Additional check for empty notes
-            logger.warning(
-                f"Skipping BibTeX entry {row.get('ID', 'unknown')} as the note is empty."
-            )
-            continue
-
-        prompt = "\n".join(f"// {line}" for line in note.splitlines())
-        body += f"{prompt}\n+ Regarding: #bcite(<{row['ID']}>)\n"
+        if note_key and row[note_key].strip():
+            note = row[note_key]
+            prompt = "\n".join(f"// {line}" for line in note.splitlines())
+            body += f"{prompt}\n+ Regarding: #bcite(<{row['ID']}>)\n"
+        else:
+            # No note, just add the citation
+            body += f"+ Regarding: #bcite(<{row['ID']}>)\n"
+            logger.info(f"No note for entry {row.get('ID', 'unknown')}; omitting note.")
 
     if not body.strip():
-        # If no valid notes, provide a default message
-        body = "// No notes available for rebuttal. Please add labels with notes to generate content.\n+ No items to rebut.\n"
-        logger.info("No valid notes found; using default rebuttal content.")
+        # Fallback if no entries at all
+        body = "// No entries available for rebuttal.\n+ No items to rebut.\n"
+        logger.info("No entries found; using fallback content.")
 
     rebuttal_body = TYPST_TEMPLATE.replace("POINTS", body).replace(
         "BIBPATH", bibfile.name

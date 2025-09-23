@@ -1,6 +1,6 @@
 ![Deploy](https://github.com/evidlabel/evid/actions/workflows/ci.yml/badge.svg)![Version](https://img.shields.io/github/v/release/evidlabel/evid)
 # evid - PDF Labeler
-`evid` is an application, aimed at the legal industry, for labelling PDF text content and making the labels citeable (for use in e.g.  or Typst). 
+`evid` is an application, aimed at the legal industry, for labelling PDF text content and making the labels citeable (for use in LaTeX or Typst). 
 
 ## Workflow
 - Create a dataset
