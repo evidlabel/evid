@@ -22,7 +22,7 @@ def load_config() -> dict:
         except yaml.YAMLError:
             print("Invalid YAML in .evidrc, using defaults.")
             return ConfigModel().model_dump()
-        except ValueError as e:  # Includes Pydantic ValidationError
+        except ValueError:  # Includes Pydantic ValidationError
             print(f"Validation error in .evidrc: {e}. Using defaults.")
             return ConfigModel().model_dump()
     else:

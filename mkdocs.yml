@@ -1,23 +1,23 @@
-site_name: evid
-repo_url: https://github.com/evidlabel/evid
+site_name: evid Documentation
 theme:
   name: material
-  font:
-    text: Ubuntu Sans
-    code: Ubuntu Mono
   palette:
-    scheme: slate
-    primary: orange
-    accent: green 
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
 nav:
   - Home: index.md
-  - Installation: installation.md
-  - Usage: usage.md
-  - Development: development.md
-plugins:
-  - search
-markdown_extensions:
-  - admonition
-  - pymdownx.details
-  - pymdownx.superfences
-
+  - CLI: cli.md
+  - GUI: gui.md
+  - API: api.md
