@@ -1,5 +1,4 @@
 import sys
-from pathlib import Path
 from treeparse import cli, group, command, argument, option
 from evid.cli.callbacks import (
     set_directory,
@@ -123,6 +122,14 @@ doc_group.commands.append(
         name="label",
         help="Label a document in a dataset",
         callback=label_callback,
+        options=[
+            option(
+                flags=["-f", "--filename"],
+                arg_type=str,
+                default="label.typ",
+                help="Typst file to label, defaults to label.typ",
+            ),
+        ],
     )
 )
 
