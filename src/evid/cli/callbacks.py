@@ -108,7 +108,7 @@ def bibtex_callback(dataset: str = None, uuid: str = None):
     generate_bibtex([typ_file])
 
 
-def label_callback(dataset: str = None, uuid: str = None):
+def label_callback(dataset: str = None, uuid: str = None, filename: str = "label.typ"):
     """Label a document."""
     if dataset and dataset.isdigit():
         datasets = sorted(get_datasets(DIRECTORY))
@@ -130,7 +130,7 @@ def label_callback(dataset: str = None, uuid: str = None):
     elif not (DIRECTORY / dataset).exists():
         sys.exit(f"Dataset '{dataset}' does not exist.")
 
-    label_evidence(DIRECTORY, dataset, uuid)
+    label_evidence(DIRECTORY, dataset, uuid, filename)
 
 
 def rebut_callback(dataset: str = None, uuid: str = None):
