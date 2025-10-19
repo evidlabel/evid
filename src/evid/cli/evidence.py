@@ -224,7 +224,9 @@ def select_evidence(
         sys.exit("Invalid selection.")
 
 
-def label_evidence(directory: Path, dataset: str = None, uuid: str = None) -> None:
+def label_evidence(
+    directory: Path, dataset: str = None, uuid: str = None, filename: str = "label.typ"
+) -> None:
     """Label a document in the specified dataset."""
     from evid.cli.dataset import select_dataset
 
@@ -247,4 +249,4 @@ def label_evidence(directory: Path, dataset: str = None, uuid: str = None) -> No
         logger.warning("Multiple files found, using the first one.")
     file_path = files[0]
 
-    create_label(file_path, dataset, uuid)
+    create_label(file_path, dataset, uuid, filename=filename)
