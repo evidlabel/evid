@@ -7,7 +7,6 @@ from pathlib import Path
 from .tabs.add_evidence import AddEvidenceTab
 from .tabs.browse_evidence import BrowseEvidenceTab
 from evid import DEFAULT_DIR
-import numpy as np  # For potential vectorisation, though not used here
 
 
 class EvidenceManagerApp(QMainWindow):
@@ -38,7 +37,8 @@ class EvidenceManagerApp(QMainWindow):
         """Detect if system prefers dark mode."""
         try:
             from PyQt6.QtGui import QGuiApplication
-            if hasattr(QGuiApplication.styleHints(), 'colorScheme'):
+
+            if hasattr(QGuiApplication.styleHints(), "colorScheme"):
                 return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
         except AttributeError:
             pass
