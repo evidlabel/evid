@@ -14,10 +14,14 @@ logger = logging.getLogger(__name__)
 
 
 def create_label(
-    file_path: Path, dataset: str, uuid: str, autolabel: bool = False
+    file_path: Path,
+    dataset: str,
+    uuid: str,
+    autolabel: bool = False,
+    filename: str = "label.typ",
 ) -> None:
     """Generate a label file and open it in the configured editor."""
-    label_file = file_path.parent / "label.typ"
+    label_file = file_path.parent / filename
     try:
         if not label_file.exists():
             if file_path.suffix.lower() == ".pdf":
