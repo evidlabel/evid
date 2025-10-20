@@ -1,7 +1,7 @@
 """GUI tab for browsing evidence."""
 
 import logging
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QLineEdit,
 )
-from PyQt6.QtCore import Qt
+from PySide6.QtCore import Qt
 from pathlib import Path
 import yaml
 import subprocess

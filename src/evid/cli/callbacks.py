@@ -13,7 +13,6 @@ from evid.cli.dataset import (
 
 from evid.cli.evidence import label_evidence, select_evidence, get_evidence_list
 from evid.core.bibtex import generate_bibtex
-from evid.gui.main import main as gui_main
 from evid.core.models import ConfigModel
 from evid.core.rebut_doc import rebut_doc
 from evid.cli.evidence import add_evidence
@@ -217,7 +216,12 @@ def list_docs_callback(dataset: str = None, uuid: str = None):
 
 def gui_callback():
     """Launch the GUI."""
-    gui_main(DIRECTORY)
+    try:
+        from evid.gui.main import main as gui_main
+        gui_main(DIRECTORY)
+    except ImportError:
+        print("GUI requires PySide6. Install with: pip install pyside6")
+        sys.exit(1)
 
 
 def update_callback():

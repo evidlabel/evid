@@ -1,8 +1,8 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget
-from PyQt6.QtGui import QPalette, QColor, QKeySequence
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QShortcut
+from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
+from PySide6.QtGui import QPalette, QColor, QKeySequence
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QShortcut
 from pathlib import Path
 from .tabs.add_evidence import AddEvidenceTab
 from .tabs.browse_evidence import BrowseEvidenceTab
@@ -36,7 +36,7 @@ class EvidenceManagerApp(QMainWindow):
     def is_dark_mode(self):
         """Detect if system prefers dark mode."""
         try:
-            from PyQt6.QtGui import QGuiApplication
+            from PySide6.QtGui import QGuiApplication
 
             if hasattr(QGuiApplication.styleHints(), "colorScheme"):
                 return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
