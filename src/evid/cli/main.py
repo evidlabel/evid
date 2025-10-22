@@ -103,10 +103,6 @@ set_group.commands.append(
 doc_group = group(
     name="doc",
     help="Manage documents",
-    options=[
-        option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
-        option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
-    ],
 )
 app.subgroups.append(doc_group)
 
@@ -115,6 +111,10 @@ doc_group.commands.append(
         name="bibtex",
         help="Generate BibTeX files from label.typ files",
         callback=bibtex_callback,
+        options=[
+            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
+            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
+        ],
     )
 )
 
@@ -124,6 +124,8 @@ doc_group.commands.append(
         help="Label a document in a dataset",
         callback=label_callback,
         options=[
+            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
+            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
             option(
                 flags=["-f", "--filename"],
                 arg_type=str,
@@ -139,6 +141,10 @@ doc_group.commands.append(
         name="rebut",
         help="Generate rebuttal for a document in a dataset",
         callback=rebut_callback,
+        options=[
+            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
+            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
+        ],
     )
 )
 
@@ -147,6 +153,10 @@ doc_group.commands.append(
         name="list",
         help="List documents in the dataset",
         callback=list_docs_callback,
+        options=[
+            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
+            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
+        ],
     )
 )
 
