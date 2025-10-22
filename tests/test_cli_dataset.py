@@ -1,3 +1,4 @@
+"""Test dataset CLI functions."""
 import pytest
 from unittest.mock import patch, MagicMock
 from evid.cli.dataset import (

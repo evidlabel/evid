@@ -1,3 +1,4 @@
+"""Initialize the evid package."""
 from pathlib import Path
 import yaml
 import importlib.metadata

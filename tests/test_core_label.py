@@ -1,3 +1,4 @@
+"""Test label creation."""
 import pytest
 from unittest.mock import patch
 from evid.core.label import create_label

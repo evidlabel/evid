@@ -1,3 +1,4 @@
+"""Test package initialization."""
 import pytest
 from evid import load_config, CONFIG, DEFAULT_DIR
 

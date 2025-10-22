@@ -1,3 +1,4 @@
+"""Main GUI application."""
 import sys
 from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
 from PySide6.QtGui import QPalette, QColor, QKeySequence

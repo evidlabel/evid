@@ -1,3 +1,4 @@
+"""Test label setup functions."""
 from evid.core.label_setup import (
     clean_text_for_typst,
     textpdf_to_typst,
