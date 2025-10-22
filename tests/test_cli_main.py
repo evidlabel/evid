@@ -1,3 +1,4 @@
+"""Test CLI main functionality."""
 import pytest
 from unittest.mock import patch
 import sys

@@ -1,3 +1,4 @@
+"""CLI callback functions."""
 import sys
 from pathlib import Path
 import logging

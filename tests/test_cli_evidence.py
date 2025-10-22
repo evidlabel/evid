@@ -1,3 +1,4 @@
+"""Test evidence CLI functions."""
 import pytest
 from unittest.mock import patch
 from evid.cli.evidence import (

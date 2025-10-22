@@ -1,3 +1,4 @@
+"""Test GUI add evidence tab."""
 import pytest
 from unittest.mock import patch
 from evid.gui.tabs.add_evidence import AddEvidenceTab

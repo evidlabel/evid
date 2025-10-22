@@ -1,3 +1,4 @@
+"""Test evidence addition."""
 import pytest
 import hashlib
 import uuid

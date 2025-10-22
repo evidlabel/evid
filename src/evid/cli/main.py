@@ -1,3 +1,4 @@
+"""Main CLI entry point."""
 import sys
 from treeparse import cli, group, command, argument, option
 from evid.cli.callbacks import (
