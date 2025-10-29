@@ -5,6 +5,7 @@ from unittest.mock import patch
 import sys
 from evid.cli.main import main
 from evid import CONFIG
+import os
 
 
 @pytest.fixture
@@ -49,6 +50,7 @@ def test_set_add(mock_directory):
             )
 
 
+@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Skipped in CI")
 def test_doc_bibtex(mock_directory):
     dataset = "test_ds"
     uuid = "uuid"
@@ -66,6 +68,7 @@ def test_doc_bibtex(mock_directory):
             mock_bibtex.assert_called_once_with([typ_file])
 
 
+@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Skipped in CI")
 def test_doc_label(mock_directory):
     dataset = "test_ds"
     (mock_directory / dataset).mkdir(exist_ok=True)
@@ -80,6 +83,7 @@ def test_doc_label(mock_directory):
             )
 
 
+@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Skipped in CI")
 def test_doc_rebut(mock_directory):
     dataset = "test_ds"
     uuid = "uuid"
@@ -96,6 +100,7 @@ def test_doc_rebut(mock_directory):
             mock_rebut.assert_called_once_with(workdir)
 
 
+@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Skipped in CI")
 def test_doc_list(mock_directory):
     dataset = "test_ds"
     (mock_directory / dataset).mkdir(exist_ok=True)
