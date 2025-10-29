@@ -1,5 +1,6 @@
 """Main GUI application."""
 import sys
+import os
 from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
 from PySide6.QtGui import QPalette, QColor, QKeySequence
 from PySide6.QtCore import Qt
@@ -79,7 +80,7 @@ class EvidenceManagerApp(QMainWindow):
 
         self.setPalette(palette)
         # Ensure stylesheet enforces dark theme for elements not covered by palette
-        self.setStyleSheet("""
+        self.setStyleSheet(""""
             QToolTip { background-color: #2e2e2e; color: #ffffff; border: 1px solid #555555; }
             QComboBox, QLineEdit, QTextEdit, QTableWidget { 
                 background-color: #3e3e3e; 
@@ -125,7 +126,7 @@ class EvidenceManagerApp(QMainWindow):
         palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#f0f0f0"))
 
         self.setPalette(palette)
-        self.setStyleSheet("""
+        self.setStyleSheet(""""
             QToolTip { background-color: #f0f0f0; color: #000000; border: 1px solid #a0a0a0; }
             QComboBox, QLineEdit, QTextEdit, QTableWidget { 
                 background-color: #ffffff; 
@@ -191,7 +192,12 @@ class EvidenceManagerApp(QMainWindow):
 
 
 def main(directory=DEFAULT_DIR):
+    # Check for headless mode
+    headless = os.environ.get("QT_QPA_PLATFORM") == "offscreen" or os.environ.get("HEADLESS") == "1"
     app = QApplication(sys.argv)
     window = EvidenceManagerApp(Path(directory))
     window.show()
+    if headless:
+        # In headless mode, don't start the event loop
+        return
     sys.exit(app.exec())
