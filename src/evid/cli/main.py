@@ -1,8 +1,10 @@
 """Main CLI entry point."""
+
 import sys
+from pathlib import Path
 from treeparse import cli, group, command, argument, option
+from evid import CONFIG
 from evid.cli.callbacks import (
-    set_directory,
     create_callback,
     track_callback,
     list_datasets_callback,
@@ -15,10 +17,19 @@ from evid.cli.callbacks import (
     update_callback,
     show_callback,
 )
+import argparse
 
 
 def main():
-    set_directory()
+    # Parse --db manually
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("-d", "--db", default=CONFIG["default_dir"])
+    args, unknown = parser.parse_known_args()
+    import evid.cli.callbacks
+
+    evid.cli.callbacks.DIRECTORY = Path(args.db).expanduser()
+    sys.argv = [sys.argv[0]] + unknown
+
     if len(sys.argv) == 1:
         gui_callback()
     else:
@@ -33,6 +44,14 @@ app = cli(
     show_types=True,
     show_defaults=True,
     line_connect=True,
+    options=[
+        option(
+            flags=["-d", "--db"],
+            arg_type=str,
+            default=CONFIG["default_dir"],
+            help="document database",
+        ),
+    ],
 )
 
 set_group = group(name="set", help="Manage datasets")
@@ -103,6 +122,10 @@ set_group.commands.append(
 doc_group = group(
     name="doc",
     help="Manage documents",
+    options=[
+        option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
+        option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
+    ],
 )
 app.subgroups.append(doc_group)
 
@@ -111,10 +134,6 @@ doc_group.commands.append(
         name="bibtex",
         help="Generate BibTeX files from label.typ files",
         callback=bibtex_callback,
-        options=[
-            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
-            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
-        ],
     )
 )
 
@@ -124,8 +143,6 @@ doc_group.commands.append(
         help="Label a document in a dataset",
         callback=label_callback,
         options=[
-            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
-            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
             option(
                 flags=["-f", "--filename"],
                 arg_type=str,
@@ -141,10 +158,6 @@ doc_group.commands.append(
         name="rebut",
         help="Generate rebuttal for a document in a dataset",
         callback=rebut_callback,
-        options=[
-            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
-            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
-        ],
     )
 )
 
@@ -153,10 +166,6 @@ doc_group.commands.append(
         name="list",
         help="List documents in the dataset",
         callback=list_docs_callback,
-        options=[
-            option(flags=["-s", "--dataset"], arg_type=str, help="Dataset name"),
-            option(flags=["-u", "--uuid"], arg_type=str, help="UUID of the document"),
-        ],
     )
 )
 

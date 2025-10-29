@@ -20,7 +20,6 @@ from evid.cli.evidence import add_evidence
 import yaml
 from rich.console import Console
 from rich.table import Table
-import argparse
 
 # Set up logging with Rich handler
 logging.basicConfig(handlers=[RichHandler()], level=logging.DEBUG, rich_tracebacks=True)
@@ -28,18 +27,8 @@ logger = logging.getLogger(__name__)
 
 DIRECTORY = None
 
-
-def set_directory():
-    global DIRECTORY
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("-d", "--directory", default=CONFIG["default_dir"])
-    args, unknown = parser.parse_known_args()
-    DIRECTORY = Path(args.directory).expanduser()
-    sys.argv = [sys.argv[0]] + unknown
-
-
 # Define callbacks
-def create_callback(dataset: str = None):
+def create_callback(db: str = None, dataset: str = None):
     """Create a new dataset."""
     if not dataset:
         dataset = input("Enter new dataset name: ").strip()
@@ -48,7 +37,7 @@ def create_callback(dataset: str = None):
     create_dataset(DIRECTORY, dataset)
 
 
-def track_callback(dataset: str = None):
+def track_callback(db: str = None, dataset: str = None):
     """Track a dataset with Git."""
     if not dataset:
         dataset = select_dataset(DIRECTORY, "Select dataset to track")
@@ -65,14 +54,12 @@ def track_callback(dataset: str = None):
     track_dataset(DIRECTORY, dataset)
 
 
-def list_datasets_callback():
+def list_datasets_callback(db: str = None):
     """List all available datasets."""
     list_datasets(DIRECTORY)
 
 
-def add_callback(
-    source: str, label: bool = False, autolabel: bool = False, dataset: str = None
-):
+def add_callback(db: str = None, source: str = None, label: bool = False, autolabel: bool = False, dataset: str = None):
     """Add evidence from source."""
     if dataset and dataset.isdigit():
         datasets = sorted(get_datasets(DIRECTORY))
@@ -94,7 +81,7 @@ def add_callback(
     add_evidence(DIRECTORY, dataset, source, label, autolabel)
 
 
-def bibtex_callback(dataset: str = None, uuid: str = None):
+def bibtex_callback(db: str = None, dataset: str = None, uuid: str = None):
     """Generate BibTeX for document."""
     if not dataset:
         dataset = select_dataset(
@@ -108,7 +95,7 @@ def bibtex_callback(dataset: str = None, uuid: str = None):
     generate_bibtex([typ_file])
 
 
-def label_callback(dataset: str = None, uuid: str = None, filename: str = "label.typ"):
+def label_callback(db: str = None, dataset: str = None, uuid: str = None, filename: str = "label.typ"):
     """Label a document."""
     if dataset and dataset.isdigit():
         datasets = sorted(get_datasets(DIRECTORY))
@@ -133,7 +120,7 @@ def label_callback(dataset: str = None, uuid: str = None, filename: str = "label
     label_evidence(DIRECTORY, dataset, uuid, filename)
 
 
-def rebut_callback(dataset: str = None, uuid: str = None):
+def rebut_callback(db: str = None, dataset: str = None, uuid: str = None):
     """Generate rebuttal for document."""
     if dataset and dataset.isdigit():
         datasets = sorted(get_datasets(DIRECTORY))
@@ -169,7 +156,7 @@ def rebut_callback(dataset: str = None, uuid: str = None):
         sys.exit(f"Failed to generate rebuttal: {str(e)}")
 
 
-def list_docs_callback(dataset: str = None, uuid: str = None):
+def list_docs_callback(db: str = None, dataset: str = None, uuid: str = None):
     """List documents in dataset."""
     if dataset and dataset.isdigit():
         datasets = sorted(get_datasets(DIRECTORY))
@@ -215,7 +202,7 @@ def list_docs_callback(dataset: str = None, uuid: str = None):
     console.print(table)
 
 
-def gui_callback():
+def gui_callback(db: str = None):
     """Launch the GUI."""
     try:
         from evid.gui.main import main as gui_main
@@ -225,7 +212,7 @@ def gui_callback():
         sys.exit(1)
 
 
-def update_callback():
+def update_callback(db: str = None):
     """Update configuration file."""
     config_path = Path.home() / ".evidrc"
     if config_path.exists():
@@ -257,7 +244,7 @@ def update_callback():
     print(f".evidrc {action} at {config_path} with complete default fields.")
 
 
-def show_callback():
+def show_callback(db: str = None):
     """Show current configuration."""
     config_path = Path.home() / ".evidrc"
     defaults = ConfigModel().model_dump()

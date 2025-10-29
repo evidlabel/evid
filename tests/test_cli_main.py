@@ -105,3 +105,15 @@ def test_config_show(mock_load, mock_directory):
     mock_load.return_value = {}
     with patch.object(sys, "argv", ["evid", "config", "show"]):
         main()
+
+
+def test_db_option(tmp_path):
+    """Test using --db option with a custom directory."""
+    custom_db = tmp_path / "custom_db"
+    custom_db.mkdir()
+    with patch("evid.cli.callbacks.create_dataset") as mock_create:
+        with patch.object(
+            sys, "argv", ["evid", "--db", str(custom_db), "set", "create", "--dataset", "test_ds"]
+        ):
+            main()
+        mock_create.assert_called_once_with(custom_db, "test_ds")
