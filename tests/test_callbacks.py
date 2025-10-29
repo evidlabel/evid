@@ -2,6 +2,7 @@
 
 import pytest
 from unittest.mock import patch
+import os
 
 
 def test_create_callback(tmp_path):
@@ -60,6 +61,11 @@ def test_add_callback(tmp_path):
             )
 
 
+@pytest.mark.skipif(
+    os.environ.get("HEADLESS") == "1"
+    or os.environ.get("QT_QPA_PLATFORM") == "offscreen",
+    reason="Skipped in headless mode",
+)
 def test_bibtex_callback(tmp_path):
     import evid.cli.callbacks
 
@@ -84,14 +90,12 @@ def test_bibtex_callback(tmp_path):
                 mock_bibtex.assert_called_once()
 
 
+@pytest.mark.skipif(
+    os.environ.get("HEADLESS") == "1"
+    or os.environ.get("QT_QPA_PLATFORM") == "offscreen",
+    reason="Skipped in headless mode",
+)
 def test_gui_callback(tmp_path):
-    import os
-
-    if (
-        os.environ.get("HEADLESS") == "1"
-        or os.environ.get("QT_QPA_PLATFORM") == "offscreen"
-    ):
-        pytest.skip("Skipped in headless mode")
     import evid.cli.callbacks
 
     evid.cli.callbacks.DIRECTORY = tmp_path
