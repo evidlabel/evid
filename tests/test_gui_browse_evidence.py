@@ -1,8 +1,8 @@
 """Test GUI browse evidence tab."""
+
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from evid.gui.tabs.browse_evidence import BrowseEvidenceTab
-from pathlib import Path
 import yaml
 from PySide6.QtWidgets import QTableWidgetItem
 import os
@@ -51,7 +51,19 @@ def test_load_metadata(browse_tab, tmp_path):
 
 def test_filter_metadata(browse_tab, tmp_path):
     # Setup metadata
-    browse_tab.metadata_entries = [("2023-01-01", {"title": "Test Doc", "authors": "Author", "time_added": "2023-01-01", "uuid": "uuid1", "original_name": "test.pdf", "label": "test"})]
+    browse_tab.metadata_entries = [
+        (
+            "2023-01-01",
+            {
+                "title": "Test Doc",
+                "authors": "Author",
+                "time_added": "2023-01-01",
+                "uuid": "uuid1",
+                "original_name": "test.pdf",
+                "label": "test",
+            },
+        )
+    ]
     browse_tab.filter_metadata()
     assert browse_tab.table.rowCount() == 1
     # Test search
@@ -101,7 +113,10 @@ def test_create_labels(browse_tab, tmp_path):
 
 
 def test_generate_bibtex(browse_tab, tmp_path):
-    if os.environ.get("HEADLESS") == "1" or os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+    if (
+        os.environ.get("HEADLESS") == "1"
+        or os.environ.get("QT_QPA_PLATFORM") == "offscreen"
+    ):
         pytest.skip("Skipped in headless mode")
     dataset = "test_ds"
     (tmp_path / dataset).mkdir()
@@ -116,7 +131,9 @@ def test_generate_bibtex(browse_tab, tmp_path):
     browse_tab.table.setItem(0, 3, QTableWidgetItem("test.pdf"))
     browse_tab.table.setItem(0, 4, QTableWidgetItem("uuid1"))
     browse_tab.table.selectRow(0)
-    with patch("evid.gui.tabs.browse_evidence.generate_bib_from_typ", return_value=(True, "")) as mock_gen:
+    with patch(
+        "evid.gui.tabs.browse_evidence.generate_bib_from_typ", return_value=(True, "")
+    ) as mock_gen:
         browse_tab.generate_bibtex()
         mock_gen.assert_called_once()
 
