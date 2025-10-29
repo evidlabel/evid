@@ -114,8 +114,9 @@ def test_create_labels(browse_tab, tmp_path):
 
 @pytest.mark.skipif(
     os.environ.get("HEADLESS") == "1"
-    or os.environ.get("QT_QPA_PLATFORM") == "offscreen",
-    reason="Skipped in headless mode",
+    or os.environ.get("QT_QPA_PLATFORM") == "offscreen"
+    or os.environ.get("CI") == "true",
+    reason="Skipped in headless or CI mode",
 )
 def test_generate_bibtex(browse_tab, tmp_path):
     dataset = "test_ds"
