@@ -1,4 +1,5 @@
 """Handle label setup and text processing."""
+
 from pathlib import Path
 import fitz
 import re

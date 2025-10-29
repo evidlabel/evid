@@ -1,4 +1,5 @@
 """Handle rebuttal document generation."""
+
 from pathlib import Path
 import logging
 import bibtexparser as bib

@@ -1,4 +1,5 @@
 """Data models for evid."""
+
 from pydantic import BaseModel, Field
 from pathlib import Path
 

@@ -1,9 +1,9 @@
 """CLI callback functions."""
+
 import sys
 from pathlib import Path
 import logging
 from rich.logging import RichHandler
-from evid import CONFIG
 from evid.cli.dataset import (
     list_datasets,
     select_dataset,
@@ -26,6 +26,7 @@ logging.basicConfig(handlers=[RichHandler()], level=logging.DEBUG, rich_tracebac
 logger = logging.getLogger(__name__)
 
 DIRECTORY = None
+
 
 # Define callbacks
 def create_callback(db: str = None, dataset: str = None):
@@ -59,7 +60,13 @@ def list_datasets_callback(db: str = None):
     list_datasets(DIRECTORY)
 
 
-def add_callback(db: str = None, source: str = None, label: bool = False, autolabel: bool = False, dataset: str = None):
+def add_callback(
+    db: str = None,
+    source: str = None,
+    label: bool = False,
+    autolabel: bool = False,
+    dataset: str = None,
+):
     """Add evidence from source."""
     if dataset and dataset.isdigit():
         datasets = sorted(get_datasets(DIRECTORY))
@@ -95,7 +102,9 @@ def bibtex_callback(db: str = None, dataset: str = None, uuid: str = None):
     generate_bibtex([typ_file])
 
 
-def label_callback(db: str = None, dataset: str = None, uuid: str = None, filename: str = "label.typ"):
+def label_callback(
+    db: str = None, dataset: str = None, uuid: str = None, filename: str = "label.typ"
+):
     """Label a document."""
     if dataset and dataset.isdigit():
         datasets = sorted(get_datasets(DIRECTORY))
@@ -206,6 +215,7 @@ def gui_callback(db: str = None):
     """Launch the GUI."""
     try:
         from evid.gui.main import main as gui_main
+
         gui_main(DIRECTORY)
     except ImportError:
         print("GUI requires PySide6. Install with: pip install pyside6")

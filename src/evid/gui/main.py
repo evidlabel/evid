@@ -1,4 +1,5 @@
 """Main GUI application."""
+
 import sys
 import os
 from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
@@ -193,7 +194,10 @@ class EvidenceManagerApp(QMainWindow):
 
 def main(directory=DEFAULT_DIR):
     # Check for headless mode
-    headless = os.environ.get("QT_QPA_PLATFORM") == "offscreen" or os.environ.get("HEADLESS") == "1"
+    headless = (
+        os.environ.get("QT_QPA_PLATFORM") == "offscreen"
+        or os.environ.get("HEADLESS") == "1"
+    )
     app = QApplication(sys.argv)
     window = EvidenceManagerApp(Path(directory))
     window.show()
