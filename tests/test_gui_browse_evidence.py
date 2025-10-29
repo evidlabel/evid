@@ -112,12 +112,12 @@ def test_create_labels(browse_tab, tmp_path):
         mock_create.assert_called_once_with(pdf_file, dataset, "uuid1")
 
 
+@pytest.mark.skipif(
+    os.environ.get("HEADLESS") == "1"
+    or os.environ.get("QT_QPA_PLATFORM") == "offscreen",
+    reason="Skipped in headless mode",
+)
 def test_generate_bibtex(browse_tab, tmp_path):
-    if (
-        os.environ.get("HEADLESS") == "1"
-        or os.environ.get("QT_QPA_PLATFORM") == "offscreen"
-    ):
-        pytest.skip("Skipped in headless mode")
     dataset = "test_ds"
     (tmp_path / dataset).mkdir()
     uuid_dir = tmp_path / dataset / "uuid1"
