@@ -1,8 +1,8 @@
 """Test GUI add evidence tab."""
+
 import pytest
 from unittest.mock import patch, MagicMock
 from evid.gui.tabs.add_evidence import AddEvidenceTab
-from pathlib import Path
 
 
 @pytest.fixture

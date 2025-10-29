@@ -1,4 +1,5 @@
 """Test database functionality."""
+
 import pytest
 import yaml
 from evid.core.database import Database

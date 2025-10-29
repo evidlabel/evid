@@ -1,4 +1,5 @@
 """Test PDF metadata extraction."""
+
 from evid.core.pdf_metadata import extract_pdf_metadata
 from io import BytesIO
 

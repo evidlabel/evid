@@ -1,4 +1,5 @@
 """GUI tab for adding evidence."""
+
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,

@@ -1,4 +1,5 @@
 """Test CLI main functionality."""
+
 import pytest
 from unittest.mock import patch
 import sys
@@ -113,7 +114,9 @@ def test_db_option(tmp_path):
     custom_db.mkdir()
     with patch("evid.cli.callbacks.create_dataset") as mock_create:
         with patch.object(
-            sys, "argv", ["evid", "--db", str(custom_db), "set", "create", "--dataset", "test_ds"]
+            sys,
+            "argv",
+            ["evid", "--db", str(custom_db), "set", "create", "--dataset", "test_ds"],
         ):
             main()
         mock_create.assert_called_once_with(custom_db, "test_ds")

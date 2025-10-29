@@ -1,4 +1,5 @@
 """Test text utilities."""
+
 from evid.utils.text import normalize_text
 
 

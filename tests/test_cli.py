@@ -1,4 +1,5 @@
 """Test CLI functionality."""
+
 import pytest
 from unittest.mock import patch, MagicMock
 from evid.cli.dataset import get_datasets, select_dataset, create_dataset
