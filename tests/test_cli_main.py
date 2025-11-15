@@ -62,7 +62,7 @@ def test_doc_bibtex(mock_directory):
             with patch.object(
                 sys,
                 "argv",
-                ["evid", "doc", "bibtex", "--dataset", dataset, "--uuid", uuid],
+                ["evid", "doc", "--dataset", dataset, "--uuid", uuid, "bibtex"],
             ):
                 main()
             mock_bibtex.assert_called_once_with([typ_file])
@@ -75,7 +75,7 @@ def test_doc_label(mock_directory):
     with patch("evid.cli.callbacks.DIRECTORY", mock_directory):
         with patch("evid.cli.callbacks.label_evidence") as mock_label:
             with patch.object(
-                sys, "argv", ["evid", "doc", "label", "--dataset", dataset]
+                sys, "argv", ["evid", "doc", "--dataset", dataset, "label"]
             ):
                 main()
             mock_label.assert_called_once_with(
@@ -94,7 +94,7 @@ def test_doc_rebut(mock_directory):
             with patch.object(
                 sys,
                 "argv",
-                ["evid", "doc", "rebut", "--dataset", dataset, "--uuid", uuid],
+                ["evid", "doc", "--dataset", dataset, "--uuid", uuid, "rebut"],
             ):
                 main()
             mock_rebut.assert_called_once_with(workdir)
@@ -110,7 +110,7 @@ def test_doc_list(mock_directory):
                 {"date": "2023-01-01", "uuid": "uuid", "title": "Test"}
             ]
             with patch.object(
-                sys, "argv", ["evid", "doc", "list", "--dataset", dataset]
+                sys, "argv", ["evid", "doc", "--dataset", dataset, "list"]
             ):
                 main()
             mock_list_docs.assert_called_once_with(mock_directory, dataset)
