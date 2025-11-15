@@ -1,3 +1,5 @@
+"""Handle label setup and text processing."""
+
 from pathlib import Path
 import fitz
 import re
@@ -73,8 +75,8 @@ def textpdf_to_typst(
         date, name = "DATE", "NAME"
 
     # Escape for Typst string literals
-    name_escaped = name.replace('\\', '\\\\').replace('"', '\\"')
-    date_escaped = date.replace('\\', '\\\\').replace('"', '\\"')
+    name_escaped = name.replace("\\", "\\\\").replace('"', '\\"')
+    date_escaped = date.replace("\\", "\\\\").replace('"', '\\"')
     title_display = name.replace("_", " ")
 
     pdf = fitz.open(pdfname)
@@ -140,8 +142,8 @@ def text_to_typst(
         date, name = "DATE", "NAME"
 
     # Escape for Typst string literals
-    name_escaped = name.replace('\\', '\\\\').replace('"', '\\"')
-    date_escaped = date.replace('\\', '\\\\').replace('"', '\\"')
+    name_escaped = name.replace("\\", "\\\\").replace('"', '\\"')
+    date_escaped = date.replace("\\", "\\\\").replace('"', '\\"')
     title_display = name.replace("_", " ")
 
     with txtname.open("r", encoding="utf-8") as f:
@@ -216,7 +218,7 @@ def emojis_to_text(s):
 
 def bib_escape(s: str) -> str:
     """Escape special characters for BibTeX string fields."""
-    return s.replace('\\', '\\\\').replace('"', '\\"')
+    return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def load_uuid_prefix(file_path: Path) -> str:
@@ -252,6 +254,7 @@ def load_url(file_path: Path) -> str:
                 return str(info_data["url"])
     return ""
 
+
 def load_authors(file_path: Path) -> str:
     """Load authors from info.yml."""
     info_file = file_path.with_name("info.yml")
@@ -269,6 +272,7 @@ def load_authors(file_path: Path) -> str:
                 return str(info_data["authors"])
     return ""
 
+
 def load_title(file_path: Path) -> str:
     info_file = file_path.with_name("info.yml")
     if info_file.exists():
@@ -284,6 +288,7 @@ def load_title(file_path: Path) -> str:
             if "title" in info_data:
                 return str(info_data["title"])
     return ""
+
 
 def load_dates(file_path: Path) -> str:
     info_file = file_path.with_name("info.yml")
@@ -324,7 +329,13 @@ def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
         with open(output_file, "w", encoding="utf-8") as bibtex_file:
             # Write main document entry first
             main_lines = [f"@article{{ {uuid_prefix}:main  ,"]
-            title_value = replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(load_title(json_file)))))
+            title_value = replace_underscores(
+                replace_multiple_spaces(
+                    remove_curly_brace_content(
+                        remove_backslash_substrings(load_title(json_file))
+                    )
+                )
+            )
             if title_value:
                 main_lines.append(f"    title = {{{title_value}}},")
             author_value = load_authors(json_file)
@@ -348,11 +359,21 @@ def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
                     note_key = "nonote" if exclude_note else "note"
                     entry_lines.append(f"    {note_key} = {{{note_value}}},")
 
-                title_value = replace_underscores(replace_multiple_spaces(remove_backslash_substrings(row.get("quote", ""))))
+                title_value = replace_underscores(
+                    replace_multiple_spaces(
+                        remove_backslash_substrings(row.get("quote", ""))
+                    )
+                )
                 if title_value:
                     entry_lines.append(f"    title = {{{title_value}}},")
 
-                journal_value = replace_underscores(replace_multiple_spaces(remove_curly_brace_content(remove_backslash_substrings(row.get("title", "")))))
+                journal_value = replace_underscores(
+                    replace_multiple_spaces(
+                        remove_curly_brace_content(
+                            remove_backslash_substrings(row.get("title", ""))
+                        )
+                    )
+                )
                 if journal_value and journal_value != "NAME":
                     entry_lines.append(f"    journal = {{{journal_value}}},")
 
@@ -360,11 +381,19 @@ def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
                 if author_value:
                     entry_lines.append(f"    author = {{{author_value}}},")
 
-                date_value = row["date"].strftime("%Y-%m-%d") if not pd.isnull(row["date"]) else ""
+                date_value = (
+                    row["date"].strftime("%Y-%m-%d")
+                    if not pd.isnull(row["date"])
+                    else ""
+                )
                 if date_value:
                     entry_lines.append(f"    date = {{{date_value}}},")
 
-                pages_value = int(row.get("opage", "")) if "opage" in row and not pd.isnull(row.get("opage", "")) else ""
+                pages_value = (
+                    int(row.get("opage", ""))
+                    if "opage" in row and not pd.isnull(row.get("opage", ""))
+                    else ""
+                )
                 if pages_value:
                     entry_lines.append(f"    pages = {{{pages_value}}},")
 

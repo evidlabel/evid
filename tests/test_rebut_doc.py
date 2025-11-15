@@ -1,3 +1,5 @@
+"""Test rebuttal document generation."""
+
 import pytest
 from unittest.mock import patch
 from evid.core.rebut_doc import base_rebuttal, write_rebuttal, rebut_doc

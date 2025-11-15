@@ -1,3 +1,5 @@
+"""Test label setup functions."""
+
 import pytest
 import fitz
 from evid.core.label_setup import textpdf_to_typst, clean_text_for_typst

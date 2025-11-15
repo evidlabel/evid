@@ -1,3 +1,5 @@
+"""Test BibTeX generation."""
+
 import pytest
 from evid.core.bibtex import generate_bib_from_typ, generate_bibtex
 import json

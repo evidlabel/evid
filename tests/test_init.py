@@ -1,3 +1,5 @@
+"""Test package initialization."""
+
 import pytest
 from evid import load_config, CONFIG, DEFAULT_DIR
 
@@ -19,7 +21,7 @@ def mock_config(tmp_path):
 def test_load_config_defaults():
     config = load_config()
     assert config == {
-        "default_dir": str(Path("~/Documents/evid").expanduser()),
+        "default_dir": "~/Documents/evid",
         "editor": "code",
         "directory": "code",
         "latex": "pdflatex {file}",
@@ -37,7 +39,7 @@ def test_load_config_invalid_yaml(mock_config):
     mock_config.write_text("invalid: yaml: here")
     config = load_config()
     assert config == {
-        "default_dir": str(Path("~/Documents/evid").expanduser()),
+        "default_dir": "~/Documents/evid",
         "editor": "code",
         "directory": "code",
         "latex": "pdflatex {file}",
@@ -48,7 +50,7 @@ def test_load_config_validation_error(mock_config):
     mock_config.write_text(yaml.dump({"editor": 123}))
     config = load_config()
     assert config == {
-        "default_dir": str(Path("~/Documents/evid").expanduser()),
+        "default_dir": "~/Documents/evid",
         "editor": "code",
         "directory": "code",
         "latex": "pdflatex {file}",
