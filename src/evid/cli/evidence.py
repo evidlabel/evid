@@ -9,10 +9,9 @@ import uuid
 import sys
 from pathlib import Path
 from bs4 import BeautifulSoup
-from evid.utils.text import normalize_text
-from evid.core.label_setup import clean_text_for_typst
-from evid.core.pdf_metadata import extract_pdf_metadata  # Moved to new file
+from evid.core.text_processing import clean_text_for_typst
 from evid.core.label import create_label  # Moved to new file
+from evid.core.pdf_metadata import extract_pdf_metadata  # Moved to new file
 import arrow
 import yaml
 from evid.core.models import InfoModel  # Added for validation
