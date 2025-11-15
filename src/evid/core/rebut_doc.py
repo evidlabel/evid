@@ -1,3 +1,5 @@
+"""Handle rebuttal document generation."""
+
 from pathlib import Path
 import logging
 import bibtexparser as bib
@@ -44,10 +46,27 @@ def base_rebuttal(bibfile: Path) -> str:
 
     body = ""
     for row in bibdb.entries:
-        note_key = "nonote" if "nonote" in row else "note"
-        note = row[note_key]
-        prompt = "\n".join(f"// {line}" for line in note.splitlines())
-        body += f"{prompt}\n+ Regarding: #bcite(<{row['ID']}>)\n\n"
+        # Determine the note key, prioritizing 'nonote' (as per exclude_note=True in BibTeX gen)
+        if "nonote" in row:
+            note_key = "nonote"
+        elif "note" in row:
+            note_key = "note"
+        else:
+            note_key = None
+
+        if note_key and row[note_key].strip():
+            note = row[note_key]
+            prompt = "\n".join(f"// {line}" for line in note.splitlines())
+            body += f"{prompt}\n+ Regarding: #bcite(<{row['ID']}>)\n"
+        else:
+            # No note, just add the citation
+            body += f"+ Regarding: #bcite(<{row['ID']}>)\n"
+            logger.info(f"No note for entry {row.get('ID', 'unknown')}; omitting note.")
+
+    if not body.strip():
+        # Fallback if no entries at all
+        body = "// No entries available for rebuttal.\n+ No items to rebut.\n"
+        logger.info("No entries found; using fallback content.")
 
     rebuttal_body = TYPST_TEMPLATE.replace("POINTS", body).replace(
         "BIBPATH", bibfile.name

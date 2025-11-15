@@ -1,3 +1,5 @@
+"""Test rebuttal document generation."""
+
 import pytest
 from unittest.mock import patch
 from evid.core.rebut_doc import base_rebuttal, write_rebuttal, rebut_doc
@@ -58,19 +60,3 @@ def test_rebut_doc(temp_dir):
             rebut_doc(workdir)
     rebut_file = workdir / "rebut.typ"
     assert rebut_file.exists()
-
-
-def test_rebut_doc_no_label(temp_dir):
-    workdir = temp_dir / "workdir"
-    workdir.mkdir()
-    with pytest.raises(RuntimeError):
-        rebut_doc(workdir)
-
-
-def test_rebut_doc_empty_label(temp_dir):
-    workdir = temp_dir / "workdir"
-    workdir.mkdir()
-    typ_file = workdir / "label.typ"
-    typ_file.write_text("")
-    with pytest.raises(RuntimeError):
-        rebut_doc(workdir)

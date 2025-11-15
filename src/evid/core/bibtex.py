@@ -1,3 +1,5 @@
+"""Handle BibTeX generation."""
+
 import os
 from pathlib import Path
 import logging

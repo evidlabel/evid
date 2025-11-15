@@ -1,4 +1,6 @@
-from PyQt6.QtWidgets import (
+"""GUI tab for adding evidence."""
+
+from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
@@ -101,7 +103,7 @@ class AddEvidenceTab(QWidget):
         )
 
     def browse_file(self):
-        from PyQt6.QtWidgets import QFileDialog
+        from PySide6.QtWidgets import QFileDialog
 
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Select PDF", str(Path.home() / "Downloads"), "PDF Files (*.pdf)"

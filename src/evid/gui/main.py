@@ -1,8 +1,11 @@
+"""Main GUI application."""
+
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget
-from PyQt6.QtGui import QPalette, QColor, QKeySequence
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QShortcut
+import os
+from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
+from PySide6.QtGui import QPalette, QColor, QKeySequence
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QShortcut
 from pathlib import Path
 from .tabs.add_evidence import AddEvidenceTab
 from .tabs.browse_evidence import BrowseEvidenceTab
@@ -16,8 +19,8 @@ class EvidenceManagerApp(QMainWindow):
         self.setWindowTitle("evid")
         self.resize(800, 600)
 
-        # Enforce dark theme across all platforms
-        self.set_dark_theme()
+        # Detect system theme and apply accordingly
+        self.apply_theme()
 
         # Setup tabs
         self.tabs = QTabWidget()
@@ -33,8 +36,27 @@ class EvidenceManagerApp(QMainWindow):
         # Setup keyboard shortcuts
         self.setup_shortcuts()
 
+    def is_dark_mode(self):
+        """Detect if system prefers dark mode."""
+        try:
+            from PySide6.QtGui import QGuiApplication
+
+            if hasattr(QGuiApplication.styleHints(), "colorScheme"):
+                return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+        except AttributeError:
+            pass
+        # Fallback: assume light mode
+        return False
+
+    def apply_theme(self):
+        """Apply light or dark theme based on system preference."""
+        if self.is_dark_mode():
+            self.set_dark_theme()
+        else:
+            self.set_light_theme()
+
     def set_dark_theme(self):
-        """Apply a consistent dark theme to the application."""
+        """Apply a consistent dark theme."""
         palette = QPalette()
         # Background colors
         palette.setColor(QPalette.ColorRole.Window, QColor("#2e2e2e"))
@@ -59,7 +81,7 @@ class EvidenceManagerApp(QMainWindow):
 
         self.setPalette(palette)
         # Ensure stylesheet enforces dark theme for elements not covered by palette
-        self.setStyleSheet("""
+        self.setStyleSheet(""""
             QToolTip { background-color: #2e2e2e; color: #ffffff; border: 1px solid #555555; }
             QComboBox, QLineEdit, QTextEdit, QTableWidget { 
                 background-color: #3e3e3e; 
@@ -77,6 +99,52 @@ class EvidenceManagerApp(QMainWindow):
             QTabBar::tab { 
                 background: #3e3e3e; 
                 color: #ffffff; 
+                padding: 5px; 
+            }
+            QTabBar::tab:selected { 
+                background: #0078d4; 
+            }
+        """)
+
+    def set_light_theme(self):
+        """Apply a consistent light theme."""
+        palette = QPalette()
+        # Use default light colors
+        palette.setColor(QPalette.ColorRole.Window, QColor("#f0f0f0"))
+        palette.setColor(QPalette.ColorRole.Base, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#f7f7f7"))
+        palette.setColor(QPalette.ColorRole.WindowText, QColor("#000000"))
+        palette.setColor(QPalette.ColorRole.Text, QColor("#000000"))
+        palette.setColor(QPalette.ColorRole.ToolTipText, QColor("#000000"))
+        palette.setColor(QPalette.ColorRole.Button, QColor("#e0e0e0"))
+        palette.setColor(QPalette.ColorRole.ButtonText, QColor("#000000"))
+        palette.setColor(QPalette.ColorRole.Highlight, QColor("#0078d4"))
+        palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.PlaceholderText, QColor("#777777"))
+        palette.setColor(QPalette.ColorRole.Light, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.Mid, QColor("#c0c0c0"))
+        palette.setColor(QPalette.ColorRole.Dark, QColor("#a0a0a0"))
+        palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#f0f0f0"))
+
+        self.setPalette(palette)
+        self.setStyleSheet(""""
+            QToolTip { background-color: #f0f0f0; color: #000000; border: 1px solid #a0a0a0; }
+            QComboBox, QLineEdit, QTextEdit, QTableWidget { 
+                background-color: #ffffff; 
+                color: #000000; 
+                border: 1px solid #a0a0a0; 
+            }
+            QPushButton { 
+                background-color: #e0e0e0; 
+                color: #000000; 
+                border: 1px solid #a0a0a0; 
+            }
+            QPushButton:hover { 
+                background-color: #0078d4; 
+            }
+            QTabBar::tab { 
+                background: #f0f0f0; 
+                color: #000000; 
                 padding: 5px; 
             }
             QTabBar::tab:selected { 
@@ -125,7 +193,15 @@ class EvidenceManagerApp(QMainWindow):
 
 
 def main(directory=DEFAULT_DIR):
+    # Check for headless mode
+    headless = (
+        os.environ.get("QT_QPA_PLATFORM") == "offscreen"
+        or os.environ.get("HEADLESS") == "1"
+    )
     app = QApplication(sys.argv)
     window = EvidenceManagerApp(Path(directory))
     window.show()
+    if headless:
+        # In headless mode, don't start the event loop
+        return
     sys.exit(app.exec())

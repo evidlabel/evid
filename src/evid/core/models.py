@@ -1,3 +1,5 @@
+"""Data models for evid."""
+
 from pydantic import BaseModel, Field
 from pathlib import Path
 
@@ -16,7 +18,7 @@ class InfoModel(BaseModel):
 
 class ConfigModel(BaseModel):
     default_dir: str = Field(
-        default_factory=lambda: str(Path("~/Documents/evid").expanduser())
+        default_factory=lambda: "~/Documents/evid"
     )
     editor: str = "code"
     directory: str = "code"

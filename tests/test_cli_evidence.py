@@ -1,3 +1,5 @@
+"""Test evidence CLI functions."""
+
 import pytest
 from unittest.mock import patch
 from evid.cli.evidence import (
@@ -84,4 +86,4 @@ def test_label_evidence(temp_dir):
     pdf_path.touch()
     with patch("evid.cli.evidence.create_label") as mock_create:
         label_evidence(temp_dir, dataset, uuid)
-        mock_create.assert_called_with(pdf_path, dataset, uuid)
+        mock_create.assert_called_with(pdf_path, dataset, uuid, filename="label.typ")
