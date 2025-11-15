@@ -5,8 +5,7 @@ from pathlib import Path
 import logging
 import subprocess
 from typing import List, Tuple
-from evid.core.label_setup import json_to_bib
-# , parallel_csv_to_bib
+from evid.core.bibtex_utils import json_to_bib
 
 logger = logging.getLogger(__name__)
 

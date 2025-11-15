@@ -4,7 +4,7 @@ import logging
 from rich.logging import RichHandler
 from pathlib import Path
 import subprocess
-from evid.core.label_setup import textpdf_to_typst, text_to_typst
+from evid.core.text_processing import textpdf_to_typst, text_to_typst
 from evid import CONFIG  # Import CONFIG to access the editor setting
 from evid.core.bibtex import generate_bib_from_typ
 

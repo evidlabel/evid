@@ -32,10 +32,6 @@ Use the CLI to manage datasets:
 
 ![help](docs/assets/help.svg)
 
-## Documentation 
-
-For more detailed information, visit the [documentation page](https://evidlabel.github.io/evid/).
-
 ## Labelling
 - When selecting a document and pressing the "Label" button, a typst document is generated that contains the extracted text from the PDF. 
     
