@@ -66,9 +66,6 @@ class BrowseEvidenceTab(QWidget):
         )
         self.table.setSortingEnabled(True)  # Enable sorting
         self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)  # Default sort by Date
-        self.table.setSelectionMode(
-            QTableWidget.SelectionMode.ExtendedSelection
-        )  # Enable multi-selection
 
         # Set default column widths
         header = self.table.horizontalHeader()
@@ -274,6 +271,7 @@ class BrowseEvidenceTab(QWidget):
 
         dataset = self.dataset_combo.currentText()
         success_count = 0
+        bib_contents = []
         for row in selected_rows:
             uuid_item = self.table.item(row, 4)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
@@ -293,6 +291,12 @@ class BrowseEvidenceTab(QWidget):
                 if success:
                     logger.info(f"Generated BibTeX file: {bib_file}")
                     success_count += 1
+                    # Read and collect BibTeX content
+                    try:
+                        with bib_file.open("r", encoding="utf-8") as f:
+                            bib_contents.append(f.read())
+                    except Exception as e:
+                        logger.warning(f"Failed to read BibTeX file {bib_file}: {str(e)}")
                 else:
                     logger.error(msg)
                     QMessageBox.critical(
@@ -309,10 +313,16 @@ class BrowseEvidenceTab(QWidget):
                 )
 
         if success_count > 0:
+            # Concatenate all BibTeX contents
+            concatenated_bib = "\n\n".join(bib_contents)
+            # Copy to clipboard
+            from PySide6.QtWidgets import QApplication
+            clipboard = QApplication.clipboard()
+            clipboard.setText(concatenated_bib)
             QMessageBox.information(
                 self,
                 "BibTeX Generation Complete",
-                f"Successfully generated BibTeX files for {success_count} entries.",
+                f"Successfully generated BibTeX files for {success_count} entries.\nConcatenated BibTeX copied to clipboard.",
             )
 
     def run_rebut(self):
