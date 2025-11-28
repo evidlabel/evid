@@ -2,7 +2,8 @@
 
 import pytest
 import fitz
-from evid.core.label_setup import textpdf_to_typst, clean_text_for_typst
+from evid.core.typst_generation import textpdf_to_typst
+from evid.core.text_cleaning import clean_text_for_typst
 import yaml
 
 
