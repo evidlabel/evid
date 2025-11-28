@@ -1,13 +1,8 @@
 """Test label setup functions."""
 
-from evid.core.label_setup import (
-    clean_text_for_typst,
-    textpdf_to_typst,
-    text_to_typst,
-    json_to_bib,
-    load_uuid_prefix,
-    load_url,
-)
+from evid.core.text_cleaning import clean_text_for_typst
+from evid.core.typst_generation import textpdf_to_typst, text_to_typst
+from evid.core.bibtex_utils import json_to_bib, load_uuid_prefix, load_url
 import fitz
 import yaml
 import json
@@ -56,8 +51,8 @@ def test_json_to_bib(tmp_path):
         }
     ]
     json_path.write_text(json.dumps(data))
-    with patch("evid.core.label_setup.load_uuid_prefix", return_value="uuid"):
-        with patch("evid.core.label_setup.load_url", return_value="http://example.com"):
+    with patch("evid.core.bibtex_utils.load_uuid_prefix", return_value="uuid"):
+        with patch("evid.core.bibtex_utils.load_url", return_value="http://example.com"):
             json_to_bib(json_path, bib_path, True)
     assert bib_path.exists()
     content = bib_path.read_text()
