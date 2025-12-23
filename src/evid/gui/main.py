@@ -13,6 +13,8 @@ from evid import DEFAULT_DIR
 
 
 class EvidenceManagerApp(QMainWindow):
+    """Main application window for evid GUI."""
+
     def __init__(self, directory: Path):
         super().__init__()
         self.directory = directory
@@ -193,6 +195,7 @@ class EvidenceManagerApp(QMainWindow):
 
 
 def main(directory=DEFAULT_DIR):
+    """Launch the GUI application."""
     # Check for headless mode
     headless = (
         os.environ.get("QT_QPA_PLATFORM") == "offscreen"

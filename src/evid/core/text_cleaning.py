@@ -17,6 +17,7 @@ LIGATURES = {
 
 
 def clean_text_for_typst(text: str) -> str:
+    """Clean text for Typst by expanding ligatures and commenting lines with '@'."""
     logger.info(f"clean_text_for_typst called with text length: {len(text)}")
     print(text)
     # Expand ligatures

@@ -18,6 +18,7 @@ from evid.core.models import InfoModel  # Added for validation
 import hashlib
 from rich.console import Console
 from rich.table import Table
+from evid.utils.text import normalize_text
 
 
 # Configure Rich handler for colored logging
