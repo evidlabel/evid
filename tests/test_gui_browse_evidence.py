@@ -1,15 +1,15 @@
 """Test GUI browse evidence tab."""
 
 import pytest
-from unittest.mock import patch
 from evid.gui.tabs.browse_evidence import BrowseEvidenceTab
 import yaml
 from PySide6.QtWidgets import QTableWidgetItem
 import os
+from unittest.mock import patch
 
 
 @pytest.fixture
-def browse_tab(qtbot, tmp_path):
+def browse_tab(tmp_path):
     tab = BrowseEvidenceTab(tmp_path)
     yield tab
 

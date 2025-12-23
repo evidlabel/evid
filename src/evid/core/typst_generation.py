@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 def textpdf_to_typst(
     pdfname: Path, outputfile: Path = None, autolabel: bool = False
 ) -> str:
+    """Generate Typst content from PDF file."""
     info_file = pdfname.with_name("info.yml")
     if info_file.exists():
         with info_file.open() as f:
@@ -43,7 +44,7 @@ def textpdf_to_typst(
     body = ""
     para_num = 1
     for i, page in enumerate(pdf):
-        # Disable TEXT_PRESERVE_LIGATURES to decompose ligatures
+        # Disable TEXT_PRESERVE_LIGATURES to dissolve ligatures
         flags = fitz.TEXT_PRESERVE_LIGATURES
         text = clean_text_for_typst(page.get_text(flags=flags))
         page_body = f"#mset(values: (opage: {i + 1}))\n== Page {i + 1}\n"
@@ -82,6 +83,7 @@ def textpdf_to_typst(
 def text_to_typst(
     txtname: Path, outputfile: Path = None, autolabel: bool = False
 ) -> str:
+    """Generate Typst content from text file."""
     info_file = txtname.with_name("info.yml")
     if info_file.exists():
         with info_file.open("r") as f:

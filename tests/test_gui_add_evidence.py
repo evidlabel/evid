@@ -1,12 +1,12 @@
 """Test GUI add evidence tab."""
 
 import pytest
-from unittest.mock import patch, MagicMock
 from evid.gui.tabs.add_evidence import AddEvidenceTab
+from unittest.mock import patch, MagicMock
 
 
 @pytest.fixture
-def add_tab(qtbot, tmp_path):
+def add_tab(tmp_path):
     tab = AddEvidenceTab(tmp_path)
     yield tab
 
