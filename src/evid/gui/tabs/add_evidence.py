@@ -30,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 
 class AddEvidenceTab(QWidget):
+    """Tab for adding new evidence documents."""
+
     def __init__(self, directory: Path = DEFAULT_DIR):
         super().__init__()
         self.directory = directory

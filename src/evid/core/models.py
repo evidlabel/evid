@@ -1,10 +1,11 @@
 """Data models for evid."""
 
 from pydantic import BaseModel, Field
-from pathlib import Path
 
 
 class InfoModel(BaseModel):
+    """Model for document info metadata."""
+
     original_name: str = Field(..., description="Original file name")
     uuid: str = Field(..., description="Unique identifier")
     time_added: str = Field(..., description="Date added")
@@ -17,9 +18,9 @@ class InfoModel(BaseModel):
 
 
 class ConfigModel(BaseModel):
-    default_dir: str = Field(
-        default_factory=lambda: "~/Documents/evid"
-    )
+    """Model for configuration settings."""
+
+    default_dir: str = Field(default_factory=lambda: "~/Documents/evid")
     editor: str = "code"
     directory: str = "code"
     latex: str = "pdflatex {file}"

@@ -1,6 +1,7 @@
 """GUI tab for browsing evidence."""
 
 import logging
+import json
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -30,6 +31,8 @@ logger = logging.getLogger(__name__)
 
 
 class BrowseEvidenceTab(QWidget):
+    """Tab for browsing and managing existing evidence."""
+
     def __init__(self, directory: Path = DEFAULT_DIR):
         super().__init__()
         self.directory = directory
@@ -91,6 +94,7 @@ class BrowseEvidenceTab(QWidget):
             QPushButton("Generate BibTeX", clicked=self.generate_bibtex)
         )
         button_layout.addWidget(QPushButton("Rebut", clicked=self.run_rebut))
+        button_layout.addWidget(QPushButton("Prompt", clicked=self.create_prompt))
         layout.addLayout(button_layout)
 
         self.setLayout(layout)
@@ -296,7 +300,9 @@ class BrowseEvidenceTab(QWidget):
                         with bib_file.open("r", encoding="utf-8") as f:
                             bib_contents.append(f.read())
                     except Exception as e:
-                        logger.warning(f"Failed to read BibTeX file {bib_file}: {str(e)}")
+                        logger.warning(
+                            f"Failed to read BibTeX file {bib_file}: {str(e)}"
+                        )
                 else:
                     logger.error(msg)
                     QMessageBox.critical(
@@ -317,6 +323,7 @@ class BrowseEvidenceTab(QWidget):
             concatenated_bib = "\n\n".join(bib_contents)
             # Copy to clipboard
             from PySide6.QtWidgets import QApplication
+
             clipboard = QApplication.clipboard()
             clipboard.setText(concatenated_bib)
             QMessageBox.information(
@@ -374,3 +381,115 @@ class BrowseEvidenceTab(QWidget):
                 QMessageBox.critical(
                     self, "Rebuttal Error", f"An unexpected error occurred: {str(e)}"
                 )
+
+    def create_prompt(self):
+        """Generate a concatenated Markdown prompt from selected evidence labels."""
+        selected_rows = sorted(
+            set(index.row() for index in self.table.selectedIndexes())
+        )
+        if not selected_rows:
+            QMessageBox.warning(
+                self, "No Selection", "Please select at least one evidence entry."
+            )
+            return
+
+        dataset = self.dataset_combo.currentText()
+        markdown_parts = []
+        for row in selected_rows:
+            uuid_item = self.table.item(row, 4)
+            if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
+                QMessageBox.critical(
+                    self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID."
+                )
+                continue
+
+            uuid = uuid_item.text()
+            workdir = self.directory / dataset / uuid
+            typ_file = workdir / "label.typ"
+            json_file = workdir / "label.json"
+            info_file = workdir / "info.yml"
+
+            # Ensure JSON exists by generating BibTeX if needed
+            if not json_file.exists():
+                success, msg = generate_bib_from_typ(typ_file)
+                if not success:
+                    logger.error(msg)
+                    QMessageBox.critical(
+                        self,
+                        "Prompt Generation Error",
+                        f"Failed to generate data for {uuid}: {msg}",
+                    )
+                    continue
+
+            # Load info.yml
+            try:
+                with info_file.open("r", encoding="utf-8") as f:
+                    info = yaml.safe_load(f)
+                validated_info = InfoModel(**info)
+                info = validated_info.model_dump()
+            except Exception as e:
+                logger.error(f"Failed to load info for {uuid}: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Info Load Error",
+                    f"Failed to load metadata for {uuid}: {str(e)}",
+                )
+                continue
+
+            title = info.get("title", "Unknown")
+            authors = info.get("authors", "Unknown")
+            url = info.get("url", "")
+            pdf_path_full = str(workdir / info.get("original_name", ""))
+            # Replace home directory with 'HOME' for privacy
+            home = str(Path.home())
+            if pdf_path_full.startswith(home):
+                pdf_path = pdf_path_full.replace(home, "HOME", 1)
+            else:
+                pdf_path = pdf_path_full
+
+            # Load label.json
+            try:
+                with json_file.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception as e:
+                logger.error(f"Failed to load JSON for {uuid}: {e}")
+                QMessageBox.critical(
+                    self,
+                    "JSON Load Error",
+                    f"Failed to load labels for {uuid}: {str(e)}",
+                )
+                continue
+
+            # Build Markdown chapter
+            chapter = f"# {title}\n\n"
+            chapter += f"**Author:** {authors}\n\n"
+            if url:
+                chapter += f"**Link:** {url}\n\n"
+            chapter += f"**PDF:** {pdf_path}\n\n"
+
+            # Extract labels (exclude 'main')
+            labels = [
+                item["value"] for item in data if item["value"].get("key") != "main"
+            ]
+            for label in labels:
+                opage = label.get("opage", "")
+                text = label.get("text", "")
+                note = label.get("note", "")
+                content = note if note else text
+                # Indent multiline content properly for Markdown lists
+                indented_content = content.replace("\n", "\n  ")
+                chapter += f"- Page {opage}: {indented_content}\n"
+
+            markdown_parts.append(chapter)
+
+        full_markdown = "\n\n".join(markdown_parts)
+        # Copy to clipboard
+        from PySide6.QtWidgets import QApplication
+
+        clipboard = QApplication.clipboard()
+        clipboard.setText(full_markdown)
+        QMessageBox.information(
+            self,
+            "Prompt Generated",
+            "Markdown prompt copied to clipboard.",
+        )

@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 DIRECTORY = None
 
 
-# Define callbacks
 def create_callback(db: str = None, dataset: str = None):
     """Create a new dataset."""
     if not dataset:

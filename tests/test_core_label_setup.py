@@ -52,7 +52,9 @@ def test_json_to_bib(tmp_path):
     ]
     json_path.write_text(json.dumps(data))
     with patch("evid.core.bibtex_utils.load_uuid_prefix", return_value="uuid"):
-        with patch("evid.core.bibtex_utils.load_url", return_value="http://example.com"):
+        with patch(
+            "evid.core.bibtex_utils.load_url", return_value="http://example.com"
+        ):
             json_to_bib(json_path, bib_path, True)
     assert bib_path.exists()
     content = bib_path.read_text()
