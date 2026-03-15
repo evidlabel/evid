@@ -11,25 +11,16 @@ from evid.core.models import InfoModel
 logger = logging.getLogger(__name__)
 
 
-def create_prompt(selected_rows, table, dataset_combo, directory):
-    """Generate a concatenated Markdown prompt from selected evidence labels."""
-    if not selected_rows:
+def create_prompt(uuids, dataset, directory):
+    """Generate a concatenated Markdown prompt from selected evidence UUIDs."""
+    if not uuids:
         QMessageBox.warning(
             None, "No Selection", "Please select at least one evidence entry."
         )
         return
 
-    dataset = dataset_combo.currentText()
     markdown_parts = []
-    for row in selected_rows:
-        uuid_item = table.item(row, 4)
-        if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-            QMessageBox.critical(
-                None, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID."
-            )
-            continue
-
-        uuid = uuid_item.text()
+    for uuid in uuids:
         workdir = directory / dataset / uuid
         typ_file = workdir / "label.typ"
         json_file = workdir / "label.json"
