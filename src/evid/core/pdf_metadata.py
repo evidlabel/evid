@@ -16,6 +16,7 @@ def extract_pdf_metadata(
     pdf_source: Path | BytesIO, file_name: str
 ) -> tuple[str, str, str]:
     """Extract title, authors, and date from PDF as plain strings, preserving Danish characters."""
+    import fitz  # Import here to avoid frontend issues during import
     try:
         if isinstance(pdf_source, Path):
             with open(pdf_source, "rb") as f:

@@ -387,4 +387,10 @@ class BrowseEvidenceTab(QWidget):
         selected_rows = sorted(
             set(index.row() for index in self.table.selectedIndexes())
         )
-        create_prompt(selected_rows, self.table, self.dataset_combo, self.directory)
+        uuids = []
+        for row in selected_rows:
+            uuid_item = self.table.item(row, 4)
+            if uuid_item and uuid_item.text() and uuid_item.text() != "Unknown":
+                uuids.append(uuid_item.text())
+        dataset = self.dataset_combo.currentText()
+        create_prompt(uuids, dataset, self.directory)
