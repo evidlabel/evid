@@ -24,6 +24,8 @@ def create_label(
     label_file = file_path.parent / filename
     try:
         if not label_file.exists():
+            # Ensure static directory exists for frontend (used by fitz)
+            Path("static").mkdir(exist_ok=True)
             if file_path.suffix.lower() == ".pdf":
                 textpdf_to_typst(file_path, label_file, autolabel)
             elif file_path.suffix.lower() == ".txt":
@@ -33,6 +35,7 @@ def create_label(
                 return
 
         # Open the editor
+        logger.info(f"Opening editor '{CONFIG['editor']}' with file: {label_file}")
         try:
             subprocess.run([CONFIG["editor"], str(label_file)], check=True)
         except FileNotFoundError:
@@ -44,7 +47,7 @@ def create_label(
             )
             return  # Exit early if editor fails to open
         except subprocess.SubprocessError as e:
-            logger.error(f"Error opening the configured editor: {str(e)}")
+            logger.exception(f"Error opening the configured editor: {str(e)}")
             print(f"Failed to open the configured editor: {str(e)}")
             return  # Exit early if editor fails
 
@@ -56,5 +59,5 @@ def create_label(
 
         # csv had no function other than to generate the bib file, fully deprecate csv use
     except Exception as e:
-        logger.error(f"Error during label workflow: {str(e)}")
+        logger.exception(f"Error during label workflow: {str(e)}")
         print(f"An unexpected error occurred: {str(e)}")

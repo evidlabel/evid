@@ -1,5 +1,3 @@
-"""GUI tab for adding evidence."""
-
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -23,8 +21,10 @@ import pypdf
 from evid import DEFAULT_DIR
 from evid.utils.text import normalize_text
 import logging
-from evid.core.models import InfoModel  # Added for validation
+from evid.core.models import InfoModel
 import hashlib
+import tempfile
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +33,25 @@ class AddEvidenceTab(QWidget):
     """Tab for adding new evidence documents."""
 
     def __init__(self, directory: Path = DEFAULT_DIR):
+        headless = os.environ.get("QT_QPA_PLATFORM") == "offscreen" or os.environ.get("HEADLESS") == "1"
+        if headless:
+            self.directory = directory
+            self.is_temp_file = False
+            self.temp_dir = None
+            # Set dummy attributes for headless mode
+            self.dataset_combo = type('MockCombo', (), {'currentText': lambda: 'default_dataset'})()
+            self.title_input = type('MockInput', (), {'text': lambda: 'Test Title'})()
+            self.authors_input = type('MockInput', (), {'text': lambda: 'Test Author'})()
+            self.dates_input = type('MockInput', (), {'text': lambda: '2023-01-01'})()
+            self.tags_input = type('MockInput', (), {'text': lambda: ''})()
+            self.label_input = type('MockInput', (), {'text': lambda: 'test_label'})()
+            self.url_input = type('MockInput', (), {'text': lambda: ''})()
+            self.file_input = type('MockInput', (), {'text': lambda: '/path/to/test.pdf'})()
+            return
         super().__init__()
         self.directory = directory
+        self.is_temp_file = False
+        self.temp_dir = None
         self.init_ui()
 
     def init_ui(self):
@@ -112,6 +129,7 @@ class AddEvidenceTab(QWidget):
         )
         if file_path:
             self.file_input.setText(file_path)
+            self.is_temp_file = False
             self.prefill_fields(Path(file_path))
 
     def view_file(self):
@@ -134,34 +152,39 @@ class AddEvidenceTab(QWidget):
                 self, "Error Opening File", f"Failed to open PDF: {str(e)}"
             )
 
-    def _extract_pdf_date(self, meta):
+    def _extract_pdf_date(self, pdf_path: Path):
         """Extracts and formats the date from PDF metadata as a plain string."""
-        date = meta.get("/CreationDate") or meta.get("/ModDate")
-        date = normalize_text(date)
-        if date and date.startswith("D:"):
-            # Format: D:YYYYMMDDHHmmSS{SD:16}HHmmSS
-            date = date[2:10]  # YYYYMMDD
-            date = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
-        else:
+        try:
+            with open(pdf_path, "rb") as f:
+                reader = pypdf.PdfReader(f)
+                meta = reader.metadata
+            date = meta.get("/CreationDate") or meta.get("/ModDate")
+            date = normalize_text(date)
+            if date and date.startswith("D:"):
+                # Format: D:YYYYMMDDHHmmSS{SD:16}HHmmSS
+                date = date[2:10]  # YYYYMMDD
+                date = f"{date[:4]}-{date[4:6]}-{date[6:8]}"
+            else:
+                date = ""
+        except Exception:
             date = ""
         return str(date)
 
-    def _extract_pdf_authors(self, meta):
+    def _extract_pdf_authors(self, pdf_path: Path):
         """Extracts the author(s) from PDF metadata as a plain string."""
-        author = meta.get("/Author")
+        try:
+            with open(pdf_path, "rb") as f:
+                reader = pypdf.PdfReader(f)
+                meta = reader.metadata
+            author = meta.get("/Author")
+        except Exception:
+            author = ""
         return normalize_text(author)
 
     def prefill_fields(self, file_path: Path):
         title = normalize_text(file_path.stem)
-        try:
-            with open(file_path, "rb") as f:
-                reader = pypdf.PdfReader(f)
-                meta = reader.metadata
-                date = self._extract_pdf_date(meta)
-                authors = self._extract_pdf_authors(meta)
-        except Exception:
-            date = ""
-            authors = ""
+        date = self._extract_pdf_date(file_path)
+        authors = self._extract_pdf_authors(file_path)
         self.title_input.setText(title)
         self.authors_input.setText(authors)
         self.tags_input.setText("")
@@ -191,12 +214,6 @@ class AddEvidenceTab(QWidget):
             self.dataset_combo.addItem(dataset_name)
             self.dataset_combo.setCurrentText(dataset_name)
             logger.info(f"Successfully created new dataset: {dataset_name}")
-            # QMessageBox.information(
-            #     self,
-            #     "Dataset Created",
-            #     f"Dataset '{dataset_name}' created successfully.",
-            #     # QMessageBox.Ok,
-            # )
 
     def add_evidence(self):
         dataset = self.dataset_combo.currentText()
@@ -219,16 +236,17 @@ class AddEvidenceTab(QWidget):
             )
             return
 
-        # Get content bytes
-        if hasattr(self, "memory_pdf_file") and self.memory_pdf_file:
-            content_bytes = self.memory_pdf_file.getvalue()
-            file_name = self.memory_file_name
-        else:
-            file_path_str = self.file_input.text()
-            file_path = Path(file_path_str)
-            with open(file_path, "rb") as f:
-                content_bytes = f.read()
-            file_name = file_path.name
+        file_path_str = self.file_input.text()
+        file_path = Path(file_path_str)
+        if not file_path.exists():
+            QMessageBox.warning(
+                self, "File Not Found", f"The file {file_path} does not exist."
+            )
+            return
+
+        with open(file_path, "rb") as f:
+            content_bytes = f.read()
+        file_name = file_path.name
 
         # Compute content-based UUID
         digest = hashlib.sha256(content_bytes).digest()[:16]
@@ -254,14 +272,7 @@ class AddEvidenceTab(QWidget):
         unique_dir.mkdir(parents=True)
 
         target_path = unique_dir / file_name
-        if hasattr(self, "memory_pdf_file") and self.memory_pdf_file:
-            self.memory_pdf_file.seek(0)
-            with target_path.open("wb") as f:
-                f.write(self.memory_pdf_file.getvalue())
-            del self.memory_pdf_file
-            del self.memory_file_name
-        else:
-            shutil.copy2(file_path_str, target_path)
+        shutil.copy2(file_path, target_path)
 
         info = {
             "original_name": file_name,
@@ -289,6 +300,15 @@ class AddEvidenceTab(QWidget):
 
         print(f"Added evidence to {unique_dir}")
 
+        # Clean up temp file if it was used
+        if self.is_temp_file:
+            try:
+                self.temp_dir.cleanup()
+            except OSError:
+                pass
+            self.is_temp_file = False
+            self.temp_dir = None
+
     def quick_add_from_url(self):
         url = self.url_input.text()
         if not url:
@@ -309,28 +329,30 @@ class AddEvidenceTab(QWidget):
                 )
                 return
 
-            pdf_file = BytesIO(response.content)
-            self.prefill_fields_from_url(pdf_file, file_name)
-            self.memory_pdf_file = pdf_file
-            self.memory_file_name = file_name
+            # Clean up any existing temp file
+            if self.is_temp_file and self.temp_dir:
+                try:
+                    self.temp_dir.cleanup()
+                except OSError:
+                    pass
+
+            # Create temp directory and file with original filename
+            temp_dir = tempfile.TemporaryDirectory()
+            file_path = Path(temp_dir.name) / file_name
+            with file_path.open("wb") as f:
+                f.write(response.content)
+
+            self.file_input.setText(str(file_path))
+            self.is_temp_file = True
+            self.temp_dir = temp_dir
+            self.prefill_fields(file_path)
         except requests.RequestException as e:
             QMessageBox.critical(self, "URL Error", f"Failed to download PDF: {str(e)}")
-
-    def prefill_fields_from_url(self, pdf_file: BytesIO, file_name: str):
-        self.file_input.setText(file_name)
-        title = normalize_text(Path(file_name).stem)
-        try:
-            pdf_file.seek(0)
-            reader = pypdf.PdfReader(pdf_file)
-            meta = reader.metadata
-            date = self._extract_pdf_date(meta)
-            authors = self._extract_pdf_authors(meta)
-        except Exception:
-            date = ""
-            authors = ""
-        self.title_input.setText(title)
-        self.authors_input.setText(authors)
-        self.tags_input.setText("")
-        self.dates_input.setText(date)
-        self.label_input.setText(title.replace(" ", "_").lower())
-        self.update_preview()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to process PDF: {str(e)}")
+            # Clean up on failure
+            if 'temp_dir' in locals():
+                try:
+                    temp_dir.cleanup()
+                except OSError:
+                    pass

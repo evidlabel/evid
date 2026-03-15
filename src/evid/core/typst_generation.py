@@ -1,7 +1,6 @@
 """Typst generation functions for evid."""
 
 from pathlib import Path
-import fitz
 import yaml
 import logging
 from evid.core.models import InfoModel
@@ -14,6 +13,7 @@ def textpdf_to_typst(
     pdfname: Path, outputfile: Path = None, autolabel: bool = False
 ) -> str:
     """Generate Typst content from PDF file."""
+    import fitz
     info_file = pdfname.with_name("info.yml")
     if info_file.exists():
         with info_file.open() as f:
