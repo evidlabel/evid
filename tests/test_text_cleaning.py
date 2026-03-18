@@ -30,6 +30,15 @@ def test_already_escaped_dollar_unchanged():
     assert result.count("\\$") == 1
 
 
+def test_bare_hash_escaped():
+    assert "\\#" in clean_text_for_typst("url.com/page#anchor")
+
+
+def test_already_escaped_hash_unchanged():
+    result = clean_text_for_typst("already \\# escaped")
+    assert result.count("\\#") == 1
+
+
 def test_multiple_newlines_collapsed():
     result = clean_text_for_typst("a\n\n\n\nb")
     assert "\n\n\n" not in result
