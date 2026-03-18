@@ -19,7 +19,7 @@ dependencies = [
     "frontend",
     "arrow",
     "rich",
-    "treeparse",
+    "treeparse==0.2.0",
     "PySide6",
     "bibtexparser",
     "demoji",
