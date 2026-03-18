@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QColor, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
 
@@ -12,6 +12,24 @@ from evid import DEFAULT_DIR
 
 from .tabs.add_evidence import AddEvidenceTab
 from .tabs.browse_evidence import BrowseEvidenceTab
+
+
+class _TabCycleFilter(QObject):
+    """Intercept Ctrl+PageUp/Down globally to cycle tabs."""
+
+    def __init__(self, tabs):
+        super().__init__()
+        self._tabs = tabs
+
+    def eventFilter(self, obj, event):  # noqa: N802
+        if event.type() == QEvent.Type.KeyPress and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            if event.key() == Qt.Key.Key_PageUp:
+                self._tabs.setCurrentIndex((self._tabs.currentIndex() - 1) % self._tabs.count())
+                return True
+            if event.key() == Qt.Key.Key_PageDown:
+                self._tabs.setCurrentIndex((self._tabs.currentIndex() + 1) % self._tabs.count())
+                return True
+        return False
 
 
 class EvidenceManagerApp(QMainWindow):
@@ -181,22 +199,10 @@ class EvidenceManagerApp(QMainWindow):
 
     def setup_shortcuts(self):
         """Setup keyboard shortcuts for tab navigation, app closing, labeling, and BibTeX generation."""
-        # Ctrl+PageUp / Ctrl+PageDown to cycle between tabs
-        prev_tab = QShortcut(QKeySequence("Ctrl+PageUp"), self)
-        prev_tab.activated.connect(
-            lambda: self.tabs.setCurrentIndex(
-                (self.tabs.currentIndex() - 1) % self.tabs.count()
-            )
-        )
-        prev_tab.setContext(Qt.ShortcutContext.ApplicationShortcut)
-
-        next_tab = QShortcut(QKeySequence("Ctrl+PageDown"), self)
-        next_tab.activated.connect(
-            lambda: self.tabs.setCurrentIndex(
-                (self.tabs.currentIndex() + 1) % self.tabs.count()
-            )
-        )
-        next_tab.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        # Ctrl+PageUp / Ctrl+PageDown — application-level event filter so it
+        # works regardless of which child widget currently has focus.
+        self._tab_filter = _TabCycleFilter(self.tabs)
+        QApplication.instance().installEventFilter(self._tab_filter)
 
         # Ctrl+W to close the application
         QShortcut(QKeySequence("Ctrl+W"), self, self.close)
