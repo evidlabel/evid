@@ -86,7 +86,7 @@ def test_open_directory(browse_tab, tmp_path):
     browse_tab.dataset_combo.setCurrentText(dataset)
     # Add row to table
     browse_tab.table.insertRow(0)
-    browse_tab.table.setItem(0, 4, QTableWidgetItem("uuid1"))
+    browse_tab.table.setItem(0, 6, QTableWidgetItem("uuid1"))
     # Select the row
     browse_tab.table.selectRow(0)
     with patch("subprocess.run") as mock_run:
@@ -106,8 +106,8 @@ def test_create_labels(browse_tab, tmp_path):
     browse_tab.dataset_combo.setCurrentText(dataset)
     # Add row to table
     browse_tab.table.insertRow(0)
-    browse_tab.table.setItem(0, 3, QTableWidgetItem("test.pdf"))
-    browse_tab.table.setItem(0, 4, QTableWidgetItem("uuid1"))
+    browse_tab.table.setItem(0, 5, QTableWidgetItem("test.pdf"))
+    browse_tab.table.setItem(0, 6, QTableWidgetItem("uuid1"))
     browse_tab.table.selectRow(0)
     with patch("evid.gui.tabs.browse_evidence.create_label") as mock_create:
         browse_tab.create_labels()
@@ -131,8 +131,8 @@ def test_generate_bibtex(browse_tab, tmp_path):
     browse_tab.dataset_combo.setCurrentText(dataset)
     # Add row to table
     browse_tab.table.insertRow(0)
-    browse_tab.table.setItem(0, 3, QTableWidgetItem("test.pdf"))
-    browse_tab.table.setItem(0, 4, QTableWidgetItem("uuid1"))
+    browse_tab.table.setItem(0, 5, QTableWidgetItem("test.pdf"))
+    browse_tab.table.setItem(0, 6, QTableWidgetItem("uuid1"))
     browse_tab.table.selectRow(0)
     with patch(
         "evid.gui.tabs.browse_evidence.generate_bib_from_typ", return_value=(True, "")
@@ -151,7 +151,7 @@ def test_run_rebut(browse_tab, tmp_path):
     browse_tab.dataset_combo.setCurrentText(dataset)
     # Add row to table
     browse_tab.table.insertRow(0)
-    browse_tab.table.setItem(0, 4, QTableWidgetItem("uuid1"))
+    browse_tab.table.setItem(0, 6, QTableWidgetItem("uuid1"))
     browse_tab.table.selectRow(0)
     with patch("evid.core.rebut_doc.rebut_doc") as mock_rebut:
         browse_tab.run_rebut()
