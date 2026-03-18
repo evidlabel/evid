@@ -66,6 +66,25 @@ def test_prefill_fields_fallback_to_filename_when_no_pdf_title(add_tab, tmp_path
         assert add_tab.label_input.text() == "248080"
 
 
+def test_quick_add_from_url_sets_title(add_tab, tmp_path):
+    add_tab.url_input.setText("http://example.com/article")
+    mock_response = MagicMock()
+    mock_response.text = "<html><head><title>My Article</title></head><body>text</body></html>"
+    mock_response.raise_for_status.return_value = None
+    mock_response.headers = {"Content-Type": "text/html"}
+    mock_response.content = b""
+    fake_pdf = tmp_path / "article.pdf"
+    fake_pdf.write_bytes(b"%PDF-1.0\n%%EOF")
+    with patch("evid.gui.tabs.add_evidence.requests.get", return_value=mock_response):
+        with patch(
+            "evid.core.typst_generation.web_to_pdf",
+            return_value=(fake_pdf, "My Article"),
+        ):
+            add_tab.quick_add_from_url()
+    assert add_tab.title_input.text() == "My Article"
+    assert add_tab.label_input.text() == "my_article"
+
+
 def test_add_evidence(add_tab, tmp_path):
     add_tab.dataset_combo.addItem("test_ds")
     add_tab.dataset_combo.setCurrentText("test_ds")
