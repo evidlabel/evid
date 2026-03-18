@@ -1,5 +1,6 @@
 """GUI tab for browsing evidence."""
 
+import json
 import logging
 import subprocess
 from pathlib import Path
@@ -188,7 +189,11 @@ class BrowseEvidenceTab(QWidget):
 
                 entry_dir = self.directory / dataset / uuid_value
                 file_ok = bool(original_name) and (entry_dir / original_name).exists()
-                json_ok = (entry_dir / "label.json").exists()
+                json_path = entry_dir / "label.json"
+                try:
+                    json_ok = json_path.exists() and bool(json.loads(json_path.read_text(encoding="utf-8")))
+                except Exception:
+                    json_ok = False
 
                 for col, ok in enumerate([yml_ok, file_ok, json_ok]):
                     item = QTableWidgetItem("✓" if ok else "✗")
