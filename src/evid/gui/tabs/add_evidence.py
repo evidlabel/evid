@@ -1,30 +1,31 @@
+import hashlib
+import logging
+import os
+import shutil
+import subprocess
+import tempfile
+import uuid
+from pathlib import Path
+
+import arrow
+import pypdf
+import requests
+import yaml
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QPushButton,
-    QComboBox,
-    QTextEdit,
     QMessageBox,
+    QPushButton,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from pathlib import Path
-import uuid
-import arrow
-import yaml
-import shutil
-import subprocess
-import requests
-from io import BytesIO
-import pypdf
+
 from evid import DEFAULT_DIR
-from evid.utils.text import normalize_text
-import logging
 from evid.core.models import InfoModel
-import hashlib
-import tempfile
-import os
+from evid.utils.text import normalize_text
 
 logger = logging.getLogger(__name__)
 
@@ -33,20 +34,29 @@ class AddEvidenceTab(QWidget):
     """Tab for adding new evidence documents."""
 
     def __init__(self, directory: Path = DEFAULT_DIR):
-        headless = os.environ.get("QT_QPA_PLATFORM") == "offscreen" or os.environ.get("HEADLESS") == "1"
+        headless = (
+            os.environ.get("QT_QPA_PLATFORM") == "offscreen"
+            or os.environ.get("HEADLESS") == "1"
+        )
         if headless:
             self.directory = directory
             self.is_temp_file = False
             self.temp_dir = None
             # Set dummy attributes for headless mode
-            self.dataset_combo = type('MockCombo', (), {'currentText': lambda: 'default_dataset'})()
-            self.title_input = type('MockInput', (), {'text': lambda: 'Test Title'})()
-            self.authors_input = type('MockInput', (), {'text': lambda: 'Test Author'})()
-            self.dates_input = type('MockInput', (), {'text': lambda: '2023-01-01'})()
-            self.tags_input = type('MockInput', (), {'text': lambda: ''})()
-            self.label_input = type('MockInput', (), {'text': lambda: 'test_label'})()
-            self.url_input = type('MockInput', (), {'text': lambda: ''})()
-            self.file_input = type('MockInput', (), {'text': lambda: '/path/to/test.pdf'})()
+            self.dataset_combo = type(
+                "MockCombo", (), {"currentText": lambda: "default_dataset"}
+            )()
+            self.title_input = type("MockInput", (), {"text": lambda: "Test Title"})()
+            self.authors_input = type(
+                "MockInput", (), {"text": lambda: "Test Author"}
+            )()
+            self.dates_input = type("MockInput", (), {"text": lambda: "2023-01-01"})()
+            self.tags_input = type("MockInput", (), {"text": lambda: ""})()
+            self.label_input = type("MockInput", (), {"text": lambda: "test_label"})()
+            self.url_input = type("MockInput", (), {"text": lambda: ""})()
+            self.file_input = type(
+                "MockInput", (), {"text": lambda: "/path/to/test.pdf"}
+            )()
             return
         super().__init__()
         self.directory = directory
@@ -149,7 +159,7 @@ class AddEvidenceTab(QWidget):
             subprocess.run(["xdg-open", str(file_path)])
         except subprocess.SubprocessError as e:
             QMessageBox.critical(
-                self, "Error Opening File", f"Failed to open PDF: {str(e)}"
+                self, "Error Opening File", f"Failed to open PDF: {e!s}"
             )
 
     def _extract_pdf_date(self, pdf_path: Path):
@@ -181,15 +191,28 @@ class AddEvidenceTab(QWidget):
             author = ""
         return normalize_text(author)
 
+    def _extract_pdf_title(self, pdf_path: Path):
+        """Extracts the title from PDF metadata as a plain string."""
+        try:
+            with open(pdf_path, "rb") as f:
+                reader = pypdf.PdfReader(f)
+                meta = reader.metadata
+            title = meta.get("/Title")
+        except Exception:
+            title = ""
+        return normalize_text(title)
+
     def prefill_fields(self, file_path: Path):
-        title = normalize_text(file_path.stem)
+        filename_title = normalize_text(file_path.stem)
+        pdf_title = self._extract_pdf_title(file_path)
+        label_base = pdf_title or filename_title
         date = self._extract_pdf_date(file_path)
         authors = self._extract_pdf_authors(file_path)
-        self.title_input.setText(title)
+        self.title_input.setText(filename_title)
         self.authors_input.setText(authors)
         self.tags_input.setText("")
         self.dates_input.setText(date)
-        self.label_input.setText(title.replace(" ", "_").lower())
+        self.label_input.setText(label_base.replace(" ", "_").lower())
         self.update_preview()
 
     def update_preview(self):
@@ -265,7 +288,7 @@ class AddEvidenceTab(QWidget):
                 QMessageBox.critical(
                     self,
                     "Error Opening Directory",
-                    f"Failed to open directory: {str(e)}",
+                    f"Failed to open directory: {e!s}",
                 )
             return
 
@@ -347,11 +370,11 @@ class AddEvidenceTab(QWidget):
             self.temp_dir = temp_dir
             self.prefill_fields(file_path)
         except requests.RequestException as e:
-            QMessageBox.critical(self, "URL Error", f"Failed to download PDF: {str(e)}")
+            QMessageBox.critical(self, "URL Error", f"Failed to download PDF: {e!s}")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to process PDF: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to process PDF: {e!s}")
             # Clean up on failure
-            if 'temp_dir' in locals():
+            if "temp_dir" in locals():
                 try:
                     temp_dir.cleanup()
                 except OSError:
