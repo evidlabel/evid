@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "evid"
-version = "0.2.6"
+version = "0.2.7"
 description = "Evidence management tool for PDFs and text documents."
 authors = [
     {name = "Your Name", email = "your.email@example.com"},
