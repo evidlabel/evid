@@ -40,15 +40,30 @@ def test_create_dataset(add_tab, tmp_path):
     assert "new_ds" in add_tab.get_datasets()
 
 
-def test_prefill_fields(add_tab, tmp_path):
-    pdf_path = tmp_path / "test.pdf"
+def test_prefill_fields_uses_pdf_title_as_label(add_tab, tmp_path):
+    pdf_path = tmp_path / "248080.pdf"
     pdf_path.write_bytes(b"%PDF-1.0\n%%EOF")
     with patch("evid.gui.tabs.add_evidence.pypdf.PdfReader") as mock_reader:
         mock_meta = MagicMock()
-        mock_meta.get.return_value = "Test Title"
+        mock_meta.get.side_effect = lambda key, default=None: {
+            "/Title": "Bekendtgørelse af barnets lov",
+        }.get(key, default)
         mock_reader.return_value.metadata = mock_meta
         add_tab.prefill_fields(pdf_path)
-        assert add_tab.title_input.text() == "test"
+        assert add_tab.title_input.text() == "248080"
+        assert add_tab.label_input.text() == "bekendtgørelse_af_barnets_lov"
+
+
+def test_prefill_fields_fallback_to_filename_when_no_pdf_title(add_tab, tmp_path):
+    pdf_path = tmp_path / "248080.pdf"
+    pdf_path.write_bytes(b"%PDF-1.0\n%%EOF")
+    with patch("evid.gui.tabs.add_evidence.pypdf.PdfReader") as mock_reader:
+        mock_meta = MagicMock()
+        mock_meta.get.return_value = None
+        mock_reader.return_value.metadata = mock_meta
+        add_tab.prefill_fields(pdf_path)
+        assert add_tab.title_input.text() == "248080"
+        assert add_tab.label_input.text() == "248080"
 
 
 def test_add_evidence(add_tab, tmp_path):
