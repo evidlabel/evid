@@ -1,15 +1,17 @@
 """Main GUI application."""
 
-import sys
 import os
-from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
-from PySide6.QtGui import QPalette, QColor, QKeySequence
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QShortcut
+import sys
 from pathlib import Path
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QKeySequence, QPalette, QShortcut
+from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
+
+from evid import DEFAULT_DIR
+
 from .tabs.add_evidence import AddEvidenceTab
 from .tabs.browse_evidence import BrowseEvidenceTab
-from evid import DEFAULT_DIR
 
 
 class EvidenceManagerApp(QMainWindow):
@@ -19,7 +21,7 @@ class EvidenceManagerApp(QMainWindow):
         super().__init__()
         self.directory = directory
         self.setWindowTitle("evid")
-        self.resize(800, 600)
+        self.resize(1400, 900)
 
         # Detect system theme and apply accordingly
         self.apply_theme()
@@ -61,50 +63,69 @@ class EvidenceManagerApp(QMainWindow):
         """Apply a consistent dark theme."""
         palette = QPalette()
         # Background colors
-        palette.setColor(QPalette.ColorRole.Window, QColor("#2e2e2e"))
-        palette.setColor(QPalette.ColorRole.Base, QColor("#3e3e3e"))
-        palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#353535"))
+        palette.setColor(QPalette.ColorRole.Window, QColor("#2d2d2d"))
+        palette.setColor(QPalette.ColorRole.Base, QColor("#2d2d2d"))
+        palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#333333"))
         # Text colors
-        palette.setColor(QPalette.ColorRole.WindowText, QColor("#ffffff"))
-        palette.setColor(QPalette.ColorRole.Text, QColor("#ffffff"))
-        palette.setColor(QPalette.ColorRole.ToolTipText, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.WindowText, QColor("#dcdcdc"))
+        palette.setColor(QPalette.ColorRole.Text, QColor("#dcdcdc"))
+        palette.setColor(QPalette.ColorRole.ToolTipText, QColor("#dcdcdc"))
         # Button and highlight colors
         palette.setColor(QPalette.ColorRole.Button, QColor("#4a4a4a"))
-        palette.setColor(QPalette.ColorRole.ButtonText, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.ButtonText, QColor("#dcdcdc"))
         palette.setColor(QPalette.ColorRole.Highlight, QColor("#0078d4"))
-        palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#ffffff"))
+        palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#dcdcdc"))
         # Disabled elements
         palette.setColor(QPalette.ColorRole.PlaceholderText, QColor("#888888"))
         palette.setColor(QPalette.ColorRole.Light, QColor("#555555"))
         palette.setColor(QPalette.ColorRole.Mid, QColor("#444444"))
         palette.setColor(QPalette.ColorRole.Dark, QColor("#333333"))
         # Tooltip background
-        palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#2e2e2e"))
+        palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#2d2d2d"))
 
         self.setPalette(palette)
-        # Ensure stylesheet enforces dark theme for elements not covered by palette
-        self.setStyleSheet(""""
-            QToolTip { background-color: #2e2e2e; color: #ffffff; border: 1px solid #555555; }
-            QComboBox, QLineEdit, QTextEdit, QTableWidget { 
-                background-color: #3e3e3e; 
-                color: #ffffff; 
-                border: 1px solid #555555; 
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: #2d2d2d;
+                color: #dcdcdc;
+                border: 1px solid #555555;
             }
-            QPushButton { 
-                background-color: #4a4a4a; 
-                color: #ffffff; 
-                border: 1px solid #555555; 
+            QComboBox, QLineEdit, QTextEdit, QTableWidget {
+                background-color: #2d2d2d;
+                color: #dcdcdc;
+                border: 1px solid #555555;
             }
-            QPushButton:hover { 
-                background-color: #0078d4; 
+            QPlainTextEdit {
+                background: #1a1a1a;
+                color: #b0c4b0;
+                font-family: monospace;
+                font-size: 11px;
+                border: none;
             }
-            QTabBar::tab { 
-                background: #3e3e3e; 
-                color: #ffffff; 
-                padding: 5px; 
+            QPushButton {
+                background-color: #4a4a4a;
+                color: #dcdcdc;
+                border: 1px solid #555555;
             }
-            QTabBar::tab:selected { 
-                background: #0078d4; 
+            QPushButton:hover {
+                background-color: #0078d4;
+            }
+            QTabBar::tab {
+                background: #2d2d2d;
+                color: #aaaaaa;
+                padding: 5px;
+            }
+            QTabBar::tab:selected {
+                background: #0078d4;
+                color: #dcdcdc;
+            }
+            QHeaderView::section {
+                background-color: #333333;
+                color: #aaaaaa;
+                border: 1px solid #444444;
+            }
+            QLabel {
+                color: #dcdcdc;
             }
         """)
 
@@ -129,28 +150,32 @@ class EvidenceManagerApp(QMainWindow):
         palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#f0f0f0"))
 
         self.setPalette(palette)
-        self.setStyleSheet(""""
-            QToolTip { background-color: #f0f0f0; color: #000000; border: 1px solid #a0a0a0; }
-            QComboBox, QLineEdit, QTextEdit, QTableWidget { 
-                background-color: #ffffff; 
-                color: #000000; 
-                border: 1px solid #a0a0a0; 
+        self.setStyleSheet("""
+            QToolTip {
+                background-color: #f0f0f0;
+                color: #000000;
+                border: 1px solid #a0a0a0;
             }
-            QPushButton { 
-                background-color: #e0e0e0; 
-                color: #000000; 
-                border: 1px solid #a0a0a0; 
+            QComboBox, QLineEdit, QTextEdit, QTableWidget {
+                background-color: #ffffff;
+                color: #000000;
+                border: 1px solid #a0a0a0;
             }
-            QPushButton:hover { 
-                background-color: #0078d4; 
+            QPushButton {
+                background-color: #e0e0e0;
+                color: #000000;
+                border: 1px solid #a0a0a0;
             }
-            QTabBar::tab { 
-                background: #f0f0f0; 
-                color: #000000; 
-                padding: 5px; 
+            QPushButton:hover {
+                background-color: #0078d4;
             }
-            QTabBar::tab:selected { 
-                background: #0078d4; 
+            QTabBar::tab {
+                background: #f0f0f0;
+                color: #000000;
+                padding: 5px;
+            }
+            QTabBar::tab:selected {
+                background: #0078d4;
             }
         """)
 
@@ -179,18 +204,22 @@ class EvidenceManagerApp(QMainWindow):
         QShortcut(
             QKeySequence("Ctrl+L"),
             self,
-            lambda: self.browse_tab.create_labels()
-            if self.tabs.currentWidget() == self.browse_tab
-            else None,
+            lambda: (
+                self.browse_tab.create_labels()
+                if self.tabs.currentWidget() == self.browse_tab
+                else None
+            ),
         )
 
         # Ctrl+B to trigger BibTeX generation in Browse tab
         QShortcut(
             QKeySequence("Ctrl+B"),
             self,
-            lambda: self.browse_tab.generate_bibtex()
-            if self.tabs.currentWidget() == self.browse_tab
-            else None,
+            lambda: (
+                self.browse_tab.generate_bibtex()
+                if self.tabs.currentWidget() == self.browse_tab
+                else None
+            ),
         )
 
 

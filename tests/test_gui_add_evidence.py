@@ -1,14 +1,24 @@
 """Test GUI add evidence tab."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
+
 from evid.gui.tabs.add_evidence import AddEvidenceTab
-from unittest.mock import patch, MagicMock
 
 
 @pytest.fixture
-def add_tab(tmp_path):
-    tab = AddEvidenceTab(tmp_path)
-    yield tab
+def add_tab(qapp, tmp_path):
+    import os
+
+    saved = {k: os.environ.pop(k, None) for k in ("QT_QPA_PLATFORM", "HEADLESS", "CI")}
+    try:
+        tab = AddEvidenceTab(tmp_path)
+    finally:
+        for k, v in saved.items():
+            if v is not None:
+                os.environ[k] = v
+    return tab
 
 
 def test_init_ui(add_tab):
