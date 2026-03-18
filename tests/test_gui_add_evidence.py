@@ -82,7 +82,7 @@ def test_quick_add_from_url_sets_title(add_tab, tmp_path):
         ):
             add_tab.quick_add_from_url()
     assert add_tab.title_input.text() == "My Article"
-    assert add_tab.label_input.text() == "my_article"
+    assert add_tab.label_input.text() == "My Article"
 
 
 def test_quick_add_from_url_author_from_meta(add_tab, tmp_path):

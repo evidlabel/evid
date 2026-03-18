@@ -369,7 +369,7 @@ class AddEvidenceTab(QWidget):
             self.prefill_fields(file_path)
             if page_title:
                 self.title_input.setText(page_title)
-                self.label_input.setText(page_title.replace(" ", "_").lower())
+                self.label_input.setText(page_title)
             if not self.authors_input.text().strip() and "application/pdf" not in content_type:
                 from urllib.parse import urlparse
                 from bs4 import BeautifulSoup
