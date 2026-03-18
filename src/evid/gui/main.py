@@ -1,17 +1,41 @@
 """Main GUI application."""
 
+import logging
 import os
 import sys
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QColor, QKeySequence, QPalette, QShortcut
-from PySide6.QtWidgets import QApplication, QMainWindow, QTabWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QPlainTextEdit,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from evid import DEFAULT_DIR
 
 from .tabs.add_evidence import AddEvidenceTab
 from .tabs.browse_evidence import BrowseEvidenceTab
+
+
+class _QtLogHandler(logging.Handler):
+    """Append log records to a QPlainTextEdit."""
+
+    def __init__(self, widget: QPlainTextEdit):
+        super().__init__()
+        self._widget = widget
+        self.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+
+    def emit(self, record):
+        msg = self.format(record)
+        self._widget.appendPlainText(msg)
+        self._widget.verticalScrollBar().setValue(
+            self._widget.verticalScrollBar().maximum()
+        )
 
 
 class _TabCycleFilter(QObject):
@@ -41,21 +65,38 @@ class EvidenceManagerApp(QMainWindow):
         self.setWindowTitle("evid")
         self.resize(1400, 900)
 
-        # Detect system theme and apply accordingly
         self.apply_theme()
 
-        # Setup tabs
+        # Central widget: tabs + log pane
+        central = QWidget()
+        vbox = QVBoxLayout(central)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+
         self.tabs = QTabWidget()
-        self.setCentralWidget(self.tabs)
+        vbox.addWidget(self.tabs, stretch=1)
+
+        self.log_pane = QPlainTextEdit()
+        self.log_pane.setReadOnly(True)
+        self.log_pane.setMaximumBlockCount(200)
+        line_h = self.log_pane.fontMetrics().lineSpacing()
+        self.log_pane.setFixedHeight(line_h * 3 + 10)
+        vbox.addWidget(self.log_pane)
+
+        self.setCentralWidget(central)
+
+        # Attach log handler to root logger
+        self._log_handler = _QtLogHandler(self.log_pane)
+        self._log_handler.setLevel(logging.INFO)
+        logging.getLogger().addHandler(self._log_handler)
 
         self.add_tab = AddEvidenceTab(self.directory)
         self.browse_tab = BrowseEvidenceTab(self.directory)
 
         self.tabs.addTab(self.add_tab, "Add")
         self.tabs.addTab(self.browse_tab, "Browse")
-        self.tabs.setCurrentIndex(1)  # Set Browse tab as active initially
+        self.tabs.setCurrentIndex(1)
 
-        # Setup keyboard shortcuts
         self.setup_shortcuts()
 
     def is_dark_mode(self):
@@ -67,11 +108,9 @@ class EvidenceManagerApp(QMainWindow):
                 return QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
         except AttributeError:
             pass
-        # Fallback: assume light mode
         return False
 
     def apply_theme(self):
-        """Apply light or dark theme based on system preference."""
         if self.is_dark_mode():
             self.set_dark_theme()
         else:
@@ -80,27 +119,21 @@ class EvidenceManagerApp(QMainWindow):
     def set_dark_theme(self):
         """Apply a consistent dark theme."""
         palette = QPalette()
-        # Background colors
         palette.setColor(QPalette.ColorRole.Window, QColor("#2d2d2d"))
         palette.setColor(QPalette.ColorRole.Base, QColor("#2d2d2d"))
         palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#333333"))
-        # Text colors
         palette.setColor(QPalette.ColorRole.WindowText, QColor("#dcdcdc"))
         palette.setColor(QPalette.ColorRole.Text, QColor("#dcdcdc"))
         palette.setColor(QPalette.ColorRole.ToolTipText, QColor("#dcdcdc"))
-        # Button and highlight colors
         palette.setColor(QPalette.ColorRole.Button, QColor("#4a4a4a"))
         palette.setColor(QPalette.ColorRole.ButtonText, QColor("#dcdcdc"))
         palette.setColor(QPalette.ColorRole.Highlight, QColor("#0078d4"))
         palette.setColor(QPalette.ColorRole.HighlightedText, QColor("#dcdcdc"))
-        # Disabled elements
         palette.setColor(QPalette.ColorRole.PlaceholderText, QColor("#888888"))
         palette.setColor(QPalette.ColorRole.Light, QColor("#555555"))
         palette.setColor(QPalette.ColorRole.Mid, QColor("#444444"))
         palette.setColor(QPalette.ColorRole.Dark, QColor("#333333"))
-        # Tooltip background
         palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#2d2d2d"))
-
         self.setPalette(palette)
         self.setStyleSheet("""
             QToolTip {
@@ -150,7 +183,6 @@ class EvidenceManagerApp(QMainWindow):
     def set_light_theme(self):
         """Apply a consistent light theme."""
         palette = QPalette()
-        # Use default light colors
         palette.setColor(QPalette.ColorRole.Window, QColor("#f0f0f0"))
         palette.setColor(QPalette.ColorRole.Base, QColor("#ffffff"))
         palette.setColor(QPalette.ColorRole.AlternateBase, QColor("#f7f7f7"))
@@ -166,7 +198,6 @@ class EvidenceManagerApp(QMainWindow):
         palette.setColor(QPalette.ColorRole.Mid, QColor("#c0c0c0"))
         palette.setColor(QPalette.ColorRole.Dark, QColor("#a0a0a0"))
         palette.setColor(QPalette.ColorRole.ToolTipBase, QColor("#f0f0f0"))
-
         self.setPalette(palette)
         self.setStyleSheet("""
             QToolTip {
@@ -198,16 +229,12 @@ class EvidenceManagerApp(QMainWindow):
         """)
 
     def setup_shortcuts(self):
-        """Setup keyboard shortcuts for tab navigation, app closing, labeling, and BibTeX generation."""
-        # Ctrl+PageUp / Ctrl+PageDown — application-level event filter so it
-        # works regardless of which child widget currently has focus.
+        """Setup keyboard shortcuts."""
         self._tab_filter = _TabCycleFilter(self.tabs)
         QApplication.instance().installEventFilter(self._tab_filter)
 
-        # Ctrl+W to close the application
         QShortcut(QKeySequence("Ctrl+W"), self, self.close)
 
-        # Ctrl+L to trigger labeling in Browse tab
         QShortcut(
             QKeySequence("Ctrl+L"),
             self,
@@ -218,7 +245,6 @@ class EvidenceManagerApp(QMainWindow):
             ),
         )
 
-        # Ctrl+B to trigger BibTeX generation in Browse tab
         QShortcut(
             QKeySequence("Ctrl+B"),
             self,
@@ -232,7 +258,6 @@ class EvidenceManagerApp(QMainWindow):
 
 def main(directory=DEFAULT_DIR):
     """Launch the GUI application."""
-    # Check for headless mode
     headless = (
         os.environ.get("QT_QPA_PLATFORM") == "offscreen"
         or os.environ.get("HEADLESS") == "1"
@@ -241,6 +266,5 @@ def main(directory=DEFAULT_DIR):
     window = EvidenceManagerApp(Path(directory))
     window.show()
     if headless:
-        # In headless mode, don't start the event loop
         return
     sys.exit(app.exec())

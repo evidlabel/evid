@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QMessageBox,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
@@ -145,22 +144,16 @@ class AddEvidenceTab(QWidget):
     def view_file(self):
         file_path = self.file_input.text().strip()
         if not file_path:
-            QMessageBox.warning(
-                self, "No File Selected", "Please select a PDF file to view."
-            )
+            logger.warning("No file selected — please select a PDF file to view.")
             return
         file_path = Path(file_path)
         if not file_path.exists():
-            QMessageBox.warning(
-                self, "File Not Found", f"The file {file_path} does not exist."
-            )
+            logger.warning("File not found: %s", file_path)
             return
         try:
             subprocess.run(["xdg-open", str(file_path)])
         except subprocess.SubprocessError as e:
-            QMessageBox.critical(
-                self, "Error Opening File", f"Failed to open PDF: {e!s}"
-            )
+            logger.error("Failed to open PDF: %s", e)
 
     def _extract_pdf_date(self, pdf_path: Path):
         """Extracts and formats the date from PDF metadata as a plain string."""
@@ -227,16 +220,12 @@ class AddEvidenceTab(QWidget):
         if dataset_name:
             dataset_path = self.directory / dataset_name
             if dataset_path.exists():
-                QMessageBox.warning(
-                    self,
-                    "Dataset Exists",
-                    f"Dataset '{dataset_name}' already exists. Please choose a different name.",
-                )
+                logger.warning("Dataset '%s' already exists.", dataset_name)
                 return
             dataset_path.mkdir(parents=True, exist_ok=False)
             self.dataset_combo.addItem(dataset_name)
             self.dataset_combo.setCurrentText(dataset_name)
-            logger.info(f"Successfully created new dataset: {dataset_name}")
+            logger.info("Created dataset: %s", dataset_name)
 
     def add_evidence(self):
         dataset = self.dataset_combo.currentText()
@@ -252,19 +241,13 @@ class AddEvidenceTab(QWidget):
             field for field, value in required_fields.items() if not value.strip()
         ]
         if missing_fields:
-            QMessageBox.warning(
-                self,
-                "Missing Required Fields",
-                f"Please fill in the following required fields:\n- {', '.join(missing_fields)}",
-            )
+            logger.warning("Missing required fields: %s", ", ".join(missing_fields))
             return
 
         file_path_str = self.file_input.text()
         file_path = Path(file_path_str)
         if not file_path.exists():
-            QMessageBox.warning(
-                self, "File Not Found", f"The file {file_path} does not exist."
-            )
+            logger.warning("File not found: %s", file_path)
             return
 
         with open(file_path, "rb") as f:
@@ -277,19 +260,7 @@ class AddEvidenceTab(QWidget):
         unique_dir = self.directory / dataset / unique_id.hex
 
         if unique_dir.exists():
-            QMessageBox.information(
-                self,
-                "Already Added",
-                f"This document is already added in {dataset} at {unique_id.hex}. Opening directory.",
-            )
-            try:
-                subprocess.run(["code", str(unique_dir)], check=True)
-            except subprocess.SubprocessError as e:
-                QMessageBox.critical(
-                    self,
-                    "Error Opening Directory",
-                    f"Failed to open directory: {e!s}",
-                )
+            logger.info("Already added: %s (dataset=%s)", unique_id.hex, dataset)
             return
 
         unique_dir.mkdir(parents=True)
@@ -314,14 +285,13 @@ class AddEvidenceTab(QWidget):
             validated_info = InfoModel(**info)
             info = validated_info.model_dump()
         except ValueError as e:
-            logger.error(f"Validation error for info.yml: {e}")
-            QMessageBox.critical(self, "Validation Error", f"Validation failed: {e}")
+            logger.error("Validation error for info.yml: %s", e)
             return
 
         with (unique_dir / "info.yml").open("w", encoding="utf-8") as f:
             yaml.dump(info, f, allow_unicode=True)
 
-        print(f"Added evidence to {unique_dir}")
+        logger.info("Added evidence to %s", unique_dir)
 
         # Clean up temp file if it was used
         if self.is_temp_file:
@@ -335,7 +305,7 @@ class AddEvidenceTab(QWidget):
     def quick_add_from_url(self):
         url = self.url_input.text()
         if not url:
-            QMessageBox.warning(self, "No URL", "Please enter a URL to add.")
+            logger.warning("No URL entered.")
             return
 
         try:
@@ -378,9 +348,9 @@ class AddEvidenceTab(QWidget):
                 author = (meta_author.get("content", "") if meta_author else "") or urlparse(url).netloc
                 self.authors_input.setText(author)
         except requests.RequestException as e:
-            QMessageBox.critical(self, "URL Error", f"Failed to fetch URL: {e!s}")
+            logger.error("Failed to fetch URL: %s", e)
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to process URL: {e!s}")
+            logger.error("Failed to process URL: %s", e)
             if "temp_dir" in locals():
                 try:
                     temp_dir.cleanup()
