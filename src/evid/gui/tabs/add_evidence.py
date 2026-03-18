@@ -370,6 +370,13 @@ class AddEvidenceTab(QWidget):
             if page_title:
                 self.title_input.setText(page_title)
                 self.label_input.setText(page_title.replace(" ", "_").lower())
+            if not self.authors_input.text().strip() and "application/pdf" not in content_type:
+                from urllib.parse import urlparse
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(response.text, "html.parser")
+                meta_author = soup.find("meta", attrs={"name": "author"})
+                author = (meta_author.get("content", "") if meta_author else "") or urlparse(url).netloc
+                self.authors_input.setText(author)
         except requests.RequestException as e:
             QMessageBox.critical(self, "URL Error", f"Failed to fetch URL: {e!s}")
         except Exception as e:

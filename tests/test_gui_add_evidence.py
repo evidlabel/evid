@@ -85,6 +85,34 @@ def test_quick_add_from_url_sets_title(add_tab, tmp_path):
     assert add_tab.label_input.text() == "my_article"
 
 
+def test_quick_add_from_url_author_from_meta(add_tab, tmp_path):
+    add_tab.url_input.setText("http://example.com/article")
+    mock_response = MagicMock()
+    mock_response.text = '<html><head><title>T</title><meta name="author" content="Jane Doe"></head><body>x</body></html>'
+    mock_response.raise_for_status.return_value = None
+    mock_response.headers = {"Content-Type": "text/html"}
+    fake_pdf = tmp_path / "article.pdf"
+    fake_pdf.write_bytes(b"%PDF-1.0\n%%EOF")
+    with patch("evid.gui.tabs.add_evidence.requests.get", return_value=mock_response):
+        with patch("evid.core.typst_generation.web_to_pdf", return_value=(fake_pdf, "T")):
+            add_tab.quick_add_from_url()
+    assert add_tab.authors_input.text() == "Jane Doe"
+
+
+def test_quick_add_from_url_author_fallback_to_domain(add_tab, tmp_path):
+    add_tab.url_input.setText("http://example.com/article")
+    mock_response = MagicMock()
+    mock_response.text = "<html><head><title>T</title></head><body>x</body></html>"
+    mock_response.raise_for_status.return_value = None
+    mock_response.headers = {"Content-Type": "text/html"}
+    fake_pdf = tmp_path / "article.pdf"
+    fake_pdf.write_bytes(b"%PDF-1.0\n%%EOF")
+    with patch("evid.gui.tabs.add_evidence.requests.get", return_value=mock_response):
+        with patch("evid.core.typst_generation.web_to_pdf", return_value=(fake_pdf, "T")):
+            add_tab.quick_add_from_url()
+    assert add_tab.authors_input.text() == "example.com"
+
+
 def test_add_evidence(add_tab, tmp_path):
     add_tab.dataset_combo.addItem("test_ds")
     add_tab.dataset_combo.setCurrentText("test_ds")
