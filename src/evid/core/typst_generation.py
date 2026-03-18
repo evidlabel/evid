@@ -50,9 +50,6 @@ def web_to_pdf(url: str, output_dir: Path, html: str = None) -> tuple:
     text = clean_text_for_typst(
         normalize_text(soup.get_text(separator="\n", strip=True))
     )
-    # Escape bare # so web hashtags/anchors don't trigger Typst function calls
-    text = text.replace("#", "\\#")
-
     safe_title = page_title.replace("\\", "\\\\").replace('"', '\\"')
     safe_url = url.replace("\\", "\\\\").replace('"', '\\"')
 

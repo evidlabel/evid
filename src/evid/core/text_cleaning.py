@@ -44,7 +44,8 @@ def clean_text_for_typst(text: str) -> str:
     # Join back
     text = "\n".join(processed_lines)
 
-    # Escape bare Typst special characters: * and $
+    # Escape bare Typst special characters: #, * and $
+    text = re.sub(r"(?<!\\)#", r"\\#", text)
     text = re.sub(r"(?<!\\)\*", r"\\*", text)
     text = re.sub(r"(?<!\\)\$", r"\\$", text)
 
