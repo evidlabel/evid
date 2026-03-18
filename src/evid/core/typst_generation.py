@@ -11,9 +11,18 @@ from evid.core.text_cleaning import clean_text_for_typst
 logger = logging.getLogger(__name__)
 
 
-def web_to_pdf(url: str, output_dir: Path) -> tuple:
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+}
+
+
+def web_to_pdf(url: str, output_dir: Path, html: str = None) -> tuple:
     """Fetch a web page, render it as a timestamped Typst document, compile to PDF.
 
+    If html is provided the network fetch is skipped.
     Returns (pdf_path, page_title).
     """
     import subprocess
@@ -23,10 +32,12 @@ def web_to_pdf(url: str, output_dir: Path) -> tuple:
 
     from evid.utils.text import normalize_text
 
-    response = requests.get(url, timeout=15)
-    response.raise_for_status()
+    if html is None:
+        response = requests.get(url, timeout=15, headers=_BROWSER_HEADERS)
+        response.raise_for_status()
+        html = response.text
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    soup = BeautifulSoup(html, "html.parser")
     title_tag = soup.find("title")
     page_title = (
         normalize_text(title_tag.get_text())
@@ -50,9 +61,9 @@ def web_to_pdf(url: str, output_dir: Path) -> tuple:
 
 = {safe_title}
 
-*Archived: #datetime.today().display()*
+#strong[Archived:] #datetime.today().display()
 
-*Source: {safe_url}*
+#strong[Source:] {safe_url}
 
 {text}
 """
