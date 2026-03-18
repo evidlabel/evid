@@ -1,7 +1,7 @@
 """Text cleaning functions for evid."""
 
-import re
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +23,9 @@ def clean_text_for_typst(text: str) -> str:
     # Expand ligatures
     for lig, repl in LIGATURES.items():
         if lig in text:
-            logger.info(f"Found ligature {repr(lig)} in text")
+            logger.info(f"Found ligature {lig!r} in text")
             text = text.replace(lig, repl)
-            logger.info(f"Replaced ligature {repr(lig)} with {repr(repl)}")
+            logger.info(f"Replaced ligature {lig!r} with {repl!r}")
 
     # Split into lines
     lines = text.split("\n")
@@ -43,6 +43,10 @@ def clean_text_for_typst(text: str) -> str:
 
     # Join back
     text = "\n".join(processed_lines)
+
+    # Escape bare Typst special characters: * and $
+    text = re.sub(r"(?<!\\)\*", r"\\*", text)
+    text = re.sub(r"(?<!\\)\$", r"\\$", text)
 
     # Collapse multiple newlines
     text = re.sub(r"(\n\s*\n)+", r"\n\n", text)
