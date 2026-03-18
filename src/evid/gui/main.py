@@ -11,9 +11,8 @@ from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
     QPlainTextEdit,
+    QSplitter,
     QTabWidget,
-    QVBoxLayout,
-    QWidget,
 )
 
 from evid import DEFAULT_DIR
@@ -67,23 +66,24 @@ class EvidenceManagerApp(QMainWindow):
 
         self.apply_theme()
 
-        # Central widget: tabs + log pane
-        central = QWidget()
-        vbox = QVBoxLayout(central)
-        vbox.setContentsMargins(0, 0, 0, 0)
-        vbox.setSpacing(0)
+        # Central widget: splitter with tabs on top, log pane on bottom
+        splitter = QSplitter(Qt.Orientation.Vertical)
 
         self.tabs = QTabWidget()
-        vbox.addWidget(self.tabs, stretch=1)
+        splitter.addWidget(self.tabs)
 
         self.log_pane = QPlainTextEdit()
         self.log_pane.setReadOnly(True)
         self.log_pane.setMaximumBlockCount(200)
-        line_h = self.log_pane.fontMetrics().lineSpacing()
-        self.log_pane.setFixedHeight(line_h * 3 + 10)
-        vbox.addWidget(self.log_pane)
+        splitter.addWidget(self.log_pane)
 
-        self.setCentralWidget(central)
+        # Initial sizes: give tabs the bulk, log pane ~3 lines
+        line_h = self.log_pane.fontMetrics().lineSpacing()
+        log_init = line_h * 3 + 10
+        splitter.setSizes([900 - log_init, log_init])
+        splitter.setCollapsible(1, False)
+
+        self.setCentralWidget(splitter)
 
         # Attach log handler to root logger
         self._log_handler = _QtLogHandler(self.log_pane)
