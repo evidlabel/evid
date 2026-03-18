@@ -354,18 +354,22 @@ class AddEvidenceTab(QWidget):
 
             temp_dir = tempfile.TemporaryDirectory()
 
+            page_title = None
             if "application/pdf" in content_type:
                 file_name = Path(url.split("/")[-1] or "document").stem + ".pdf"
                 file_path = Path(temp_dir.name) / file_name
                 with file_path.open("wb") as f:
                     f.write(response.content)
             else:
-                file_path, _ = web_to_pdf(url, Path(temp_dir.name), html=response.text)
+                file_path, page_title = web_to_pdf(url, Path(temp_dir.name), html=response.text)
 
             self.file_input.setText(str(file_path))
             self.is_temp_file = True
             self.temp_dir = temp_dir
             self.prefill_fields(file_path)
+            if page_title:
+                self.title_input.setText(page_title)
+                self.label_input.setText(page_title.replace(" ", "_").lower())
         except requests.RequestException as e:
             QMessageBox.critical(self, "URL Error", f"Failed to fetch URL: {e!s}")
         except Exception as e:
