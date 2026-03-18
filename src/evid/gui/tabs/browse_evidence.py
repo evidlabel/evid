@@ -1,32 +1,31 @@
 """GUI tab for browsing evidence."""
 
 import logging
+import subprocess
+from pathlib import Path
+
+import arrow
+import yaml
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
     QComboBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
-    QMessageBox,
-    QHeaderView,
-    QLineEdit,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt
-from pathlib import Path
-import yaml
-import subprocess
-from evid.core.label import create_label
-from evid.core.bibtex import generate_bib_from_typ
-import arrow
+
 from evid import DEFAULT_DIR
+from evid.core.bibtex import generate_bib_from_typ
+from evid.core.label import create_label
 from evid.core.models import InfoModel
 from evid.core.prompt import create_prompt
 
-# Set up logging with detailed output
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
@@ -36,7 +35,7 @@ class BrowseEvidenceTab(QWidget):
     def __init__(self, directory: Path = DEFAULT_DIR):
         super().__init__()
         self.directory = directory
-        self.metadata_entries = []  # Store all metadata for filtering
+        self.metadata_entries = []
         self.init_ui()
 
     def init_ui(self):
@@ -67,22 +66,19 @@ class BrowseEvidenceTab(QWidget):
         self.table.setHorizontalHeaderLabels(
             ["Author", "Title", "Date", "File Name", "UUID"]
         )
-        self.table.setSortingEnabled(True)  # Enable sorting
-        self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)  # Default sort by Date
+        self.table.setSortingEnabled(True)
+        self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)
 
-        # Set default column widths
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        self.table.setColumnWidth(0, 200)  # Author
-        self.table.setColumnWidth(1, 250)  # Title
-        self.table.setColumnWidth(2, 100)  # Date
-        self.table.setColumnWidth(3, 150)  # File Name
-        self.table.setColumnWidth(4, 150)  # UUID
-
-        # Make columns stretch when window resizes
+        self.table.setColumnWidth(0, 200)
+        self.table.setColumnWidth(1, 250)
+        self.table.setColumnWidth(2, 100)
+        self.table.setColumnWidth(3, 150)
+        self.table.setColumnWidth(4, 150)
         header.setStretchLastSection(True)
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # Author
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)  # Title
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.table)
 
         # Buttons
@@ -101,7 +97,7 @@ class BrowseEvidenceTab(QWidget):
 
         if self.dataset_combo.count() > 0:
             self.dataset_combo.setCurrentIndex(0)
-            self.load_metadata()  # Automatically load metadata for the first dataset
+            self.load_metadata()
 
     def get_datasets(self):
         return (
@@ -117,14 +113,13 @@ class BrowseEvidenceTab(QWidget):
     def load_metadata(self):
         dataset = self.dataset_combo.currentText()
         if not dataset:
-            return  # Silently return if no dataset selected
+            return
 
-        # Fully reset table and metadata
         self.table.setSortingEnabled(False)
         self.table.clearContents()
         self.table.setRowCount(0)
         self.metadata_entries = []
-        logger.debug(f"Loading metadata for dataset: {dataset}")
+        logger.debug("Loading metadata for dataset: %s", dataset)
 
         for info_file in self.directory.glob(f"{dataset}/**/info.yml"):
             try:
@@ -136,9 +131,8 @@ class BrowseEvidenceTab(QWidget):
                     or not isinstance(metadata, dict)
                     or "uuid" not in metadata
                 ):
-                    continue  # Skip invalid entries
+                    continue
 
-                # Validate with Pydantic
                 validated_metadata = InfoModel(**metadata)
                 metadata = validated_metadata.model_dump()
 
@@ -150,20 +144,14 @@ class BrowseEvidenceTab(QWidget):
 
                 self.metadata_entries.append((date, metadata))
             except ValueError as e:
-                logger.error(f"Validation error in {info_file}: {str(e)}")
-                continue
+                logger.error("Validation error in %s: %s", info_file, e)
             except yaml.YAMLError as e:
-                logger.error(f"YAML parsing error in {info_file}: {str(e)}")
-                continue
+                logger.error("YAML parsing error in %s: %s", info_file, e)
             except Exception as e:
-                logger.error(f"Failed to load {info_file}: {str(e)}")
-                continue
+                logger.error("Failed to load %s: %s", info_file, e)
 
-        # Sort entries by date (latest first)
         self.metadata_entries.sort(key=lambda x: x[0], reverse=True)
-        logger.debug(f"Found {len(self.metadata_entries)} valid entries")
-
-        # Populate table with all entries initially
+        logger.debug("Found %d valid entries", len(self.metadata_entries))
         self.filter_metadata()
 
     def filter_metadata(self):
@@ -190,10 +178,6 @@ class BrowseEvidenceTab(QWidget):
                 self.table.setItem(row, 3, QTableWidgetItem(original_name))
                 self.table.setItem(row, 4, QTableWidgetItem(uuid_value))
 
-                logger.debug(
-                    f"Added row {row}: Authors={authors}, Label={label}, UUID={uuid_value}"
-                )
-
         self.table.setSortingEnabled(True)
         self.table.sortByColumn(2, Qt.SortOrder.DescendingOrder)
 
@@ -203,9 +187,7 @@ class BrowseEvidenceTab(QWidget):
             set(index.row() for index in self.table.selectedIndexes())
         )
         if not selected_rows:
-            QMessageBox.warning(
-                self, "No Selection", "Please select at least one evidence entry."
-            )
+            logger.warning("No selection — please select at least one entry.")
             return
 
         dataset = self.dataset_combo.currentText()
@@ -213,54 +195,40 @@ class BrowseEvidenceTab(QWidget):
         for row in selected_rows:
             uuid_item = self.table.item(row, 4)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-                QMessageBox.critical(
-                    self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID."
-                )
+                logger.error("Row %d has no valid UUID.", row + 1)
                 continue
 
             uuid = uuid_item.text()
             path = self.directory / dataset / uuid
             if not path.exists():
-                QMessageBox.critical(
-                    self, "Directory Missing", f"The directory {path} does not exist."
-                )
+                logger.error("Directory missing: %s", path)
                 continue
             paths.append(str(path))
 
         if paths:
             try:
-                subprocess.run(["code"] + paths, check=True)  # Open all in one window
+                subprocess.run(["code"] + paths, check=True)
             except subprocess.SubprocessError as e:
-                QMessageBox.critical(
-                    self,
-                    "Error Opening VS Code",
-                    f"Failed to open directories in VS Code: {str(e)}",
-                )
+                logger.error("Failed to open VS Code: %s", e)
 
     def create_labels(self):
         selected_rows = sorted(
             set(index.row() for index in self.table.selectedIndexes())
         )
         if not selected_rows:
-            QMessageBox.warning(
-                self, "No Selection", "Please select at least one evidence entry."
-            )
+            logger.warning("No selection — please select at least one entry.")
             return
 
         dataset = self.dataset_combo.currentText()
         for row in selected_rows:
             uuid_item = self.table.item(row, 4)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-                QMessageBox.critical(
-                    self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID."
-                )
+                logger.error("Row %d has no valid UUID.", row + 1)
                 continue
 
             uuid = uuid_item.text()
             file_name = self.table.item(row, 3).text()
             file_path = self.directory / dataset / uuid / file_name
-
-            # Call the shared create_label function
             create_label(file_path, dataset, uuid)
 
     def generate_bibtex(self):
@@ -268,9 +236,7 @@ class BrowseEvidenceTab(QWidget):
             set(index.row() for index in self.table.selectedIndexes())
         )
         if not selected_rows:
-            QMessageBox.warning(
-                self, "No Selection", "Please select at least one evidence entry."
-            )
+            logger.warning("No selection — please select at least one entry.")
             return
 
         dataset = self.dataset_combo.currentText()
@@ -279,9 +245,7 @@ class BrowseEvidenceTab(QWidget):
         for row in selected_rows:
             uuid_item = self.table.item(row, 4)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-                QMessageBox.critical(
-                    self, "Invalid Entry", f"Entry in row {row + 1} has no valid UUID."
-                )
+                logger.error("Row %d has no valid UUID.", row + 1)
                 continue
 
             uuid = uuid_item.text()
@@ -293,94 +257,53 @@ class BrowseEvidenceTab(QWidget):
             if typ_file.exists():
                 success, msg = generate_bib_from_typ(typ_file)
                 if success:
-                    logger.info(f"Generated BibTeX file: {bib_file}")
+                    logger.info("Generated BibTeX: %s", bib_file)
                     success_count += 1
-                    # Read and collect BibTeX content
                     try:
                         with bib_file.open("r", encoding="utf-8") as f:
                             bib_contents.append(f.read())
                     except Exception as e:
-                        logger.warning(
-                            f"Failed to read BibTeX file {bib_file}: {str(e)}"
-                        )
+                        logger.warning("Failed to read %s: %s", bib_file, e)
                 else:
-                    logger.error(msg)
-                    QMessageBox.critical(
-                        self,
-                        "BibTeX Generation Error",
-                        f"Failed to generate BibTeX for row {row + 1}: {msg}",
-                    )
+                    logger.error("BibTeX generation failed (row %d): %s", row + 1, msg)
             else:
-                logger.warning(f"Typst file {typ_file} not found")
-                QMessageBox.warning(
-                    self,
-                    "Typst Missing",
-                    f"No label.typ found for entry in row {row + 1}. BibTeX generation skipped.",
-                )
+                logger.warning("No label.typ for row %d — skipping BibTeX.", row + 1)
 
         if success_count > 0:
-            # Concatenate all BibTeX contents
-            concatenated_bib = "\n\n".join(bib_contents)
-            # Copy to clipboard
             from PySide6.QtWidgets import QApplication
-
             clipboard = QApplication.clipboard()
-            clipboard.setText(concatenated_bib)
-            QMessageBox.information(
-                self,
-                "BibTeX Generation Complete",
-                f"Successfully generated BibTeX files for {success_count} entries.\nConcatenated BibTeX copied to clipboard.",
-            )
+            clipboard.setText("\n\n".join(bib_contents))
+            logger.info("BibTeX copied to clipboard (%d entries).", success_count)
 
     def run_rebut(self):
         selected_rows = sorted(
             set(index.row() for index in self.table.selectedIndexes())
         )
         if not selected_rows:
-            QMessageBox.warning(
-                self, "No Selection", "Please select an evidence entry to rebut."
-            )
+            logger.warning("No selection — please select an entry to rebut.")
             return
 
         dataset = self.dataset_combo.currentText()
         for row in selected_rows:
             uuid_item = self.table.item(row, 4)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
-                QMessageBox.critical(
-                    self, "Invalid Entry", "Selected entry has no valid UUID."
-                )
+                logger.error("Selected entry has no valid UUID.")
                 continue
 
             uuid = uuid_item.text()
             workdir = self.directory / dataset / uuid
 
             if not workdir.exists():
-                logger.warning(
-                    f"Working directory {workdir} does not exist for rebuttal"
-                )
-                QMessageBox.critical(
-                    self,
-                    "Directory Missing",
-                    f"The evidence directory {workdir} does not exist. It may have been moved or deleted.",
-                )
+                logger.error("Directory missing: %s", workdir)
                 continue
 
             try:
                 from evid.core.rebut_doc import rebut_doc
-
                 rebut_doc(workdir)
             except FileNotFoundError as e:
-                logger.warning(f"Rebuttal failed: {str(e)}")
-                QMessageBox.critical(
-                    self,
-                    "Rebuttal Failed",
-                    f"Could not run rebuttal: {str(e)}. Ensure required files are available.",
-                )
+                logger.error("Rebuttal failed: %s", e)
             except Exception as e:
-                logger.warning(f"Unexpected error during rebuttal: {str(e)}")
-                QMessageBox.critical(
-                    self, "Rebuttal Error", f"An unexpected error occurred: {str(e)}"
-                )
+                logger.error("Rebuttal error: %s", e)
 
     def create_prompt(self):
         """Generate a concatenated Markdown prompt from selected evidence labels."""

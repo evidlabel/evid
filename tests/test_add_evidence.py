@@ -32,8 +32,7 @@ def add_tab(qapp, temp_dir):
     return tab
 
 
-@patch("evid.gui.tabs.add_evidence.QMessageBox")
-def test_add_evidence_success_local(mock_msgbox, add_tab, temp_dir):
+def test_add_evidence_success_local(add_tab, temp_dir):
     content = b"dummy pdf content"
     pdf_path = temp_dir / "test.pdf"
     pdf_path.write_bytes(content)
@@ -54,13 +53,9 @@ def test_add_evidence_success_local(mock_msgbox, add_tab, temp_dir):
     digest = hashlib.sha256(content).digest()[:16]
     expected_uuid = uuid.UUID(bytes=digest).hex
     assert (dataset_path / expected_uuid / "test.pdf").exists()
-    mock_msgbox.critical.assert_not_called()
-    mock_msgbox.warning.assert_not_called()
 
 
-@patch("evid.gui.tabs.add_evidence.subprocess.run")
-@patch("evid.gui.tabs.add_evidence.QMessageBox")
-def test_add_evidence_duplicate_content(mock_msgbox, mock_run, add_tab, temp_dir):
+def test_add_evidence_duplicate_content(add_tab, temp_dir):
     content = b"dummy pdf content"
     pdf_path = temp_dir / "test.pdf"
     pdf_path.write_bytes(content)
@@ -76,18 +71,16 @@ def test_add_evidence_duplicate_content(mock_msgbox, mock_run, add_tab, temp_dir
     dataset_path = temp_dir / "test_dataset"
     dataset_path.mkdir()
 
-    # First add should succeed silently
     add_tab.add_evidence()
-    mock_msgbox.information.assert_not_called()
 
-    # Second add same content → duplicate detected
-    add_tab.add_evidence()
-    mock_msgbox.information.assert_called_once()
+    # Second add same content — duplicate detected, returns silently
+    with patch("evid.gui.tabs.add_evidence.logger") as mock_log:
+        add_tab.add_evidence()
+        mock_log.info.assert_called()
 
 
 @patch("evid.gui.tabs.add_evidence.requests.get")
-@patch("evid.gui.tabs.add_evidence.QMessageBox")
-def test_quick_add_from_url_success(mock_msgbox, mock_get, add_tab):
+def test_quick_add_from_url_success(mock_get, add_tab):
     mock_response = MagicMock()
     mock_response.content = b"dummy pdf content"
     mock_response.headers = {"Content-Type": "application/pdf"}
@@ -101,27 +94,24 @@ def test_quick_add_from_url_success(mock_msgbox, mock_get, add_tab):
     assert add_tab.is_temp_file
     assert add_tab.temp_dir is not None
     add_tab.file_input.setText.assert_called()
-    mock_msgbox.critical.assert_not_called()
 
     if add_tab.temp_dir:
         add_tab.temp_dir.cleanup()
 
 
 @patch("evid.gui.tabs.add_evidence.requests.get")
-@patch("evid.gui.tabs.add_evidence.QMessageBox")
-def test_quick_add_from_url_failure(mock_msgbox, mock_get, add_tab):
+def test_quick_add_from_url_failure(mock_get, add_tab):
     import requests
 
     mock_get.side_effect = requests.RequestException("Network error")
     add_tab.url_input.text.return_value = "http://example.com/test.pdf"
 
-    add_tab.quick_add_from_url()
+    with patch("evid.gui.tabs.add_evidence.logger") as mock_log:
+        add_tab.quick_add_from_url()
+        mock_log.error.assert_called()
 
-    mock_msgbox.critical.assert_called_once()
 
-
-@patch("evid.gui.tabs.add_evidence.QMessageBox")
-def test_add_evidence_temp_file_cleanup(mock_msgbox, add_tab, temp_dir):
+def test_add_evidence_temp_file_cleanup(add_tab, temp_dir):
     content = b"dummy pdf content"
     pdf_path = temp_dir / "test.pdf"
     pdf_path.write_bytes(content)
@@ -146,8 +136,7 @@ def test_add_evidence_temp_file_cleanup(mock_msgbox, add_tab, temp_dir):
     assert not add_tab.is_temp_file
 
 
-@patch("evid.gui.tabs.add_evidence.QMessageBox")
-def test_browse_file_sets_not_temp(mock_msgbox, add_tab, temp_dir):
+def test_browse_file_sets_not_temp(add_tab, temp_dir):
     pdf_path = temp_dir / "test.pdf"
     pdf_path.write_bytes(b"dummy pdf content")
 
