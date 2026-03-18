@@ -650,7 +650,7 @@ requires-dist = [
     { name = "pyyaml" },
     { name = "requests" },
     { name = "rich" },
-    { name = "treeparse" },
+    { name = "treeparse", specifier = "==0.2.0" },
 ]
 
 [[package]]
@@ -2024,7 +2024,7 @@ wheels = [
 
 [[package]]
 name = "treeparse"
-version = "0.1.5"
+version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic", version = "2.10.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
@@ -2032,9 +2032,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/44/8d/dbf4314c7ed919efe470b9dc985e496a95e78208fb083e3a4be0e1c71252/treeparse-0.1.5.tar.gz", hash = "sha256:16f2000f5b9900781b293b34cd451f04b903830b8b86a25150e40899dd7a1e6e", size = 1801774, upload-time = "2025-10-29T12:19:12.86Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cc/65/eaf954d0aa932609e550653e87e1c6af95b3e9a7e20555b824192e614fa5/treeparse-0.2.0.tar.gz", hash = "sha256:a2fa970c55d97e4669df195c8f29298fb50ea309e597efa4bb649140d52dd9b1", size = 1544196, upload-time = "2026-03-18T13:23:22.797Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/84/b1/691008c1ab33560c9b348acf5677ac3a2b180c796895a5d340d99c011def/treeparse-0.1.5-py3-none-any.whl", hash = "sha256:b3d5b3f64105c650a8dd5b12880fea5c067f4d34385955d9eb86d2555c8b65b0", size = 15833, upload-time = "2025-10-29T12:19:11.158Z" },
+    { url = "https://files.pythonhosted.org/packages/4f/d9/2adcc2f58b7669ec011031e8b5f02cee88cc1355073c3eeaeac1d4934562/treeparse-0.2.0-py3-none-any.whl", hash = "sha256:3309b6f832937785cd41dbb427953720104a1a0ed2513654cb59a56771c15110", size = 21677, upload-time = "2026-03-18T13:23:21.167Z" },
 ]
 
 [[package]]
