@@ -61,28 +61,30 @@ class BrowseEvidenceTab(QWidget):
         search_layout.addWidget(self.search_input)
         layout.addLayout(search_layout)
 
-        # Table: F=file present, J=label.json present, then metadata columns
-        self.table = QTableWidget(0, 7)
+        # Table: Y=info.yml valid, F=file present, J=label.json present, then metadata
+        self.table = QTableWidget(0, 8)
         self.table.setHorizontalHeaderLabels(
-            ["F", "J", "Author", "Title", "Date", "File Name", "UUID"]
+            ["Y", "F", "J", "Author", "Title", "Date", "File Name", "UUID"]
         )
         self.table.setSortingEnabled(True)
-        self.table.sortByColumn(4, Qt.SortOrder.DescendingOrder)
+        self.table.sortByColumn(5, Qt.SortOrder.DescendingOrder)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.setColumnWidth(0, 24)
         self.table.setColumnWidth(1, 24)
-        self.table.setColumnWidth(2, 200)
-        self.table.setColumnWidth(3, 250)
-        self.table.setColumnWidth(4, 100)
-        self.table.setColumnWidth(5, 150)
+        self.table.setColumnWidth(2, 24)
+        self.table.setColumnWidth(3, 200)
+        self.table.setColumnWidth(4, 250)
+        self.table.setColumnWidth(5, 100)
         self.table.setColumnWidth(6, 150)
+        self.table.setColumnWidth(7, 150)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         header.setStretchLastSection(True)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.table)
 
         # Buttons
@@ -126,6 +128,7 @@ class BrowseEvidenceTab(QWidget):
         logger.debug("Loading metadata for dataset: %s", dataset)
 
         for info_file in self.directory.glob(f"{dataset}/**/info.yml"):
+            uuid_from_dir = info_file.parent.name
             try:
                 with info_file.open("r", encoding="utf-8") as f:
                     metadata = yaml.safe_load(f)
@@ -135,6 +138,11 @@ class BrowseEvidenceTab(QWidget):
                     or not isinstance(metadata, dict)
                     or "uuid" not in metadata
                 ):
+                    self.metadata_entries.append((
+                        arrow.get("1970-01-01"),
+                        {"uuid": uuid_from_dir, "original_name": "", "label": "", "authors": "", "time_added": ""},
+                        False,
+                    ))
                     continue
 
                 validated_metadata = InfoModel(**metadata)
@@ -146,13 +154,14 @@ class BrowseEvidenceTab(QWidget):
                 except arrow.parser.ParserError:
                     date = arrow.get("1970-01-01")
 
-                self.metadata_entries.append((date, metadata))
-            except ValueError as e:
-                logger.error("Validation error in %s: %s", info_file, e)
-            except yaml.YAMLError as e:
-                logger.error("YAML parsing error in %s: %s", info_file, e)
-            except Exception as e:
+                self.metadata_entries.append((date, metadata, True))
+            except (ValueError, yaml.YAMLError, Exception) as e:
                 logger.error("Failed to load %s: %s", info_file, e)
+                self.metadata_entries.append((
+                    arrow.get("1970-01-01"),
+                    {"uuid": uuid_from_dir, "original_name": "", "label": "", "authors": "", "time_added": ""},
+                    False,
+                ))
 
         self.metadata_entries.sort(key=lambda x: x[0], reverse=True)
         logger.debug("Found %d valid entries", len(self.metadata_entries))
@@ -165,35 +174,35 @@ class BrowseEvidenceTab(QWidget):
         self.table.setRowCount(0)
 
         dataset = self.dataset_combo.currentText()
-        for date, metadata in self.metadata_entries:
+        for date, metadata, yml_ok in self.metadata_entries:
             metadata_str = " ".join(str(value).lower() for value in metadata.values())
             if not search_text or search_text in metadata_str:
                 row = self.table.rowCount()
                 self.table.insertRow(row)
 
-                authors = str(metadata.get("authors", "Unknown"))
-                label = str(metadata.get("label", "Unknown"))
-                time_added = str(metadata.get("time_added", "Unknown"))
-                original_name = str(metadata.get("original_name", "Unknown"))
-                uuid_value = str(metadata.get("uuid", "Unknown"))
+                authors = str(metadata.get("authors", ""))
+                label = str(metadata.get("label", ""))
+                time_added = str(metadata.get("time_added", ""))
+                original_name = str(metadata.get("original_name", ""))
+                uuid_value = str(metadata.get("uuid", ""))
 
                 entry_dir = self.directory / dataset / uuid_value
-                file_ok = (entry_dir / original_name).exists()
+                file_ok = bool(original_name) and (entry_dir / original_name).exists()
                 json_ok = (entry_dir / "label.json").exists()
 
-                for col, text in enumerate(["✓" if file_ok else "✗", "✓" if json_ok else "✗"]):
-                    item = QTableWidgetItem(text)
+                for col, ok in enumerate([yml_ok, file_ok, json_ok]):
+                    item = QTableWidgetItem("✓" if ok else "✗")
                     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                     self.table.setItem(row, col, item)
 
-                self.table.setItem(row, 2, QTableWidgetItem(authors))
-                self.table.setItem(row, 3, QTableWidgetItem(label))
-                self.table.setItem(row, 4, QTableWidgetItem(time_added))
-                self.table.setItem(row, 5, QTableWidgetItem(original_name))
-                self.table.setItem(row, 6, QTableWidgetItem(uuid_value))
+                self.table.setItem(row, 3, QTableWidgetItem(authors))
+                self.table.setItem(row, 4, QTableWidgetItem(label))
+                self.table.setItem(row, 5, QTableWidgetItem(time_added))
+                self.table.setItem(row, 6, QTableWidgetItem(original_name))
+                self.table.setItem(row, 7, QTableWidgetItem(uuid_value))
 
         self.table.setSortingEnabled(True)
-        self.table.sortByColumn(4, Qt.SortOrder.DescendingOrder)
+        self.table.sortByColumn(5, Qt.SortOrder.DescendingOrder)
 
     def open_directory(self):
         """Open selected directories in a single VS Code window."""
@@ -207,7 +216,7 @@ class BrowseEvidenceTab(QWidget):
         dataset = self.dataset_combo.currentText()
         paths = []
         for row in selected_rows:
-            uuid_item = self.table.item(row, 6)
+            uuid_item = self.table.item(row, 7)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
                 logger.error("Row %d has no valid UUID.", row + 1)
                 continue
@@ -235,13 +244,13 @@ class BrowseEvidenceTab(QWidget):
 
         dataset = self.dataset_combo.currentText()
         for row in selected_rows:
-            uuid_item = self.table.item(row, 6)
+            uuid_item = self.table.item(row, 7)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
                 logger.error("Row %d has no valid UUID.", row + 1)
                 continue
 
             uuid = uuid_item.text()
-            file_name = self.table.item(row, 5).text()
+            file_name = self.table.item(row, 6).text()
             file_path = self.directory / dataset / uuid / file_name
             create_label(file_path, dataset, uuid)
 
@@ -257,13 +266,13 @@ class BrowseEvidenceTab(QWidget):
         success_count = 0
         bib_contents = []
         for row in selected_rows:
-            uuid_item = self.table.item(row, 6)
+            uuid_item = self.table.item(row, 7)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
                 logger.error("Row %d has no valid UUID.", row + 1)
                 continue
 
             uuid = uuid_item.text()
-            file_name = self.table.item(row, 5).text()
+            file_name = self.table.item(row, 6).text()
             file_path = self.directory / dataset / uuid / file_name
             typ_file = file_path.parent / "label.typ"
             bib_file = file_path.parent / "label.bib"
@@ -299,7 +308,7 @@ class BrowseEvidenceTab(QWidget):
 
         dataset = self.dataset_combo.currentText()
         for row in selected_rows:
-            uuid_item = self.table.item(row, 6)
+            uuid_item = self.table.item(row, 7)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
                 logger.error("Selected entry has no valid UUID.")
                 continue
@@ -326,7 +335,7 @@ class BrowseEvidenceTab(QWidget):
         )
         uuids = []
         for row in selected_rows:
-            uuid_item = self.table.item(row, 6)
+            uuid_item = self.table.item(row, 7)
             if uuid_item and uuid_item.text() and uuid_item.text() != "Unknown":
                 uuids.append(uuid_item.text())
         dataset = self.dataset_combo.currentText()
