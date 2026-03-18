@@ -339,7 +339,9 @@ class AddEvidenceTab(QWidget):
             return
 
         try:
-            response = requests.get(url, timeout=10)
+            from evid.core.typst_generation import _BROWSER_HEADERS, web_to_pdf
+
+            response = requests.get(url, timeout=10, headers=_BROWSER_HEADERS)
             response.raise_for_status()
             content_type = response.headers.get("Content-Type", "")
 
@@ -358,9 +360,7 @@ class AddEvidenceTab(QWidget):
                 with file_path.open("wb") as f:
                     f.write(response.content)
             else:
-                from evid.core.typst_generation import web_to_pdf
-
-                file_path, _ = web_to_pdf(url, Path(temp_dir.name))
+                file_path, _ = web_to_pdf(url, Path(temp_dir.name), html=response.text)
 
             self.file_input.setText(str(file_path))
             self.is_temp_file = True
