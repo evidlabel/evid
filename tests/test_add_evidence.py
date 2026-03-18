@@ -16,7 +16,7 @@ def temp_dir():
 
 
 @pytest.fixture
-def add_tab(temp_dir):
+def add_tab(qapp, temp_dir):
     tab = AddEvidenceTab(directory=temp_dir)
     tab.dataset_combo = MagicMock()
     tab.dataset_combo.currentText.return_value = "test_dataset"
