@@ -342,15 +342,6 @@ class AddEvidenceTab(QWidget):
             response = requests.get(url, timeout=10)
             response.raise_for_status()
             content_type = response.headers.get("Content-Type", "")
-            file_name = url.split("/")[-1] or "document"
-            # Ensure the file has a .pdf suffix
-            file_name = Path(file_name).stem + ".pdf"
-
-            if "application/pdf" not in content_type:
-                QMessageBox.warning(
-                    self, "Invalid File", "URL must point to a PDF file."
-                )
-                return
 
             # Clean up any existing temp file
             if self.is_temp_file and self.temp_dir:
@@ -359,21 +350,26 @@ class AddEvidenceTab(QWidget):
                 except OSError:
                     pass
 
-            # Create temp directory and file with original filename
             temp_dir = tempfile.TemporaryDirectory()
-            file_path = Path(temp_dir.name) / file_name
-            with file_path.open("wb") as f:
-                f.write(response.content)
+
+            if "application/pdf" in content_type:
+                file_name = Path(url.split("/")[-1] or "document").stem + ".pdf"
+                file_path = Path(temp_dir.name) / file_name
+                with file_path.open("wb") as f:
+                    f.write(response.content)
+            else:
+                from evid.core.typst_generation import web_to_pdf
+
+                file_path, _ = web_to_pdf(url, Path(temp_dir.name))
 
             self.file_input.setText(str(file_path))
             self.is_temp_file = True
             self.temp_dir = temp_dir
             self.prefill_fields(file_path)
         except requests.RequestException as e:
-            QMessageBox.critical(self, "URL Error", f"Failed to download PDF: {e!s}")
+            QMessageBox.critical(self, "URL Error", f"Failed to fetch URL: {e!s}")
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to process PDF: {e!s}")
-            # Clean up on failure
+            QMessageBox.critical(self, "Error", f"Failed to process URL: {e!s}")
             if "temp_dir" in locals():
                 try:
                     temp_dir.cleanup()
