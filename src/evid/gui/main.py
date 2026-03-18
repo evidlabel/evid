@@ -181,21 +181,22 @@ class EvidenceManagerApp(QMainWindow):
 
     def setup_shortcuts(self):
         """Setup keyboard shortcuts for tab navigation, app closing, labeling, and BibTeX generation."""
-        # Ctrl+PageUp to switch to Add tab
-        add_tab_shortcut = QShortcut(
-            QKeySequence("Ctrl+PageUp"),
-            self,
-            lambda: self.tabs.setCurrentIndex(0),
+        # Ctrl+PageUp / Ctrl+PageDown to cycle between tabs
+        prev_tab = QShortcut(QKeySequence("Ctrl+PageUp"), self)
+        prev_tab.activated.connect(
+            lambda: self.tabs.setCurrentIndex(
+                (self.tabs.currentIndex() - 1) % self.tabs.count()
+            )
         )
-        add_tab_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        prev_tab.setContext(Qt.ShortcutContext.ApplicationShortcut)
 
-        # Ctrl+PageDown to switch to Browse tab
-        browse_tab_shortcut = QShortcut(
-            QKeySequence("Ctrl+PageDown"),
-            self,
-            lambda: self.tabs.setCurrentIndex(1),
+        next_tab = QShortcut(QKeySequence("Ctrl+PageDown"), self)
+        next_tab.activated.connect(
+            lambda: self.tabs.setCurrentIndex(
+                (self.tabs.currentIndex() + 1) % self.tabs.count()
+            )
         )
-        browse_tab_shortcut.setContext(Qt.ShortcutContext.ApplicationShortcut)
+        next_tab.setContext(Qt.ShortcutContext.ApplicationShortcut)
 
         # Ctrl+W to close the application
         QShortcut(QKeySequence("Ctrl+W"), self, self.close)
