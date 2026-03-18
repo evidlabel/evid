@@ -51,7 +51,7 @@ def test_prefill_fields_uses_pdf_title_as_label(add_tab, tmp_path):
         mock_reader.return_value.metadata = mock_meta
         add_tab.prefill_fields(pdf_path)
         assert add_tab.title_input.text() == "248080"
-        assert add_tab.label_input.text() == "bekendtgørelse_af_barnets_lov"
+        assert add_tab.label_input.text() == "Bekendtgørelse af barnets lov"
 
 
 def test_prefill_fields_fallback_to_filename_when_no_pdf_title(add_tab, tmp_path):

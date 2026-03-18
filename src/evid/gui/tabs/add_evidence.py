@@ -205,7 +205,7 @@ class AddEvidenceTab(QWidget):
         self.authors_input.setText(authors)
         self.tags_input.setText("")
         self.dates_input.setText(date)
-        self.label_input.setText(label_base.replace(" ", "_").lower())
+        self.label_input.setText(label_base)
         self.update_preview()
 
     def update_preview(self):
