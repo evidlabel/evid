@@ -63,9 +63,9 @@ class BrowseEvidenceTab(QWidget):
         layout.addLayout(search_layout)
 
         # Table: Y=info.yml valid, F=file present, J=label.json present, then metadata
-        self.table = QTableWidget(0, 8)
+        self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(
-            ["Y", "F", "J", "Author", "Title", "Date", "File Name", "UUID"]
+            ["Y", "F", "J", "Author", "Title", "Date", "UUID"]
         )
         self.table.setSortingEnabled(True)
         self.table.sortByColumn(5, Qt.SortOrder.DescendingOrder)
@@ -79,7 +79,6 @@ class BrowseEvidenceTab(QWidget):
         self.table.setColumnWidth(4, 250)
         self.table.setColumnWidth(5, 100)
         self.table.setColumnWidth(6, 150)
-        self.table.setColumnWidth(7, 150)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
@@ -203,8 +202,9 @@ class BrowseEvidenceTab(QWidget):
                 self.table.setItem(row, 3, QTableWidgetItem(authors))
                 self.table.setItem(row, 4, QTableWidgetItem(label))
                 self.table.setItem(row, 5, QTableWidgetItem(time_added))
-                self.table.setItem(row, 6, QTableWidgetItem(original_name))
-                self.table.setItem(row, 7, QTableWidgetItem(uuid_value))
+                uuid_item = QTableWidgetItem(uuid_value)
+                uuid_item.setData(Qt.ItemDataRole.UserRole, original_name)
+                self.table.setItem(row, 6, uuid_item)
 
         self.table.setSortingEnabled(True)
         self.table.sortByColumn(5, Qt.SortOrder.DescendingOrder)
@@ -221,7 +221,7 @@ class BrowseEvidenceTab(QWidget):
         dataset = self.dataset_combo.currentText()
         paths = []
         for row in selected_rows:
-            uuid_item = self.table.item(row, 7)
+            uuid_item = self.table.item(row, 6)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
                 logger.error("Row %d has no valid UUID.", row + 1)
                 continue
@@ -249,13 +249,13 @@ class BrowseEvidenceTab(QWidget):
 
         dataset = self.dataset_combo.currentText()
         for row in selected_rows:
-            uuid_item = self.table.item(row, 7)
+            uuid_item = self.table.item(row, 6)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
                 logger.error("Row %d has no valid UUID.", row + 1)
                 continue
 
             uuid = uuid_item.text()
-            file_name = self.table.item(row, 6).text()
+            file_name = uuid_item.data(Qt.ItemDataRole.UserRole) or ""
             file_path = self.directory / dataset / uuid / file_name
             create_label(file_path, dataset, uuid)
 
@@ -271,13 +271,13 @@ class BrowseEvidenceTab(QWidget):
         success_count = 0
         bib_contents = []
         for row in selected_rows:
-            uuid_item = self.table.item(row, 7)
+            uuid_item = self.table.item(row, 6)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
                 logger.error("Row %d has no valid UUID.", row + 1)
                 continue
 
             uuid = uuid_item.text()
-            file_name = self.table.item(row, 6).text()
+            file_name = uuid_item.data(Qt.ItemDataRole.UserRole) or ""
             file_path = self.directory / dataset / uuid / file_name
             typ_file = file_path.parent / "label.typ"
             bib_file = file_path.parent / "label.bib"
@@ -313,7 +313,7 @@ class BrowseEvidenceTab(QWidget):
 
         dataset = self.dataset_combo.currentText()
         for row in selected_rows:
-            uuid_item = self.table.item(row, 7)
+            uuid_item = self.table.item(row, 6)
             if not uuid_item or not uuid_item.text() or uuid_item.text() == "Unknown":
                 logger.error("Selected entry has no valid UUID.")
                 continue
@@ -340,7 +340,7 @@ class BrowseEvidenceTab(QWidget):
         )
         uuids = []
         for row in selected_rows:
-            uuid_item = self.table.item(row, 7)
+            uuid_item = self.table.item(row, 6)
             if uuid_item and uuid_item.text() and uuid_item.text() != "Unknown":
                 uuids.append(uuid_item.text())
         dataset = self.dataset_combo.currentText()

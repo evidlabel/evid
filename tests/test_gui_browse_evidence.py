@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QTableWidgetItem
 
 from evid.gui.tabs.browse_evidence import BrowseEvidenceTab
@@ -87,7 +88,7 @@ def test_open_directory(browse_tab, tmp_path):
     browse_tab.dataset_combo.setCurrentText(dataset)
     # Add row to table
     browse_tab.table.insertRow(0)
-    browse_tab.table.setItem(0, 7, QTableWidgetItem("uuid1"))
+    browse_tab.table.setItem(0, 6, QTableWidgetItem("uuid1"))
     # Select the row
     browse_tab.table.selectRow(0)
     with patch("subprocess.run") as mock_run:
@@ -107,8 +108,9 @@ def test_create_labels(browse_tab, tmp_path):
     browse_tab.dataset_combo.setCurrentText(dataset)
     # Add row to table
     browse_tab.table.insertRow(0)
-    browse_tab.table.setItem(0, 6, QTableWidgetItem("test.pdf"))
-    browse_tab.table.setItem(0, 7, QTableWidgetItem("uuid1"))
+    uuid_item = QTableWidgetItem("uuid1")
+    uuid_item.setData(Qt.ItemDataRole.UserRole, "test.pdf")
+    browse_tab.table.setItem(0, 6, uuid_item)
     browse_tab.table.selectRow(0)
     with patch("evid.gui.tabs.browse_evidence.create_label") as mock_create:
         browse_tab.create_labels()
@@ -132,8 +134,9 @@ def test_generate_bibtex(browse_tab, tmp_path):
     browse_tab.dataset_combo.setCurrentText(dataset)
     # Add row to table
     browse_tab.table.insertRow(0)
-    browse_tab.table.setItem(0, 6, QTableWidgetItem("test.pdf"))
-    browse_tab.table.setItem(0, 7, QTableWidgetItem("uuid1"))
+    uuid_item = QTableWidgetItem("uuid1")
+    uuid_item.setData(Qt.ItemDataRole.UserRole, "test.pdf")
+    browse_tab.table.setItem(0, 6, uuid_item)
     browse_tab.table.selectRow(0)
     with patch(
         "evid.gui.tabs.browse_evidence.generate_bib_from_typ", return_value=(True, "")
@@ -152,7 +155,7 @@ def test_run_rebut(browse_tab, tmp_path):
     browse_tab.dataset_combo.setCurrentText(dataset)
     # Add row to table
     browse_tab.table.insertRow(0)
-    browse_tab.table.setItem(0, 7, QTableWidgetItem("uuid1"))
+    browse_tab.table.setItem(0, 6, QTableWidgetItem("uuid1"))
     browse_tab.table.selectRow(0)
     with patch("evid.core.rebut_doc.rebut_doc") as mock_rebut:
         browse_tab.run_rebut()
