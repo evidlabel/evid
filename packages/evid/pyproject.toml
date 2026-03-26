@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "evid"
+version = "0.2.7"
+description = "Evidence management tool for PDFs and text documents."
+authors = [
+    {name = "Your Name", email = "your.email@example.com"},
+]
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic",
+    "pyyaml",
+    "requests",
+    "beautifulsoup4",
+    "pypdf",
+    "PyMuPDF",
+    "frontend",
+    "arrow",
+    "rich",
+    "treeparse==0.2.0",
+    "PySide6",
+    "bibtexparser",
+    "demoji",
+    "pandas",
+    "GitPython",
+]
+
+[project.scripts]
+evid = "evid.cli.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/evid"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "DJ", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "INT", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
+ignore = ["S101", "S104", "COM812", "ISC001"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
