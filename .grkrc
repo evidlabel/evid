@@ -1,0 +1,34 @@
+profiles:
+  default:
+    model: grok-code-fast-1
+    role: you are an expert engineer and developer
+    output: output.json
+    prompt_prepend: ''
+    temperature: 0.05
+  py:
+    model: grok-code-fast-1
+    role: you are an expert python programmer, writing clean code
+    output: output.json
+    prompt_prepend: ''
+    temperature: 0
+  doc:
+    model: grok-4
+    role: you are an expert in writing documentation
+    output: output.json
+    prompt_prepend: ''
+    temperature: 0.7
+  law:
+    model: grok-4
+    role: you are an expert lawyer, providing legal advice
+    output: output.json
+    prompt_prepend: write concise legal argumentation, prefer latex
+    temperature: 0.35
+  psy:
+    model: grok-4
+    role: you are an expert professor in psychology
+    output: output.json
+    prompt_prepend: ''
+    temperature: 0.3
+brief:
+  file: design_brief.typ
+  role: assistant

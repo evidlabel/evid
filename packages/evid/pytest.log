@@ -1,0 +1,179 @@
+2026-03-26 01:23:31 [ WARNING] invalid pdf header: b'dummy'
+2026-03-26 01:23:31 [ WARNING] EOF marker not found
+2026-03-26 01:23:31 [ WARNING] invalid pdf header: b'dummy'
+2026-03-26 01:23:31 [ WARNING] EOF marker not found
+2026-03-26 01:23:31 [ WARNING] invalid pdf header: b'dummy'
+2026-03-26 01:23:31 [ WARNING] EOF marker not found
+2026-03-26 01:23:31 [ WARNING] invalid pdf header: b'dummy'
+2026-03-26 01:23:31 [ WARNING] EOF marker not found
+2026-03-26 01:23:31 [ WARNING] invalid pdf header: b'dummy'
+2026-03-26 01:23:31 [ WARNING] EOF marker not found
+2026-03-26 01:23:31 [ WARNING] invalid pdf header: b'dummy'
+2026-03-26 01:23:31 [ WARNING] EOF marker not found
+2026-03-26 01:23:32 [ WARNING] CAUTION: startxref found while searching for %%EOF. The file might be truncated and some data might not be read.
+2026-03-26 01:23:32 [ WARNING] EOF marker not found
+2026-03-26 01:23:32 [ WARNING] Failed to extract metadata from test.pdf, using defaults.
+2026-03-26 01:23:32 [ WARNING] CAUTION: startxref found while searching for %%EOF. The file might be truncated and some data might not be read.
+2026-03-26 01:23:32 [ WARNING] EOF marker not found
+2026-03-26 01:23:32 [ WARNING] Failed to extract metadata from test.pdf, using defaults.
+2026-03-26 01:23:32 [ WARNING] Skipped empty Typst file '/tmp/pytest-of-wr1/pytest-25/test_generate_bibtex_multiple_0/test_dataset/uuid3/label.typ'.
+2026-03-26 01:23:32 [   ERROR] Typst file '/tmp/pytest-of-wr1/pytest-25/test_generate_bibtex_nonexiste0/nonexistent1.typ' does not exist.
+2026-03-26 01:23:32 [   ERROR] Typst file '/tmp/pytest-of-wr1/pytest-25/test_generate_bibtex_nonexiste0/nonexistent2.typ' does not exist.
+2026-03-26 01:23:32 [ WARNING] CAUTION: startxref found while searching for %%EOF. The file might be truncated and some data might not be read.
+2026-03-26 01:23:32 [ WARNING] EOF marker not found
+2026-03-26 01:23:32 [ WARNING] Failed to extract metadata from test.pdf, using defaults.
+2026-03-26 01:23:32 [   ERROR] Error during label workflow: Typst file '/tmp/pytest-of-wr1/pytest-25/test_create_label_pdf0/label.typ' does not exist.
+2026-03-26 01:23:32 [ WARNING] Unsupported file type: .docx
+2026-03-26 01:23:32 [   ERROR] The configured editor 'code' not found. Please ensure it is in your PATH.
+2026-03-26 01:23:32 [   ERROR] Error opening the configured editor: editor crashed
+Traceback (most recent call last):
+  File "/home/wr1/projects/evid/packages/evid/src/evid/core/label.py", line 40, in create_label
+    subprocess.run([CONFIG["editor"], str(label_file)], check=True)
+  File "/usr/lib/python3.12/unittest/mock.py", line 1134, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1138, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1193, in _execute_mock_call
+    raise effect
+subprocess.SubprocessError: editor crashed
+2026-03-26 01:23:32 [   ERROR] Error during label workflow: typst error
+2026-03-26 01:23:32 [   ERROR] Error during label workflow: unexpected
+Traceback (most recent call last):
+  File "/home/wr1/projects/evid/packages/evid/src/evid/core/label.py", line 30, in create_label
+    textpdf_to_typst(file_path, label_file, autolabel)
+  File "/usr/lib/python3.12/unittest/mock.py", line 1134, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1138, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/unittest/mock.py", line 1193, in _execute_mock_call
+    raise effect
+RuntimeError: unexpected
+2026-03-26 01:23:32 [ WARNING] Validation error for /tmp/pytest-of-wr1/pytest-25/test_textpdf_to_typst0/info.yml: 6 validation errors for InfoModel
+original_name
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+uuid
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+time_added
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+dates
+  Input should be a valid string [type=string_type, input_value=datetime.date(2023, 1, 1), input_type=date]
+    For further information visit https://errors.pydantic.dev/2.11/v/string_type
+title
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+authors
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+2026-03-26 01:23:32 [ WARNING] Validation error for /tmp/pytest-of-wr1/pytest-25/test_textpdf_to_typst_autolabe0/info.yml: 6 validation errors for InfoModel
+original_name
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+uuid
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+time_added
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+dates
+  Input should be a valid string [type=string_type, input_value=datetime.date(2023, 1, 1), input_type=date]
+    For further information visit https://errors.pydantic.dev/2.11/v/string_type
+title
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+authors
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+2026-03-26 01:23:32 [ WARNING] Validation error for /tmp/pytest-of-wr1/pytest-25/test_textpdf_to_typst_info_val0/info.yml: 6 validation errors for InfoModel
+original_name
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+uuid
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+time_added
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+dates
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+title
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+authors
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+2026-03-26 01:23:32 [ WARNING] Validation error for /tmp/pytest-of-wr1/pytest-25/test_text_to_typst0/info.yml: 6 validation errors for InfoModel
+original_name
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+uuid
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+time_added
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+dates
+  Input should be a valid string [type=string_type, input_value=datetime.date(2023, 1, 1), input_type=date]
+    For further information visit https://errors.pydantic.dev/2.11/v/string_type
+title
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+authors
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+2026-03-26 01:23:32 [ WARNING] Validation error for /tmp/pytest-of-wr1/pytest-25/test_text_to_typst_autolabel0/info.yml: 6 validation errors for InfoModel
+original_name
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+uuid
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+time_added
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+dates
+  Input should be a valid string [type=string_type, input_value=datetime.date(2023, 1, 1), input_type=date]
+    For further information visit https://errors.pydantic.dev/2.11/v/string_type
+title
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+authors
+  Field required [type=missing, input_value={'label': 'test', 'dates'...tetime.date(2023, 1, 1)}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+2026-03-26 01:23:32 [ WARNING] Validation error for /tmp/pytest-of-wr1/pytest-25/test_text_to_typst_info_valida0/info.yml: 6 validation errors for InfoModel
+original_name
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+uuid
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+time_added
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+dates
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+title
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+authors
+  Field required [type=missing, input_value={'label': 'test'}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.11/v/missing
+2026-03-26 01:23:32 [ WARNING] CAUTION: startxref found while searching for %%EOF. The file might be truncated and some data might not be read.
+2026-03-26 01:23:32 [ WARNING] EOF marker not found
+2026-03-26 01:23:32 [ WARNING] Failed to extract metadata from test.pdf, using defaults.
+2026-03-26 01:23:32 [ WARNING] CAUTION: startxref found while searching for %%EOF. The file might be truncated and some data might not be read.
+2026-03-26 01:23:32 [ WARNING] EOF marker not found
+2026-03-26 01:23:32 [ WARNING] Failed to extract metadata from test.pdf, using defaults.
+2026-03-26 01:23:32 [ WARNING] CAUTION: startxref found while searching for %%EOF. The file might be truncated and some data might not be read.
+2026-03-26 01:23:32 [ WARNING] EOF marker not found
+2026-03-26 01:23:32 [ WARNING] Failed to extract metadata from sample.pdf, using defaults.
+2026-03-26 01:23:32 [   ERROR] Failed to generate rebuttal: Typst file '/tmp/pytest-of-wr1/pytest-25/test_rebut_doc_no_label0/workdir/label.typ' does not exist.
+2026-03-26 01:23:32 [   ERROR] Failed to generate rebuttal: Skipped empty Typst file '/tmp/pytest-of-wr1/pytest-25/test_rebut_doc_empty_label0/workdir/label.typ'.

@@ -5,7 +5,6 @@ import logging
 from pathlib import Path
 
 import yaml
-from PySide6.QtWidgets import QApplication
 
 from evid.core.models import InfoModel
 
@@ -73,5 +72,6 @@ def create_prompt(uuids, dataset, directory):
         logger.warning("No labelled entries found — nothing to copy.")
         return
 
+    from PySide6.QtWidgets import QApplication  # noqa: PLC0415
     QApplication.clipboard().setText("\n\n".join(markdown_parts))
     logger.info("Prompt copied to clipboard (%d entries).", len(markdown_parts))
