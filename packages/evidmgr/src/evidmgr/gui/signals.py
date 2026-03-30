@@ -10,6 +10,5 @@ class AppSignals(QObject):
     doc_ingested = Signal(str, str)     # set_slug, doc_uuid
     doc_indexed = Signal(str, str)      # set_slug, doc_uuid
     anon_yaml_created = Signal(str)     # set_slug
-    add_to_prompt = Signal(str, str)    # set_slug, doc_uuid
     anon_mode_changed = Signal(str)     # AnonMode value string
     ingestion_error = Signal(str)       # error message

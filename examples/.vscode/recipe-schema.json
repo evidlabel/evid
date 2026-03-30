@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Evidmgr Recipe",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "layers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/layer"
+      }
+    },
+    "final_question": {
+      "type": "string",
+      "description": "Path to final question file, relative to this recipe"
+    }
+  },
+  "$defs": {
+    "layer": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "anyOf": [
+              {
+                "enum": [
+                  "new.t1",
+                  "t2",
+                  "new.share1"
+                ],
+                "description": "Tag name"
+              },
+              {
+                "pattern": "^evid-",
+                "description": "Document UUID token (evid-<uuid>)"
+              }
+            ]
+          }
+        },
+        "grounding": {
+          "type": "string",
+          "description": "Path to grounding file, relative to this recipe"
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/layer"
+          }
+        }
+      }
+    }
+  }
+}

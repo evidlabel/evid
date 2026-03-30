@@ -1,4 +1,4 @@
-"""Anonymize tab — YAML history + entity editor + preview strip."""
+"""Anonymize tab — YAML history + entity editor."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 import yaml
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -19,14 +20,13 @@ from PySide6.QtWidgets import (
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
 
 if TYPE_CHECKING:
     from evidmgr.gui.signals import AppSignals
-    from evidmgr.models import AnonMode, EvidenceSet
+    from evidmgr.models import EvidenceSet
     from evidmgr.services.anon_service import AnonService
 
 logger = logging.getLogger(__name__)
@@ -64,15 +64,15 @@ class AnonTab(QWidget):
         lv.addLayout(hist_btns)
         splitter.addWidget(left)
 
-        # ── centre: entity editor ─────────────────────────────────────────
-        centre = QWidget()
-        cv = QVBoxLayout(centre)
-        cv.setContentsMargins(4, 0, 4, 0)
-        cv.addWidget(QLabel("Entity editor"))
+        # ── right: entity editor ──────────────────────────────────────────
+        right = QWidget()
+        rv = QVBoxLayout(right)
+        rv.setContentsMargins(4, 0, 0, 0)
+        rv.addWidget(QLabel("Entity editor"))
         self._entity_table = QTableWidget(0, len(_ENTITY_COLS))
         self._entity_table.setHorizontalHeaderLabels(_ENTITY_COLS)
         self._entity_table.horizontalHeader().setStretchLastSection(True)
-        cv.addWidget(self._entity_table)
+        rv.addWidget(self._entity_table)
 
         entity_btns = QHBoxLayout()
         self._save_btn = QPushButton("Save")
@@ -81,33 +81,9 @@ class AnonTab(QWidget):
         self._gen_fakes_btn.clicked.connect(self._on_generate_fakes)
         entity_btns.addWidget(self._save_btn)
         entity_btns.addWidget(self._gen_fakes_btn)
-        cv.addLayout(entity_btns)
-        splitter.addWidget(centre)
-
-        # ── right: preview strip ──────────────────────────────────────────
-        right = QWidget()
-        rv = QVBoxLayout(right)
-        rv.setContentsMargins(4, 0, 0, 0)
-        rv.addWidget(QLabel("Preview"))
-
-        mode_row = QHBoxLayout()
-        mode_row.addWidget(QLabel("Mode:"))
-        self._mode_combo = QComboBox()
-        self._mode_combo.addItems(["Real", "Placeholder", "Fake"])
-        self._mode_combo.currentTextChanged.connect(self._update_preview)
-        mode_row.addWidget(self._mode_combo)
-        rv.addLayout(mode_row)
-
-        self._preview_input = QTextEdit()
-        self._preview_input.setPlaceholderText("Paste text to preview…")
-        self._preview_input.textChanged.connect(self._update_preview)
-        rv.addWidget(self._preview_input)
-        rv.addWidget(QLabel("→ Anonymized:"))
-        self._preview_output = QTextEdit()
-        self._preview_output.setReadOnly(True)
-        rv.addWidget(self._preview_output)
+        rv.addLayout(entity_btns)
         splitter.addWidget(right)
-        splitter.setSizes([280, 500, 320])
+        splitter.setSizes([300, 700])
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -196,7 +172,6 @@ class AnonTab(QWidget):
             QMessageBox.warning(self, "No set", "Select an evidence set first.")
             return
         from evidmgr.gui.workers import AnonExtractWorker  # noqa: PLC0415
-        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QListWidget  # noqa: PLC0415
 
         # Simple doc selection dialog
         dlg = QDialog(self)
@@ -232,14 +207,3 @@ class AnonTab(QWidget):
         worker.error.connect(lambda msg: QMessageBox.critical(self, "Extraction failed", msg))
         self._workers.append(worker)
         worker.start()
-
-    def _update_preview(self) -> None:
-        if not self._evidence_set:
-            return
-        text = self._preview_input.toPlainText()
-        mode_text = self._mode_combo.currentText().lower()
-        from evidmgr.models import AnonMode  # noqa: PLC0415
-        mode_map = {"real": AnonMode.REAL, "placeholder": AnonMode.PLACEHOLDER, "fake": AnonMode.FAKE}
-        mode = mode_map.get(mode_text, AnonMode.REAL)
-        result = self._svc.pseudonymize(text, self._evidence_set, mode)
-        self._preview_output.setPlainText(result)

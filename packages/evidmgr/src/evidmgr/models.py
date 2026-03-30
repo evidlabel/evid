@@ -15,14 +15,6 @@ class SetType(str, Enum):
     ANON = "anon"
 
 
-class SourceType(str, Enum):
-    LAW = "law"
-    GUIDELINE = "guideline"
-    PAPER = "paper"
-    CASE = "case"
-    OTHER = "other"
-
-
 class AnonMode(str, Enum):
     REAL = "real"
     PLACEHOLDER = "placeholder"
@@ -54,6 +46,7 @@ class EvidenceSet:
     created: datetime
     description: str = ""
     anon_language: str = "da"
+    anon_mode: AnonMode = AnonMode.REAL
 
 
 @dataclass
@@ -62,7 +55,6 @@ class Document:
     path: Path
     label: str
     tags: list[str]
-    source_type: SourceType
     added: datetime
     indexed: bool = False
     anon_pending: bool = False

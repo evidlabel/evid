@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 from slugify import slugify
 
-from evidmgr.models import EvidenceSet, SetType
+from evidmgr.models import AnonMode, EvidenceSet, SetType
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +67,7 @@ class SetManager:
             "created": created.isoformat(),
             "description": description,
             "anon_language": anon_language,
+            "anon_mode": "real",
         }
         with (set_dir / "set.yml").open("w", encoding="utf-8") as f:
             yaml.safe_dump(data, f, allow_unicode=True)
@@ -98,10 +99,11 @@ class SetManager:
         yml_path = set_dir / "set.yml"
         with yml_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
-        allowed = {"name", "description", "anon_language"}
+        allowed = {"name", "description", "anon_language", "anon_mode", "set_type"}
         for k, v in kwargs.items():
             if k in allowed:
-                data[k] = v
+                # set_type is stored under "type" key to match create_set / _load_set_yml
+                data["type" if k == "set_type" else k] = v
         with yml_path.open("w", encoding="utf-8") as f:
             yaml.safe_dump(data, f, allow_unicode=True)
         return self._load_set_yml(set_dir)
@@ -131,4 +133,5 @@ class SetManager:
             created=created,
             description=data.get("description", ""),
             anon_language=data.get("anon_language", "da"),
+            anon_mode=AnonMode(data.get("anon_mode", "real")),
         )

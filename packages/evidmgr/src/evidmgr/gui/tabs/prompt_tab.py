@@ -1,4 +1,4 @@
-"""Prompt Builder tab — assembles evidence into a Markdown prompt."""
+"""Prompt Builder tab — recipe-driven evidence assembly."""
 
 from __future__ import annotations
 
@@ -8,26 +8,25 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QFileSystemWatcher, Qt, QTimer
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
-    QComboBox,
+    QApplication,
     QFileDialog,
     QHBoxLayout,
     QLabel,
-    QListWidget,
-    QListWidgetItem,
-    QMessageBox,
-    QPlainTextEdit,
+    QMenu,
     QPushButton,
     QSplitter,
+    QTextEdit,
+    QTreeWidget,
+    QTreeWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 if TYPE_CHECKING:
     from evidmgr.gui.signals import AppSignals
-    from evidmgr.models import AnonMode
-    from evidmgr.services.anon_service import AnonService
     from evidmgr.services.tag_service import TagService
 
 logger = logging.getLogger(__name__)
@@ -36,176 +35,184 @@ logger = logging.getLogger(__name__)
 class PromptTab(QWidget):
     def __init__(
         self,
-        anon_service: "AnonService",
         tag_service: "TagService",
         signals: "AppSignals",
     ) -> None:
         super().__init__()
-        self._anon_service = anon_service
         self._tag_service = tag_service
         self._signals = signals
-        # list of (set_slug, doc_uuid)
-        self._items: list[tuple[str, str]] = []
+        self._recipe_path: Path | None = None
+        self._assembled = None          # AssembledPrompt | None
+        self._corpus_index: dict[str, list[str]] = {}
+
+        self._watcher = QFileSystemWatcher(self)
+        self._watcher.fileChanged.connect(self._on_file_changed)
+        self._watcher.directoryChanged.connect(self._on_file_changed)
+
+        self._debounce_timer = QTimer(self)
+        self._debounce_timer.setSingleShot(True)
+        self._debounce_timer.setInterval(300)
+        self._debounce_timer.timeout.connect(self._reload)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # ── left: item list ───────────────────────────────────────────────
+        # ── left: recipe tree ─────────────────────────────────────────────
         left = QWidget()
         lv = QVBoxLayout(left)
         lv.setContentsMargins(0, 0, 0, 0)
-        lv.addWidget(QLabel("Evidence items (drag to re-order)"))
-        self._item_list = QListWidget()
-        self._item_list.setDragDropMode(QListWidget.DragDropMode.InternalMove)
-        self._item_list.itemSelectionChanged.connect(self._rebuild_preview)
-        lv.addWidget(self._item_list)
 
-        item_btns = QHBoxLayout()
-        self._clear_btn = QPushButton("Clear")
-        self._clear_btn.clicked.connect(self._on_clear)
-        self._remove_btn = QPushButton("Remove selected")
-        self._remove_btn.clicked.connect(self._on_remove_selected)
-        item_btns.addWidget(self._clear_btn)
-        item_btns.addWidget(self._remove_btn)
-        lv.addLayout(item_btns)
+        path_row = QHBoxLayout()
+        self._path_label = QLabel("No recipe selected")
+        self._path_label.setWordWrap(False)
+        self._path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self._browse_btn = QPushButton("…")
+        self._browse_btn.setFixedWidth(30)
+        self._browse_btn.clicked.connect(self._on_browse)
+        path_row.addWidget(self._path_label, 1)
+        path_row.addWidget(self._browse_btn)
+        lv.addLayout(path_row)
+
+        self._tree = QTreeWidget()
+        self._tree.setColumnCount(3)
+        self._tree.setHeaderLabels(["Layer ID", "Evidence", "Grounding file"])
+        self._tree.itemClicked.connect(self._on_tree_item_clicked)
+        self._tree.itemDoubleClicked.connect(self._on_tree_item_double_clicked)
+        self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._tree.customContextMenuRequested.connect(self._on_tree_context_menu)
+        lv.addWidget(self._tree)
+
+        self._token_label = QLabel("~0 tokens")
+        lv.addWidget(self._token_label)
+
         splitter.addWidget(left)
 
-        # ── right: preview + export ───────────────────────────────────────
+        # ── right: preview ────────────────────────────────────────────────
         right = QWidget()
         rv = QVBoxLayout(right)
         rv.setContentsMargins(4, 0, 0, 0)
 
-        mode_row = QHBoxLayout()
-        mode_row.addWidget(QLabel("Anon mode:"))
-        self._mode_combo = QComboBox()
-        self._mode_combo.addItems(["Real", "Placeholder", "Fake"])
-        self._mode_combo.currentTextChanged.connect(self._rebuild_preview)
-        mode_row.addWidget(self._mode_combo)
-        mode_row.addStretch()
-        rv.addLayout(mode_row)
+        top_row = QHBoxLayout()
+        top_row.addWidget(QLabel("Prompt Preview"))
+        top_row.addStretch()
+        self._copy_all_btn = QPushButton("Copy all")
+        self._copy_all_btn.clicked.connect(self._on_copy_all)
+        top_row.addWidget(self._copy_all_btn)
+        rv.addLayout(top_row)
 
-        rv.addWidget(QLabel("Preview:"))
-        self._preview = QPlainTextEdit()
+        self._preview = QTextEdit()
         self._preview.setReadOnly(True)
-        self._preview.setFont(self._preview.document().defaultFont())
         rv.addWidget(self._preview)
 
-        export_row = QHBoxLayout()
-        self._copy_btn = QPushButton("Copy to clipboard")
-        self._copy_btn.clicked.connect(self._on_copy)
-        self._save_btn = QPushButton("Save as file…")
-        self._save_btn.clicked.connect(self._on_save)
-        export_row.addWidget(self._copy_btn)
-        export_row.addWidget(self._save_btn)
-        export_row.addStretch()
-        rv.addLayout(export_row)
         splitter.addWidget(right)
-        splitter.setSizes([280, 820])
-
+        splitter.setSizes([320, 780])
         layout.addWidget(splitter)
 
-        signals.add_to_prompt.connect(self._on_add_item)
-        signals.anon_mode_changed.connect(self._on_anon_mode_changed)
+        signals.set_selected.connect(self._on_set_selected)
 
-    # ── public ────────────────────────────────────────────────────────────
+    # ── public ────────────────────────────────────────────────────────────────
 
-    def build_prompt(self) -> str:
-        """Assemble the current item list into a Markdown prompt string."""
-        from evidmgr.models import AnonMode  # noqa: PLC0415
+    # (no public API needed beyond Qt widget interface)
 
-        mode_text = self._mode_combo.currentText().lower()
-        mode_map = {"real": AnonMode.REAL, "placeholder": AnonMode.PLACEHOLDER, "fake": AnonMode.FAKE}
-        mode = mode_map.get(mode_text, AnonMode.REAL)
+    # ── private ───────────────────────────────────────────────────────────────
 
-        parts = []
-        parent = self.window()
-        for i in range(self._item_list.count()):
-            item = self._item_list.item(i)
-            if item is None:
-                continue
-            set_slug, doc_uuid = item.data(Qt.ItemDataRole.UserRole)
-            block = self._build_block(set_slug, doc_uuid, mode, parent)
-            if block:
-                parts.append(block)
-        return "\n\n---\n\n".join(parts)
+    def _on_set_selected(self, _slug: str) -> None:
+        if self._recipe_path:
+            self._reload()
 
-    # ── private ───────────────────────────────────────────────────────────
-
-    def _on_add_item(self, set_slug: str, doc_uuid: str) -> None:
-        if (set_slug, doc_uuid) in self._items:
+    def _on_browse(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Select recipe", "", "Recipe files (*.yaml *.yml);;All files (*)"
+        )
+        if not path:
             return
-        self._items.append((set_slug, doc_uuid))
-        label = self._resolve_label(set_slug, doc_uuid)
-        item = QListWidgetItem(f"[{set_slug}] {label}")
-        item.setData(Qt.ItemDataRole.UserRole, (set_slug, doc_uuid))
-        self._item_list.addItem(item)
-        self._rebuild_preview()
+        existing = self._watcher.files() + self._watcher.directories()
+        if existing:
+            self._watcher.removePaths(existing)
+        self._recipe_path = Path(path)
+        self._path_label.setText(path)
+        self._reload()
 
-    def _on_clear(self) -> None:
-        self._items.clear()
-        self._item_list.clear()
-        self._preview.setPlainText("")
+    def _on_file_changed(self, _path: str) -> None:
+        self._debounce_timer.start()
 
-    def _on_remove_selected(self) -> None:
-        for item in self._item_list.selectedItems():
-            row = self._item_list.row(item)
-            self._item_list.takeItem(row)
-        self._rebuild_preview()
+    def _reload(self) -> None:
+        if not self._recipe_path:
+            return
 
-    def _on_anon_mode_changed(self, mode_str: str) -> None:
-        idx = {"real": 0, "placeholder": 1, "fake": 2}.get(mode_str, 0)
-        self._mode_combo.setCurrentIndex(idx)
-        self._rebuild_preview()
+        # Refresh watcher paths
+        existing = self._watcher.files() + self._watcher.directories()
+        if existing:
+            self._watcher.removePaths(existing)
 
-    def _rebuild_preview(self) -> None:
-        self._preview.setPlainText(self.build_prompt())
+        from evidmgr.services import assembler  # noqa: PLC0415
 
-    def _on_copy(self) -> None:
-        from PySide6.QtWidgets import QApplication  # noqa: PLC0415
-        QApplication.clipboard().setText(self._preview.toPlainText())
-
-    def _on_save(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Save prompt", "prompt.md", "Text files (*.md *.txt)")
-        if path:
-            Path(path).write_text(self._preview.toPlainText(), encoding="utf-8")
-
-    def _resolve_label(self, set_slug: str, doc_uuid: str) -> str:
-        parent = self.window()
-        if hasattr(parent, "_set_manager"):
-            try:
-                es = parent._set_manager.load_set(set_slug)
-                info_path = es.path / "docs" / doc_uuid / "info.yml"
-                if info_path.exists():
-                    with info_path.open("r", encoding="utf-8") as f:
-                        info = yaml.safe_load(f) or {}
-                    return info.get("label", doc_uuid)
-            except Exception:
-                pass
-        return doc_uuid
-
-    def _build_block(self, set_slug: str, doc_uuid: str, mode: "AnonMode", parent) -> str:
-        if not hasattr(parent, "_set_manager"):
-            return ""
         try:
-            es = parent._set_manager.load_set(set_slug)
-            doc_dir = es.path / "docs" / doc_uuid
+            self._corpus_index = self._build_corpus_index()
+            self._assembled = assembler.assemble(
+                str(self._recipe_path), self._corpus_index
+            )
+        except Exception:
+            logger.exception("Assembly failed")
+            self._assembled = None
 
+        # Re-watch recipe + grounding files
+        watch_paths = [str(self._recipe_path)]
+        try:
+            watch_paths += assembler.list_grounding_files(str(self._recipe_path))
+        except Exception:
+            pass
+        self._watcher.addPaths(watch_paths)
+
+        self._populate_tree()
+        self._update_preview()
+
+    def _build_corpus_index(self) -> dict[str, list[str]]:
+        index: dict[str, list[str]] = {}
+        parent = self.window()
+        if not hasattr(parent, "_set_manager"):
+            return index
+
+        # Pass 1: index every doc by UUID
+        for es in parent._set_manager.list_sets():
+            docs_dir = es.path / "docs"
+            if not docs_dir.exists():
+                continue
+            for doc_dir in docs_dir.iterdir():
+                if not doc_dir.is_dir():
+                    continue
+                text = self._build_doc_text(doc_dir)
+                if text:
+                    index[doc_dir.name] = [text]
+
+        # Pass 2: index by tag name (reuse already-read texts)
+        for tag in self._tag_service.list_tags():
+            texts: list[str] = []
+            for item in tag.items:
+                doc_texts = index.get(item.doc_uuid, [])
+                texts.extend(doc_texts)
+            if texts:
+                index[tag.name] = texts
+
+        return index
+
+    def _build_doc_text(self, doc_dir: Path) -> str:
+        try:
             info_path = doc_dir / "info.yml"
             if not info_path.exists():
                 return ""
             with info_path.open("r", encoding="utf-8") as f:
                 info = yaml.safe_load(f) or {}
 
-            title = info.get("title") or info.get("label", doc_uuid)
+            title = info.get("title") or info.get("label", doc_dir.name)
             authors = info.get("authors", "")
             url = info.get("url", "")
 
-            # Load labels from label.json
             json_path = doc_dir / "label.json"
             labels_text = ""
-            if json_path.exists():
+            if json_path.exists() and json_path.stat().st_size > 0:
                 with json_path.open("r", encoding="utf-8") as f:
                     data = json.load(f)
                 labels = [item["value"] for item in data if item["value"].get("key") != "main"]
@@ -223,10 +230,226 @@ class PromptTab(QWidget):
                 block += f"**Link:** {url}\n\n"
             if labels_text:
                 block += labels_text + "\n"
-
-            # Apply anonymisation
-            block = self._anon_service.pseudonymize(block, es, mode)
-            return block
+            return block.strip()
         except Exception:
-            logger.exception("Failed to build block for %s/%s", set_slug, doc_uuid)
+            logger.exception("Failed to build doc text for %s", doc_dir)
             return ""
+
+    def _populate_tree(self) -> None:
+        self._tree.clear()
+        if not self._assembled or not self._recipe_path:
+            return
+
+        from evidmgr.services import assembler  # noqa: PLC0415
+
+        try:
+            layers, _fq, _w = assembler.parse_recipe(str(self._recipe_path))
+        except Exception:
+            return
+
+        def _add_item(parent, layer) -> None:
+            item = QTreeWidgetItem(parent)
+            item.setText(0, layer.layer_id)
+
+            # Evidence column: tokens + resolved count
+            tokens_str = ", ".join(layer.evidence_tokens) if layer.evidence_tokens else "(none)"
+            resolved = 0
+            for token in layer.evidence_tokens:
+                key = token[5:] if token.startswith("evid-") else token
+                resolved += len(self._corpus_index.get(key, []))
+            item.setText(1, f"{tokens_str} ({resolved} docs)")
+
+            # Grounding column + row colour
+            grounding_missing = False
+            if layer.grounding_rel:
+                item.setText(2, Path(layer.grounding_rel).name)
+                if layer.grounding_path and not layer.grounding_path.exists():
+                    grounding_missing = True
+            else:
+                item.setText(2, "")
+
+            if grounding_missing:
+                item.setForeground(0, QColor("red"))
+            elif resolved == 0:
+                item.setForeground(0, QColor("#cc9900"))
+            else:
+                item.setForeground(0, QColor("#2a9d2a"))
+
+            item.setData(0, Qt.ItemDataRole.UserRole, layer.layer_id)
+            item.setData(0, Qt.ItemDataRole.UserRole + 1,
+                         str(layer.grounding_path) if layer.grounding_path else None)
+
+            for child in layer.children:
+                _add_item(item, child)
+
+        for layer in layers:
+            _add_item(self._tree.invisibleRootItem(), layer)
+
+        self._tree.expandAll()
+        self._tree.resizeColumnToContents(0)
+        self._tree.resizeColumnToContents(2)
+
+        token_count = len(self._assembled.full_text) // 4
+        self._token_label.setText(f"~{token_count:,} tokens")
+
+    def _update_preview(self) -> None:
+        if self._assembled:
+            self._preview.setPlainText(self._assembled.full_text)
+        else:
+            self._preview.setPlainText("No recipe selected.")
+
+    def _scroll_to_section(self, layer_id: str) -> None:
+        if not self._assembled:
+            return
+        for section in self._assembled.sections:
+            if section.layer_id == layer_id:
+                self._preview.moveCursor(self._preview.textCursor().MoveOperation.Start)
+                cursor = self._preview.document().find(section.anchor)
+                if not cursor.isNull():
+                    self._preview.setTextCursor(cursor)
+                    self._preview.ensureCursorVisible()
+                break
+
+    def _on_tree_item_clicked(self, item: QTreeWidgetItem, _col: int) -> None:
+        layer_id = item.data(0, Qt.ItemDataRole.UserRole)
+        if layer_id:
+            self._scroll_to_section(layer_id)
+
+    def _on_tree_item_double_clicked(self, item: QTreeWidgetItem, _col: int) -> None:
+        grounding = item.data(0, Qt.ItemDataRole.UserRole + 1)
+        if grounding:
+            self._open_file(grounding)
+        elif self._recipe_path:
+            self._open_file(str(self._recipe_path))
+
+    def _on_tree_context_menu(self, pos) -> None:
+        item = self._tree.itemAt(pos)
+        menu = QMenu(self)
+
+        # Edit actions
+        if item:
+            grounding = item.data(0, Qt.ItemDataRole.UserRole + 1)
+            edit_grounding_action = menu.addAction("Edit grounding file") if grounding else None
+        else:
+            edit_grounding_action = None
+        edit_recipe_action = menu.addAction("Edit recipe YAML") if self._recipe_path else None
+
+        if item or edit_recipe_action:
+            menu.addSeparator()
+
+        # Copy actions
+        subtree_action = menu.addAction("Copy subtree prompt") if item else None
+        full_action = menu.addAction("Copy full prompt")
+
+        action = menu.exec(self._tree.viewport().mapToGlobal(pos))
+        if action is None:
+            return
+
+        if edit_grounding_action and action is edit_grounding_action:
+            self._open_file(item.data(0, Qt.ItemDataRole.UserRole + 1))
+            return
+        if edit_recipe_action and action is edit_recipe_action:
+            self._open_file(str(self._recipe_path))
+            return
+
+        from evidmgr.services import assembler  # noqa: PLC0415
+
+        if action is full_action:
+            if self._assembled:
+                QApplication.clipboard().setText(self._assembled.full_text)
+        elif subtree_action and action is subtree_action and item:
+            layer_id = item.data(0, Qt.ItemDataRole.UserRole)
+            if layer_id and self._recipe_path:
+                try:
+                    sub = assembler.assemble_subtree(
+                        str(self._recipe_path), layer_id, self._corpus_index
+                    )
+                    QApplication.clipboard().setText(sub.full_text)
+                except Exception:
+                    logger.exception("assemble_subtree failed")
+
+    def _open_file(self, path: str) -> None:
+        import shutil, subprocess  # noqa: PLC0415
+        from pathlib import Path as _Path  # noqa: PLC0415
+
+        parent = self.window()
+        editor = parent._config.editor if hasattr(parent, "_config") else "code"
+        if shutil.which(editor):
+            cmd = [editor]
+            # For VS Code, inject tag autocomplete schema when opening the recipe
+            if "code" in _Path(editor).name and self._recipe_path and _Path(path) == self._recipe_path:
+                self._inject_vscode_schema(self._recipe_path)
+                cmd.append(str(self._recipe_path.parent))
+            cmd.append(path)
+            subprocess.Popen(cmd)  # noqa: S603
+        else:
+            from PySide6.QtCore import QUrl  # noqa: PLC0415
+            from PySide6.QtGui import QDesktopServices  # noqa: PLC0415
+
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(path)):
+                from PySide6.QtWidgets import QMessageBox  # noqa: PLC0415
+
+                QMessageBox.warning(self, "Cannot open file", f"No application found to open:\n{path}")
+
+    def _inject_vscode_schema(self, recipe_path: Path) -> None:
+        import json  # noqa: PLC0415
+
+        tags = [t.name for t in self._tag_service.list_tags()]
+
+        evidence_items: dict = {"type": "string"}
+        if tags:
+            evidence_items["anyOf"] = [
+                {"enum": tags, "description": "Tag name"},
+                {"pattern": "^evid-", "description": "Document UUID token (evid-<uuid>)"},
+            ]
+
+        layer_def: dict = {
+            "type": "object",
+            "required": ["id"],
+            "additionalProperties": False,
+            "properties": {
+                "id": {"type": "string"},
+                "evidence": {"type": "array", "items": evidence_items},
+                "grounding": {
+                    "type": "string",
+                    "description": "Path to grounding file, relative to this recipe",
+                },
+                "layers": {"type": "array", "items": {"$ref": "#/$defs/layer"}},
+            },
+        }
+
+        schema = {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": "Evidmgr Recipe",
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "layers": {"type": "array", "items": {"$ref": "#/$defs/layer"}},
+                "final_question": {
+                    "type": "string",
+                    "description": "Path to final question file, relative to this recipe",
+                },
+            },
+            "$defs": {"layer": layer_def},
+        }
+
+        vscode_dir = recipe_path.parent / ".vscode"
+        vscode_dir.mkdir(exist_ok=True)
+
+        schema_path = vscode_dir / "recipe-schema.json"
+        schema_path.write_text(json.dumps(schema, indent=2), encoding="utf-8")
+
+        settings_path = vscode_dir / "settings.json"
+        settings: dict = {}
+        if settings_path.exists():
+            try:
+                settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        yaml_schemas = settings.get("yaml.schemas", {})
+        yaml_schemas["./.vscode/recipe-schema.json"] = recipe_path.name
+        settings["yaml.schemas"] = yaml_schemas
+        settings_path.write_text(json.dumps(settings, indent=2), encoding="utf-8")
+
+    def _on_copy_all(self) -> None:
+        QApplication.clipboard().setText(self._preview.toPlainText())
