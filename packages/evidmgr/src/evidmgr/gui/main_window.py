@@ -57,10 +57,10 @@ class _TabCycleFilter(QObject):
             count = self._stack.count()
             idx = self._stack.currentIndex()
             if event.key() == Qt.Key.Key_PageUp:
-                self._stack.setCurrentIndex((idx - 1) % count)
+                self._tab_bar.setCurrentIndex((idx - 1) % count)
                 return True
             if event.key() == Qt.Key.Key_PageDown:
-                self._stack.setCurrentIndex((idx + 1) % count)
+                self._tab_bar.setCurrentIndex((idx + 1) % count)
                 return True
         return False
 
@@ -133,26 +133,30 @@ class EvidMgrWindow(QMainWindow):
 
         # ── logging ───────────────────────────────────────────────────────
         self._log_handler = _QtLogHandler(self._log_pane)
-        self._log_handler.setLevel(logging.INFO)
-        logging.getLogger().addHandler(self._log_handler)
+        self._log_handler.setLevel(logging.DEBUG)
+        stdout_handler = logging.StreamHandler()
+        stdout_handler.setLevel(logging.DEBUG)
+        stdout_handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+        root = logging.getLogger()
+        root.setLevel(logging.DEBUG)
+        root.addHandler(self._log_handler)
+        root.addHandler(stdout_handler)
 
         self._setup_shortcuts()
+        self._sidebar.select_first()
 
     def _setup_tabs(self) -> None:
         from evidmgr.gui.tabs.docs_tab import DocsTab  # noqa: PLC0415
         from evidmgr.gui.tabs.search_tab import SearchTab  # noqa: PLC0415
-        from evidmgr.gui.tabs.anon_tab import AnonTab  # noqa: PLC0415
         from evidmgr.gui.tabs.prompt_tab import PromptTab  # noqa: PLC0415
 
-        self._docs_tab = DocsTab(self._ingester, self._vec_service, self._signals)
+        self._docs_tab = DocsTab(self._ingester, self._vec_service, self._signals, self._tag_service)
         self._search_tab = SearchTab(self._vec_service, self._tag_service, self._signals)
-        self._anon_tab = AnonTab(self._anon_service, self._signals)
-        self._prompt_tab = PromptTab(self._anon_service, self._tag_service, self._signals)
+        self._prompt_tab = PromptTab(self._tag_service, self._signals)
 
         for label, widget in [
             ("Docs", self._docs_tab),
             ("Search", self._search_tab),
-            ("Anonymize", self._anon_tab),
             ("Prompts", self._prompt_tab),
         ]:
             self._tab_bar.addTab(label)

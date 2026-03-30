@@ -7,7 +7,6 @@ from evidmgr.models import (
     Gender,
     NameOrigin,
     SetType,
-    SourceType,
     make_seed,
     seeded_rng,
 )
@@ -21,7 +20,6 @@ def test_enums_have_expected_values():
     assert AnonMode.REAL == "real"
     assert AnonMode.PLACEHOLDER == "placeholder"
     assert AnonMode.FAKE == "fake"
-    assert SourceType.LAW == "law"
     assert Gender.MALE == "male"
     assert NameOrigin.DANISH == "danish"
 
@@ -44,7 +42,6 @@ def test_document_defaults():
         path=Path("/tmp"),
         label="Test",
         tags=[],
-        source_type=SourceType.OTHER,
         added=datetime.now(tz=timezone.utc),
     )
     assert not doc.indexed

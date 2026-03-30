@@ -1,0 +1,14 @@
+layers:
+  - id: background
+    evidence: [t2]
+    grounding: grounding/background.md
+
+  - id: analysis
+    evidence: [t2]
+    grounding: grounding/analysis.md
+    layers:
+      - id: analysis-sub
+        evidence: [t2]
+        grounding: grounding/analysis_sub.md
+
+final_question: grounding/final_question.md

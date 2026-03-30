@@ -61,7 +61,6 @@ class VecService:
                 "doc_uuid": doc.uuid,
                 "label": doc.label,
                 "tags": ",".join(doc.tags),
-                "source_type": str(doc.source_type),
                 "chunk_idx": i,
                 "char_start": char_starts[i],
             }
@@ -75,12 +74,17 @@ class VecService:
             pass  # collection may be empty
 
         embeddings = generate_embeddings(chunks)
-        collection.add(
-            documents=chunks,
-            embeddings=embeddings,
-            ids=ids,
-            metadatas=metadatas,
-        )
+
+        # ChromaDB has a max batch size (~5461); add in batches to be safe.
+        _BATCH = 2000
+        for start in range(0, len(chunks), _BATCH):
+            end = start + _BATCH
+            collection.add(
+                documents=chunks[start:end],
+                embeddings=embeddings[start:end],
+                ids=ids[start:end],
+                metadatas=metadatas[start:end],
+            )
         logger.info("Indexed %d chunks for %s in set '%s'", len(chunks), doc.uuid, evidence_set.slug)
 
     def remove_document(self, doc_uuid: str, evidence_set: "EvidenceSet") -> None:
@@ -98,16 +102,24 @@ class VecService:
         query_text: str,
         n_results: int = 10,
         filter_tags: list[str] | None = None,
-        filter_source_type: str = "",
     ) -> list["VecResult"]:
         from vecdb.utils.embeddings import generate_embeddings
-        from evidmgr.models import Document, SourceType, VecResult
+        from evidmgr.models import Document, VecResult
 
         collection = self._collection(evidence_set)
-        where: dict | None = None
-        if filter_source_type:
-            where = {"source_type": {"$eq": filter_source_type}}
 
+        # ChromaDB raises if n_results > collection count; cap it.
+        try:
+            count = collection.count()
+        except Exception:
+            count = 0
+        if count == 0:
+            logger.info("Vector collection for '%s' is empty — index docs first", evidence_set.slug)
+            return []
+        n_results = min(n_results, count)
+        logger.debug("Vector query on '%s': %d chunks available, n_results=%d", evidence_set.slug, count, n_results)
+
+        where: dict | None = None
         embedding = generate_embeddings([query_text])[0]
         results = collection.query(
             query_embeddings=[embedding],
@@ -164,7 +176,7 @@ class VecService:
     def _load_document(doc_dir: Path, doc_uuid: str) -> "Document":
         import yaml
         from datetime import datetime, timezone
-        from evidmgr.models import Document, SourceType
+        from evidmgr.models import Document
 
         info_path = doc_dir / "info.yml"
         meta_path = doc_dir / "evidmgr_meta.yml"
@@ -186,7 +198,6 @@ class VecService:
             path=doc_dir,
             label=info.get("label", doc_uuid),
             tags=tags,
-            source_type=SourceType(meta.get("source_type", "other")),
             added=datetime.now(tz=timezone.utc),
             indexed=meta.get("indexed", False),
             anon_pending=meta.get("anon_pending", False),

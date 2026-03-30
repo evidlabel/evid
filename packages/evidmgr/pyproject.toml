@@ -20,6 +20,8 @@ dependencies = [
     "rich",
     "gender-guesser",
     "faker",
+    "requests",
+    "beautifulsoup4",
 ]
 
 [project.scripts]

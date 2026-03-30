@@ -7,6 +7,10 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -29,7 +33,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_RESULT_COLS = ["Score", "Label", "Type", "Preview", "UUID"]
+_RESULT_COLS = ["Score", "Label", "Preview", "UUID"]
 
 
 class SearchTab(QWidget):
@@ -90,34 +94,27 @@ class SearchTab(QWidget):
         qrow.addWidget(vec_btn)
         vv.addLayout(qrow)
         layout.addWidget(self._vec_widget)
-        self._vec_widget.hide()
 
-        # Results table
+        # Start on Vector search tab
+        self._sub_tabs.setCurrentIndex(1)
+
+        # Results table (multi-select, right-click menu)
         self._table = QTableWidget(0, len(_RESULT_COLS))
         self._table.setHorizontalHeaderLabels(_RESULT_COLS)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.horizontalHeader().setStretchLastSection(True)
+        self._table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._on_context_menu)
+        self._table.itemSelectionChanged.connect(self._update_action_bar)
         layout.addWidget(self._table)
 
-        # Action bar: tag + prompt
+        # Action bar: selection count + export prompt
         action_bar = QHBoxLayout()
-        action_bar.addWidget(QLabel(f"{0} selected"))
-        self._selected_count_label = action_bar.itemAt(0).widget()
-        self._table.itemSelectionChanged.connect(self._update_action_bar)
-
-        action_bar.addWidget(QLabel("Add to tag:"))
-        self._tag_input = QLineEdit()
-        self._tag_input.setPlaceholderText("tag-name")
-        self._tag_input.setMaximumWidth(150)
-        self._apply_tag_btn = QPushButton("Apply")
-        self._apply_tag_btn.clicked.connect(self._on_apply_tag)
-        self._export_prompt_btn = QPushButton("Export prompt")
-        self._export_prompt_btn.clicked.connect(self._on_export_prompt)
-        action_bar.addWidget(self._tag_input)
-        action_bar.addWidget(self._apply_tag_btn)
+        self._selected_count_label = QLabel("0 selected")
+        action_bar.addWidget(self._selected_count_label)
         action_bar.addStretch()
-        action_bar.addWidget(self._export_prompt_btn)
         layout.addLayout(action_bar)
 
         signals.set_selected.connect(self._on_set_selected)
@@ -141,7 +138,7 @@ class SearchTab(QWidget):
             return
         import re  # noqa: PLC0415
         import yaml  # noqa: PLC0415
-        from evidmgr.models import Document, SourceType  # noqa: PLC0415
+        from evidmgr.models import Document  # noqa: PLC0415
         from datetime import datetime, timezone
 
         pattern = self._meta_filter.text().strip()
@@ -178,7 +175,6 @@ class SearchTab(QWidget):
                     path=doc_dir,
                     label=label,
                     tags=tags,
-                    source_type=SourceType(meta.get("source_type", "other")),
                     added=datetime.now(tz=timezone.utc),
                 )
             )
@@ -209,9 +205,8 @@ class SearchTab(QWidget):
             self._table.insertRow(row)
             self._table.setItem(row, 0, QTableWidgetItem("—"))
             self._table.setItem(row, 1, QTableWidgetItem(doc.label))
-            self._table.setItem(row, 2, QTableWidgetItem(str(doc.source_type.value)))
-            self._table.setItem(row, 3, QTableWidgetItem(""))
-            self._table.setItem(row, 4, QTableWidgetItem(doc.uuid))
+            self._table.setItem(row, 2, QTableWidgetItem(""))
+            self._table.setItem(row, 3, QTableWidgetItem(doc.uuid))
 
     def _fill_table_from_vec_results(self, results: list["VecResult"]) -> None:
         self._table.setRowCount(0)
@@ -220,10 +215,9 @@ class SearchTab(QWidget):
             self._table.insertRow(row)
             self._table.setItem(row, 0, QTableWidgetItem(f"{res.score:.3f}"))
             self._table.setItem(row, 1, QTableWidgetItem(res.doc.label))
-            self._table.setItem(row, 2, QTableWidgetItem(str(res.doc.source_type.value)))
             preview = res.chunk_text[:120].replace("\n", " ")
-            self._table.setItem(row, 3, QTableWidgetItem(preview))
-            self._table.setItem(row, 4, QTableWidgetItem(res.doc.uuid))
+            self._table.setItem(row, 2, QTableWidgetItem(preview))
+            self._table.setItem(row, 3, QTableWidgetItem(res.doc.uuid))
 
     def _update_action_bar(self) -> None:
         n = len(self._table.selectionModel().selectedRows())
@@ -233,22 +227,28 @@ class SearchTab(QWidget):
         rows = self._table.selectionModel().selectedRows()
         uuids = []
         for row_idx in rows:
-            item = self._table.item(row_idx.row(), 4)
+            item = self._table.item(row_idx.row(), 3)
             if item:
                 uuids.append(item.text())
         return uuids
 
-    def _on_apply_tag(self) -> None:
+    def _on_context_menu(self, pos) -> None:
+        uuids = self._selected_uuids()
+        if not uuids:
+            return
+        from PySide6.QtWidgets import QMenu  # noqa: PLC0415
+
+        menu = QMenu(self)
+        tag_action = menu.addAction(f"Tag {len(uuids)} selected\u2026")
+        action = menu.exec(self._table.viewport().mapToGlobal(pos))
+        if action is not tag_action:
+            return
         if not self._evidence_set:
             return
         from evidmgr.models import TagItem  # noqa: PLC0415
 
-        uuids = self._selected_uuids()
-        if not uuids:
-            return
-        tag_name = self._tag_input.text().strip()
+        tag_name = self._ask_tag_name()
         if not tag_name:
-            QMessageBox.warning(self, "No tag", "Enter a tag name.")
             return
         tag_name = self._tag_service.qualify(tag_name, self._evidence_set.slug)
         try:
@@ -257,13 +257,32 @@ class SearchTab(QWidget):
             self._tag_service.create_tag(tag_name, self._evidence_set.slug)
         items = [TagItem(set_slug=self._evidence_set.slug, doc_uuid=u) for u in uuids]
         self._tag_service.add_items(tag_name, items)
-        from PySide6.QtWidgets import QToolTip  # noqa: PLC0415
-        from PySide6.QtGui import QCursor  # noqa: PLC0415
-        QToolTip.showText(QCursor.pos(), f"{len(uuids)} docs added to {tag_name}")
+        self.window().statusBar().showMessage(f"{len(uuids)} docs added to {tag_name}", 3000)
 
-    def _on_export_prompt(self) -> None:
-        uuids = self._selected_uuids()
-        if not uuids or not self._evidence_set:
-            return
-        for u in uuids:
-            self._signals.add_to_prompt.emit(self._evidence_set.slug, u)
+    def _ask_tag_name(self) -> str:
+        """Show a dialog with an editable combo of existing tags; return chosen name or ''."""
+        existing: list[str] = []
+        if self._evidence_set:
+            existing = [
+                t.name for t in self._tag_service.list_tags()
+            ]
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Tag selected")
+        dlg.setMinimumWidth(280)
+        layout = QFormLayout(dlg)
+        combo = QComboBox()
+        combo.setEditable(True)
+        combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        combo.addItems(existing)
+        combo.setCurrentText("")
+        combo.lineEdit().setPlaceholderText("tag-name or pick existing…")
+        layout.addRow("Tag:", combo)
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btns.accepted.connect(dlg.accept)
+        btns.rejected.connect(dlg.reject)
+        layout.addRow(btns)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return ""
+        return combo.currentText().strip()
+
