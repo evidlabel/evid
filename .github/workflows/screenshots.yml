@@ -29,7 +29,11 @@ jobs:
         run: |
           uv venv .venv --seed
           uv pip install -e .
-          uv pip install shellplot
+          # shellplot's setup.py imports pkg_resources without declaring
+          # setuptools as a build requirement — pre-install it and disable
+          # build isolation so the build can find it.
+          uv pip install setuptools
+          uv pip install --no-build-isolation shellplot
 
       - name: Regenerate help.svg
         run: |
