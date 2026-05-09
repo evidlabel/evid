@@ -10,5 +10,4 @@ def normalize_text(text: str | bytes | None, default: str = "") -> str:
             text = text.decode("utf-8")
         except UnicodeDecodeError:
             text = text.decode("latin-1", errors="replace")
-    text = str(text).strip()
-    return text
+    return str(text).strip()

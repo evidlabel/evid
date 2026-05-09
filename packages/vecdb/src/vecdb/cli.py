@@ -1,11 +1,13 @@
 """CLI with rich metadata display from info.yml."""
+
 import logging
+
 from rich.console import Console
-from rich.table import Table
 from rich.logging import RichHandler
+from rich.table import Table
 from treeparse import cli, command, option
 
-from .core.db import get_client, create_collection, bulk_add_documents, query_collection
+from .core.db import bulk_add_documents, create_collection, get_client, query_collection
 from .utils.file_utils import get_documents_with_metadata, get_label_files
 
 logging.basicConfig(
@@ -32,10 +34,18 @@ def add(directory: str, target_dir: str, collection: str = "default"):
     logger.info(f"Found {num_files} label.typ files → {len(documents)} chunks")
     if documents:
         bulk_add_documents(client, collection, documents, ids, metadatas)
-        print(f"✅ Added {len(documents)} chunks (with URL/title metadata) to '{collection}'")
+        print(
+            f"✅ Added {len(documents)} chunks (with URL/title metadata) to '{collection}'"
+        )
 
 
-def query(directory: str, query_text: str, collection: str = "default", top_n: int = 5, full: bool = False):
+def query(
+    directory: str,
+    query_text: str,
+    collection: str = "default",
+    top_n: int = 5,
+    full: bool = False,
+):
     """Search and show rich results (Title + URL from info.yml)."""
     client = get_client(directory)
     results = query_collection(client, collection, query_text, n_results=top_n)
@@ -57,7 +67,9 @@ def query(directory: str, query_text: str, collection: str = "default", top_n: i
     table.add_column("Distance", style="yellow", justify="right")
     table.add_column("Content", style="green")
 
-    for i, (doc_id, doc, dist, meta) in enumerate(zip(ids, documents, distances, metadatas), 1):
+    for i, (doc_id, doc, dist, meta) in enumerate(
+        zip(ids, documents, distances, metadatas, strict=False), 1
+    ):
         title = (meta.get("title") or doc_id)[:65]
         url = meta.get("url") or "─"
         content = doc if full else (doc[:140] + "…")
@@ -65,7 +77,9 @@ def query(directory: str, query_text: str, collection: str = "default", top_n: i
 
     console.print(table)
     if any(m.get("url") for m in metadatas):
-        console.print("\n[bold green]Tip:[/] Copy any URL above or rerun with --full (-f) for complete passages.")
+        console.print(
+            "\n[bold green]Tip:[/] Copy any URL above or rerun with --full (-f) for complete passages."
+        )
 
 
 init_cmd = command(
@@ -73,8 +87,18 @@ init_cmd = command(
     help="Create collection.",
     callback=init,
     options=[
-        option(flags=["--directory", "-d"], arg_type=str, required=True, help="DB directory"),
-        option(flags=["--collection", "-c"], arg_type=str, default="default", help="Collection"),
+        option(
+            flags=["--directory", "-d"],
+            arg_type=str,
+            required=True,
+            help="DB directory",
+        ),
+        option(
+            flags=["--collection", "-c"],
+            arg_type=str,
+            default="default",
+            help="Collection",
+        ),
     ],
 )
 
@@ -83,9 +107,24 @@ add_cmd = command(
     help="Index label.typ files with metadata from info.yml.",
     callback=add,
     options=[
-        option(flags=["--directory", "-d"], arg_type=str, required=True, help="DB directory"),
-        option(flags=["--target-dir", "-t"], arg_type=str, required=True, help="Dir containing label.typ + info.yml"),
-        option(flags=["--collection", "-c"], arg_type=str, default="default", help="Collection"),
+        option(
+            flags=["--directory", "-d"],
+            arg_type=str,
+            required=True,
+            help="DB directory",
+        ),
+        option(
+            flags=["--target-dir", "-t"],
+            arg_type=str,
+            required=True,
+            help="Dir containing label.typ + info.yml",
+        ),
+        option(
+            flags=["--collection", "-c"],
+            arg_type=str,
+            default="default",
+            help="Collection",
+        ),
     ],
 )
 
@@ -94,11 +133,26 @@ query_cmd = command(
     help="Search and show rich results (Title + URL from info.yml).",
     callback=query,
     options=[
-        option(flags=["--directory", "-d"], arg_type=str, required=True, help="DB directory"),
+        option(
+            flags=["--directory", "-d"],
+            arg_type=str,
+            required=True,
+            help="DB directory",
+        ),
         option(flags=["--query-text", "-q"], arg_type=str, required=True, help="Query"),
-        option(flags=["--collection", "-c"], arg_type=str, default="default", help="Collection"),
+        option(
+            flags=["--collection", "-c"],
+            arg_type=str,
+            default="default",
+            help="Collection",
+        ),
         option(flags=["--top-n", "-n"], arg_type=int, default=5, help="Results"),
-        option(flags=["--full", "-f"], arg_type=bool, default=False, help="Show full passages"),
+        option(
+            flags=["--full", "-f"],
+            arg_type=bool,
+            default=False,
+            help="Show full passages",
+        ),
     ],
 )
 

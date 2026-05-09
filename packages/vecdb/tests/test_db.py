@@ -1,17 +1,17 @@
 """Tests for ChromaDB operations."""
 
 import pytest
-import os
-import shutil
 
 try:
     import chromadb
+
     HAS_CHROMADB = True
 except ImportError:
     HAS_CHROMADB = False
 
 try:
     from sentence_transformers import SentenceTransformer
+
     HAS_ST = True
 except ImportError:
     HAS_ST = False
@@ -20,16 +20,19 @@ pytestmark = pytest.mark.skipif(
     not HAS_CHROMADB or not HAS_ST, reason="Missing chromadb or sentence-transformers"
 )
 
-from vecdb.core.db import get_client, create_collection, add_document, bulk_add_documents, query_collection
+from vecdb.core.db import (
+    add_document,
+    bulk_add_documents,
+    create_collection,
+    get_client,
+    query_collection,
+)
 
 
 @pytest.fixture
-def client():
-    temp_path = "tests/temp_db"
-    os.makedirs(temp_path, exist_ok=True)
-    client = get_client(temp_path)
-    yield client
-    shutil.rmtree(temp_path)
+def client(tmp_path):
+    client = get_client(str(tmp_path))
+    return client
 
 
 def test_create_collection(client):

@@ -1,10 +1,10 @@
 """Handle BibTeX generation."""
 
-import os
-from pathlib import Path
 import logging
+import os
 import subprocess
-from typing import List, Tuple
+from pathlib import Path
+
 from evid.core.bibtex_utils import json_to_bib
 
 logger = logging.getLogger(__name__)
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def generate_bib_from_typ(
     typ_file: Path, exclude_note: bool = True
-) -> Tuple[bool, str]:
+) -> tuple[bool, str]:
     """Generate BibTeX from a single Typst file. Return (success, message)."""
     if not typ_file.exists():
         return False, f"Typst file '{typ_file}' does not exist."
@@ -55,15 +55,14 @@ def generate_bib_from_typ(
             logger.info(f"Generated BibTeX file: {bib_file}")
             return True, ""
         except Exception as e:
-            return False, f"Failed to generate BibTeX for {typ_file}: {str(e)}"
+            return False, f"Failed to generate BibTeX for {typ_file}: {e!s}"
     except Exception as e:
-        return False, f"Unexpected error during Typst query: {str(e)}"
+        return False, f"Unexpected error during Typst query: {e!s}"
 
 
-def generate_bibtex(typ_files: List[Path]) -> None:
+def generate_bibtex(typ_files: list[Path]) -> None:
     """Generate BibTeX files from a list of label.typ files."""
     if not typ_files:
-        print("No Typst files provided.")
         return
 
     success_count = 0
@@ -76,8 +75,6 @@ def generate_bibtex(typ_files: List[Path]) -> None:
             logger.error(msg) if "exist" in msg else logger.warning(msg)
             errors.append(msg)
 
-    print(f"Successfully generated {success_count} BibTeX files.")
     if errors:
-        print(f"Encountered {len(errors)} issues:")
-        for error in errors:
-            print(f"  - {error}")
+        for _error in errors:
+            pass

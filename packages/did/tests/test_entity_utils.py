@@ -63,10 +63,14 @@ def test_is_possible_variant():
     assert is_possible_variant("John", "John Doe") is True
     assert is_possible_variant("Doe", "John Doe") is True
     assert is_possible_variant("J.D.", "John Doe") is True
-    assert is_possible_variant("John Doe", "J. Doe") is False  # Shorter not variant of longer
+    assert (
+        is_possible_variant("John Doe", "J. Doe") is False
+    )  # Shorter not variant of longer
     assert is_possible_variant("Jane Doe", "John Doe") is False  # Different name
     assert is_possible_variant("", "John Doe") is False
-    assert is_possible_variant("John Doe Smith", "John Doe") is False  # Longer not variant
+    assert (
+        is_possible_variant("John Doe Smith", "John Doe") is False
+    )  # Longer not variant
 
 
 def test_find_name_variants():

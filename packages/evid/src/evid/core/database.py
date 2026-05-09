@@ -1,15 +1,16 @@
 """Database handling for evid."""
 
-import yaml
 from pathlib import Path
-from typing import Dict, List
+
+import yaml
+
 from evid import DEFAULT_DIR
 from evid.core.models import InfoModel  # Added for validation
 
 
 class Database:
-    def __init__(self, db_path: Path = DEFAULT_DIR, datasets: List[str] = None):
-        self.db: Dict[str, Dict] = {}
+    def __init__(self, db_path: Path = DEFAULT_DIR, datasets: list[str] = None):
+        self.db: dict[str, dict] = {}
         if datasets is None:
             datasets = [
                 d.name
@@ -22,18 +23,20 @@ class Database:
                 try:
                     with info_file.open() as f:
                         entry = yaml.safe_load(f)
-                        # Validate with Pydantic
                         validated_entry = InfoModel(**entry)
                         entry = validated_entry.model_dump()
+                        # Store the real doc directory so resolve_uuid doesn't
+                        # have to guess the path layout (old: dataset/uuid/,
+                        # new: dataset/docs/uuid/).
+                        entry["_workdir"] = str(info_file.parent)
                         key = f"{entry.get('title', '')} {entry['uuid']}"
                         self.db[dataset][key] = entry
-                except ValueError as e:
-                    print(f"Validation error for {info_file}: {e}. Skipping.")
+                except ValueError:
                     continue
                 except Exception:
                     continue
 
-    def get_filenames(self) -> List[str]:
+    def get_filenames(self) -> list[str]:
         return [
             entry["original_name"]
             for dataset in self.db.values()

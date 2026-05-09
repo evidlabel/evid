@@ -8,9 +8,9 @@ from rich.syntax import Syntax
 from ruamel import yaml
 from treeparse import argument, command, option
 
-from ..core.anonymizer import Anonymizer
-from ..utils.console import console, print_counts
-from ..utils.file_utils import extract_text
+from did.core.anonymizer import Anonymizer
+from did.utils.console import console, print_counts
+from did.utils.file_utils import extract_text
 
 
 def extract(files, config, language):
@@ -28,7 +28,9 @@ def extract(files, config, language):
             text = extract_text(file_path)
             texts.append(text)
 
-        with console.status(f"[bold green]Detecting entities in {language}...[/bold green]"):
+        with console.status(
+            f"[bold green]Detecting entities in {language}...[/bold green]"
+        ):
             anonymizer.detect_entities(texts)
 
         console.print("[bold]Detected entities:[/bold]")
@@ -52,6 +54,7 @@ def extract(files, config, language):
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
+
 
 extract_cmd = command(
     name="extract",

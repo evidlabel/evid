@@ -1,54 +1,106 @@
-![Deploy](https://github.com/evidlabel/evid/actions/workflows/ci.yml/badge.svg)![Version](https://img.shields.io/github/v/release/evidlabel/evid)
-# evid - PDF Labeler
-`evid` is an application, aimed at the legal industry, for labelling PDF text content and making the labels citeable (for use in LaTeX or Typst). 
+![CI](https://github.com/evidlabel/evid/actions/workflows/ci.yml/badge.svg)![Version](https://img.shields.io/github/v/release/evidlabel/evid)
 
-## Workflow
-- Create a dataset
-- Add PDFs
-- Label the text, extracted from the PDF, using a text editor, surrounding labelled text with `#lab(key,text,note)` in typst
-- Use `generate bibtex` to create a BibTeX file, this will use `typst query` in the background. 
-- Use `rebut` to create a line-by-line rebuttal, that can be used in an LLM (the remarks are line prompts for the LLM).  
+# evid — Evidence Manager
+
+`evid` is a PDF evidence management tool for labelling, citing, and searching documents — primarily for legal and research workflows. It provides both a GUI and a full-featured CLI.
+
+## Features
+
+- Ingest PDFs or URLs; extract text and metadata automatically
+- Label text snippets in a Typst editor with `#lab(key, text, note)` syntax
+- Export labelled snippets to BibTeX for citation in LaTeX/Typst
+- Semantic vector search across all ingested documents
+- Regex metadata search over document fields
+- Tag documents and filter by tag
+- Generate rebuttal documents from collected evidence
+- Anonymise documents (placeholder / fake entity substitution)
+
+## Requirements
+
+- Python 3.12+
+- [`uv`](https://docs.astral.sh/uv/) (recommended) or pip
+- [`typst`](https://typst.app) binary on `PATH` — required for label extraction
+- PySide6 — installed automatically with the package (GUI only)
 
 ## Installation
-To install the latest version of `evid`:
+
 ```bash
-uv pip install https://github.com/evidlabel/evid.git
+uv pip install "evid @ git+https://github.com/evidlabel/evid.git"
 ```
 
-## Usage
+## GUI
 
-### GUI
-Launch the GUI using:
+Launch the GUI (default when invoked with no arguments):
+
 ```bash
-evid 
+evid
 ```
-Which gives access to a two-pane app, one for adding files, and one for browsing datasets. 
 
-<img src="docs/assets/image.png" alt="drawing" width="50%"/><img src="docs/assets/browse.png" alt="drawing" width="50%"/>
+<img src="docs/assets/image.png" alt="Docs tab" width="50%"/><img src="docs/assets/browse.png" alt="Search tab" width="50%"/>
 
-### CLI
+## CLI
 
-Use the CLI to manage datasets:
+![CLI help](docs/assets/help.svg)
 
-![help](docs/assets/help.svg)
+### Quick-start
 
-## Labelling
-- When selecting a document and pressing the "Label" button, a typst document is generated that contains the extracted text from the PDF. 
-    
-    The typst document is saved in the same folder as the PDF. 
+```bash
+# Create a dataset and add a document
+evid set create my-research
+evid doc add paper.pdf --dataset my-research
 
-- The user can now label using their text editor inside the typst document. For VS Code, the following keybinding will allow labelling by selecting text and pressing `ctrl+l`:
-    ```json 
-    {
-        "key": "ctrl+L",
-        "command": "editor.action.insertSnippet",
-        "when": "editorTextFocus && editorLangId == 'typst'",
-        "args": {"snippet": "#lab(\"$1\",\"${TM_SELECTED_TEXT}\",\"$2\")"}
-    }
-    ```
-    The first field is the label attached (generally a short descriptive string), the second field is the text that was highlighted, and the third field is a comment about the label (for possible use by an LLM).
+# Semantic search
+evid search vec "children separated from parents" --dataset my-research
 
-- The header in the typst document causes `typst query` to write the labels to `label.json`. 
-- The JSON file is translated to `label.bib` upon exiting the label editor (i.e., closing VS Code).  
-- The `label_table.bib` files for each PDF can be concatenated and used to formulate a rebuttal. 
-- Note that the first 4 characters of the PDF's UUID are used as a prefix for the BibTeX label, this means that the labels only have to have a unique ID for the same PDF, not across all PDFs in the dataset.
+# Regex search over metadata
+evid search meta "Guardian" --dataset my-research
+
+# Export gathered BibTeX
+evid set gather my-research -o refs.bib
+
+# List and tag documents
+evid doc list --dataset my-research --format md
+evid tag assign <uuid> my-tag
+evid tag list
+```
+
+### Search
+
+Vector search (`search vec`) embeds the query with a sentence-transformer model and returns the nearest chunks from the ChromaDB index. Results can be output as a rich table (default), Markdown, or JSON:
+
+```bash
+evid search vec "parental rights" --dataset litc --n 10 --format json
+evid search meta "2024" --dataset litc --format md
+```
+
+### Labelling
+
+1. `evid doc label --dataset <set> --uuid <uuid>` generates `label.typ` from the PDF and opens it in your configured editor (default: `code`).
+2. Wrap text with `#lab("key", "highlighted text", "note")`.
+   VS Code snippet binding for `Ctrl+L` in `.typ` files:
+   ```json
+   {
+     "key": "ctrl+L",
+     "command": "editor.action.insertSnippet",
+     "when": "editorTextFocus && editorLangId == 'typst'",
+     "args": {"snippet": "#lab(\"$1\",\"${TM_SELECTED_TEXT}\",\"$2\")"}
+   }
+   ```
+3. On editor close, `label.json` and `label.bib` are generated automatically via `typst query`.
+4. Collect all snippets across a dataset:
+   ```bash
+   evid set gather my-research -o refs.bib
+   ```
+
+### Configuration
+
+```bash
+evid config show    # show current settings
+evid config update  # write defaults to ~/.evidrc
+```
+
+`~/.evidrc` (YAML):
+```yaml
+default_dir: ~/Documents/evid
+editor: code
+```

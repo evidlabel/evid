@@ -53,6 +53,7 @@ def extract_text_worker(f):
 
 class SaveDialog(QDialog):
     """Dialog for selecting save options."""
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Save Options")
@@ -72,6 +73,7 @@ class SaveDialog(QDialog):
 
 class MainWindow(QMainWindow):
     """Main window for the DID GUI."""
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("DID Pseudonymization GUI")
@@ -292,14 +294,36 @@ class MainWindow(QMainWindow):
                     with open(temp_file, encoding="utf-8") as tf:
                         content = tf.read()
                     # Highlight replacements in green
-                    highlighted_content = re.sub(r"(<[^>]+>)", r'<span style="color: green;">\1</span>', content)
+                    highlighted_content = re.sub(
+                        r"(<[^>]+>)", r'<span style="color: green;">\1</span>', content
+                    )
                     # Color variables
-                    highlighted_content = re.sub(r"(#P\d+)", r'<span style="color: green;">\1</span>', highlighted_content)
-                    highlighted_content = re.sub(r"(#G\d+)", r'<span style="color: red;">\1</span>', highlighted_content)
-                    highlighted_content = re.sub(r"(#A\d+)", r'<span style="color: yellow;">\1</span>', highlighted_content)
-                    highlighted_content = re.sub(r"(#E\d+)", r'<span style="color: cyan;">\1</span>', highlighted_content)
+                    highlighted_content = re.sub(
+                        r"(#P\d+)",
+                        r'<span style="color: green;">\1</span>',
+                        highlighted_content,
+                    )
+                    highlighted_content = re.sub(
+                        r"(#G\d+)",
+                        r'<span style="color: red;">\1</span>',
+                        highlighted_content,
+                    )
+                    highlighted_content = re.sub(
+                        r"(#A\d+)",
+                        r'<span style="color: yellow;">\1</span>',
+                        highlighted_content,
+                    )
+                    highlighted_content = re.sub(
+                        r"(#E\d+)",
+                        r'<span style="color: cyan;">\1</span>',
+                        highlighted_content,
+                    )
                     # Color all Typst variable tags yellow
-                    highlighted_content = re.sub(r"(#\([^)]+\))", r'<span style="color: yellow;">\1</span>', highlighted_content)
+                    highlighted_content = re.sub(
+                        r"(#\([^)]+\))",
+                        r'<span style="color: yellow;">\1</span>',
+                        highlighted_content,
+                    )
                     # Preserve formatting with <pre>
                     html_content = f"<pre>{highlighted_content}</pre>"
                     self.right_text.setHtml(html_content)
@@ -336,9 +360,17 @@ class MainWindow(QMainWindow):
                         if f in self.anonymized_texts:
                             out_file = sub_dir / f"{f.stem}_pseudonymized.typ"
                             try:
-                                export_to_typst(f, self.anonymizer, out_file, vars_filename=str(vars_filename), fakevars_filename=str(fakevars_filename))
+                                export_to_typst(
+                                    f,
+                                    self.anonymizer,
+                                    out_file,
+                                    vars_filename=str(vars_filename),
+                                    fakevars_filename=str(fakevars_filename),
+                                )
                             except Exception as e:
-                                QMessageBox.warning(self, "Error", f"Failed to save {f}: {e}")
+                                QMessageBox.warning(
+                                    self, "Error", f"Failed to save {f}: {e}"
+                                )
                         progress += 1
                         self.progress_bar.setValue(progress)
                     self.progress_bar.setVisible(False)
@@ -356,16 +388,28 @@ class MainWindow(QMainWindow):
                             if f in self.anonymized_texts:
                                 temp_file = Path(tempfile.mktemp(suffix=".typ"))
                                 try:
-                                    export_to_typst(f, self.anonymizer, temp_file, vars_filename=str(vars_filename), fakevars_filename=str(fakevars_filename))
+                                    export_to_typst(
+                                        f,
+                                        self.anonymizer,
+                                        temp_file,
+                                        vars_filename=str(vars_filename),
+                                        fakevars_filename=str(fakevars_filename),
+                                    )
                                     with open(temp_file, encoding="utf-8") as tf:
                                         content = tf.read()
                                     # Remove import lines
                                     lines = content.split("\n")
-                                    filtered_lines = [line for line in lines if not line.startswith("#import")]
+                                    filtered_lines = [
+                                        line
+                                        for line in lines
+                                        if not line.startswith("#import")
+                                    ]
                                     body = "\n".join(filtered_lines).strip()
                                     out_f.write(f"= {f.name}\n\n{body}\n\n")
                                 except Exception as e:
-                                    QMessageBox.warning(self, "Error", f"Failed to process {f}: {e}")
+                                    QMessageBox.warning(
+                                        self, "Error", f"Failed to process {f}: {e}"
+                                    )
                                 finally:
                                     if temp_file.exists():
                                         temp_file.unlink()
@@ -378,6 +422,7 @@ class MainWindow(QMainWindow):
         # Clean up temp dirs
         for d in self.temp_dirs:
             import shutil
+
             shutil.rmtree(d, ignore_errors=True)
         super().closeEvent(event)
 

@@ -1,6 +1,5 @@
 """ChromaDB operations with metadata support."""
 
-import numpy as np
 from ..utils.embeddings import generate_embeddings
 
 
@@ -8,6 +7,7 @@ def get_client(persist_directory: str):
     """Persistent Chroma client."""
     import chromadb
     from chromadb.config import Settings
+
     return chromadb.PersistentClient(
         path=persist_directory, settings=Settings(anonymized_telemetry=False)
     )
@@ -18,8 +18,25 @@ def create_collection(client, collection_name: str = "default"):
     return client.create_collection(collection_name)
 
 
+def add_document(
+    client,
+    collection_name: str,
+    document: str,
+    doc_id: str,
+    metadata: dict | None = None,
+):
+    """Add a single document."""
+    bulk_add_documents(
+        client, collection_name, [document], [doc_id], [metadata] if metadata else None
+    )
+
+
 def bulk_add_documents(
-    client, collection_name: str, documents: list[str], ids: list[str], metadatas: list[dict] | None = None
+    client,
+    collection_name: str,
+    documents: list[str],
+    ids: list[str],
+    metadatas: list[dict] | None = None,
 ):
     """Vectorized bulk add with full metadata (title, url, etc)."""
     collection = client.get_collection(collection_name)
@@ -33,7 +50,7 @@ def bulk_add_documents(
             documents=batch_docs,
             embeddings=batch_embeddings,
             ids=batch_ids,
-            metadatas=batch_metas
+            metadatas=batch_metas,
         )
 
 
@@ -41,7 +58,4 @@ def query_collection(client, collection_name: str, query_text: str, n_results: i
     """Query (returns metadatas automatically)."""
     embedding = generate_embeddings([query_text])[0]
     collection = client.get_collection(collection_name)
-    return collection.query(
-        query_embeddings=[embedding],
-        n_results=n_results
-    )
+    return collection.query(query_embeddings=[embedding], n_results=n_results)

@@ -8,6 +8,7 @@ import pytest
 @pytest.fixture
 def main_window(qtbot):
     from gdid.main import MainWindow
+
     window = MainWindow()
     qtbot.addWidget(window)
     return window

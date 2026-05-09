@@ -141,8 +141,6 @@ def test_anonymize_mixed_content(anonymizer):
     assert "#(A" in result
     assert counts["person_found"] >= 4
     assert counts["person_replaced"] >= 4
-    assert (
-        counts["phone_number_found"] + counts["general_number_found"] >= 2
-    )
+    assert counts["phone_number_found"] + counts["general_number_found"] >= 2
     assert counts["location_found"] >= 1
     assert counts["location_replaced"] >= 1

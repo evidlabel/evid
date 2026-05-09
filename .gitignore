@@ -17,3 +17,10 @@ output.svg
 # third-party tool state
 .grk_cache.json
 .grkrc
+
+# private working content
+questioning/
+recipes/
+
+# huge generated demo recording (regenerate locally; too large for git)
+docs/assets/demo.svg

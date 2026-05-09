@@ -35,7 +35,9 @@
                 "enum": [
                   "new.t1",
                   "t2",
-                  "new.share1"
+                  "new.share1",
+                  "lit.t2",
+                  "lit.t4"
                 ],
                 "description": "Tag name"
               },
