@@ -1,12 +1,14 @@
 """Label creation functions."""
 
 import logging
-from rich.logging import RichHandler
-from pathlib import Path
 import subprocess
-from evid.core.typst_generation import textpdf_to_typst, text_to_typst
-from evid import CONFIG  # Import CONFIG to access the editor setting
+from pathlib import Path
+
+from rich.logging import RichHandler
+
+from evid.config import EvidConfig
 from evid.core.bibtex import generate_bib_from_typ
+from evid.core.typst_generation import text_to_typst, textpdf_to_typst
 
 # Configure Rich handler for colored logging
 logging.basicConfig(handlers=[RichHandler(rich_tracebacks=True)], level=logging.INFO)
@@ -35,29 +37,25 @@ def create_label(
                 return
 
         # Open the editor
-        logger.info(f"Opening editor '{CONFIG['editor']}' with file: {label_file}")
+        logger.info(
+            f"Opening editor '{EvidConfig.load().editor}' with file: {label_file}"
+        )
         try:
-            subprocess.run([CONFIG["editor"], str(label_file)], check=True)
+            subprocess.run([EvidConfig.load().editor, str(label_file)], check=True)
         except FileNotFoundError:
             logger.error(
-                f"The configured editor '{CONFIG['editor']}' not found. Please ensure it is in your PATH."
-            )
-            print(
-                f"The configured editor '{CONFIG['editor']}' is not installed or not in your PATH."
+                f"The configured editor '{EvidConfig.load().editor}' not found. Please ensure it is in your PATH."
             )
             return  # Exit early if editor fails to open
         except subprocess.SubprocessError as e:
-            logger.exception(f"Error opening the configured editor: {str(e)}")
-            print(f"Failed to open the configured editor: {str(e)}")
+            logger.exception(f"Error opening the configured editor: {e!s}")
             return  # Exit early if editor fails
 
         success, msg = generate_bib_from_typ(label_file)
         if not success:
             logger.error(f"Error during label workflow: {msg}")
-            print(f"An unexpected error occurred: {msg}")
             return
 
         # csv had no function other than to generate the bib file, fully deprecate csv use
     except Exception as e:
-        logger.exception(f"Error during label workflow: {str(e)}")
-        print(f"An unexpected error occurred: {str(e)}")
+        logger.exception(f"Error during label workflow: {e!s}")

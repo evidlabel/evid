@@ -2,8 +2,9 @@
 
 from collections import defaultdict
 
-from ..utils.console import console
-from ..utils.entity_utils import find_name_variants, find_number_variants
+from did.utils.console import console
+from did.utils.entity_utils import find_name_variants, find_number_variants
+
 from .helpers import fallback_scan
 from .models import Entity
 
@@ -61,7 +62,9 @@ def generate_possessives(variants: list[str]) -> list[str]:
 def detect_entities(anonymizer, texts: list):
     """Detect entities in multiple texts using Presidio."""
     model_used = anonymizer.model_map.get(anonymizer.language, "unknown")
-    console.log(f"Using spaCy model [bold]{model_used}[/bold] for language [bold]{anonymizer.language}[/bold]")
+    console.log(
+        f"Using spaCy model [bold]{model_used}[/bold] for language [bold]{anonymizer.language}[/bold]"
+    )
     all_entities = defaultdict(list)
     for text in texts:
         detection_text, map_to_original = anonymizer.preprocess_text(text)
@@ -72,9 +75,7 @@ def detect_entities(anonymizer, texts: list):
         )
 
         # Aggressive deduplication: Prefer longer entities, then higher score
-        sorted_results = sorted(
-            results, key=lambda r: (-(r.end - r.start), -r.score)
-        )
+        sorted_results = sorted(results, key=lambda r: (-(r.end - r.start), -r.score))
         selected_results = []
         used_spans = []
         for result in sorted_results:

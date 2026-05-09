@@ -38,7 +38,8 @@ class Anonymizer:
         try:
             nlp_engine = NlpEngineProvider(nlp_configuration=conf).create_engine()
         except Exception as e:
-            raise ValueError(f"NLP engine could not be created for language '{language}': {e}")
+            msg = f"NLP engine could not be created for language '{language}': {e}"
+            raise ValueError(msg)
 
         registry = RecognizerRegistry(supported_languages=[language, "en"])
         registry.load_predefined_recognizers(languages=[language, "en"])

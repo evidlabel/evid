@@ -6,7 +6,7 @@ from pathlib import Path
 
 import bibtexparser
 
-from ..core.anonymizer import Anonymizer
+from did.core.anonymizer import Anonymizer
 
 
 def extract_text(file_path: Path) -> str:
@@ -39,7 +39,8 @@ def extract_text(file_path: Path) -> str:
                     text_content.append(str(value))
             return " ".join(text_content)
     else:
-        raise ValueError(f"Unsupported file type: {file_path.suffix}")
+        msg = f"Unsupported file type: {file_path.suffix}"
+        raise ValueError(msg)
 
 
 def anonymize_file(input_path: Path, anonymizer: Anonymizer, output_path: Path) -> dict:
@@ -74,7 +75,8 @@ def anonymize_file(input_path: Path, anonymizer: Anonymizer, output_path: Path) 
         with open(output_path, "w", encoding="utf-8") as bibfile_out:
             bibtexparser.dump(database, bibfile_out)
     else:
-        raise ValueError(f"Unsupported file type: {input_path.suffix}")
+        msg = f"Unsupported file type: {input_path.suffix}"
+        raise ValueError(msg)
     return counts
 
 
@@ -93,29 +95,25 @@ def md_to_typst(md: str) -> str:
     # Code
     md = re.sub(r"`(.*?)`", r"`\1`", md)
     # Links
-    md = re.sub(r"\[(.*?)\]\((.*?)\)", r'#link("\2")[\1]', md)
-    return md
+    return re.sub(r"\[(.*?)\]\((.*?)\)", r'#link("\2")[\1]', md)
 
 
 def export_to_typst(
     input_path: Path,
     anonymizer: Anonymizer,
     main_path: Path,
-    vars_filename: str = None,
-    fakevars_filename: str = None,
+    vars_filename: str | None = None,
+    fakevars_filename: str | None = None,
 ) -> None:
     """Export anonymized content to Typst files."""
     if input_path.suffix not in [".md", ".txt", ".pdf"]:
-        raise ValueError(
-            "Typst export currently supported only for .md, .txt, and .pdf files."
-        )
+        msg = "Typst export currently supported only for .md, .txt, and .pdf files."
+        raise ValueError(msg)
 
     stem = main_path.stem
     parent = main_path.parent
     vars_path = parent / (vars_filename or f"{stem}_vars.typ")
-    fake_path = parent / (
-        fakevars_filename or f"{stem}_fakevars.typ"
-    )
+    fake_path = parent / (fakevars_filename or f"{stem}_fakevars.typ")
 
     # Generate Typst mappings
     var_counters = {

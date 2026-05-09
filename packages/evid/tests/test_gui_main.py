@@ -1,29 +1,52 @@
-# @pytest.fixture
-# def app(qtbot):
-#     test_app = QApplication.instance()
-#     if not test_app:
-#         test_app = QApplication([""])
-#     yield test_app
-#     test_app.quit()
+"""Headless GUI smoke tests for evidmgr."""
+
+import os
+
+import pytest
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CI") != "true" and os.environ.get("HEADLESS") != "1",
+    reason="GUI tests require headless/CI env (set HEADLESS=1)",
+)
 
 
-# def test_evidence_manager_app_init(app, tmp_path):
-#     window = EvidenceManagerApp(tmp_path)
-#     assert window.windowTitle() == "evid"
-#     assert window.tabs.count() == 2
-#     assert window.tabs.tabText(0) == "Add"
-#     assert window.tabs.tabText(1) == "Browse"
+@pytest.fixture(scope="module")
+def qapp():
+    import sys
+
+    from PySide6.QtWidgets import QApplication
+
+    return QApplication.instance() or QApplication(sys.argv)
 
 
-# def test_set_dark_theme(app, tmp_path):
-#     window = EvidenceManagerApp(tmp_path)
-#     palette = window.palette()
-#     assert palette.color(palette.ColorRole.Window).name() == "#2e2e2e"
+def test_main_window_creates(qapp, tmp_path):
+    from evid.config import EvidConfig
+    from evid.gui.main_window import EvidMgrWindow
+
+    config = EvidConfig(data_dir=tmp_path)
+    window = EvidMgrWindow(config=config)
+    assert window is not None
+    assert window.windowTitle() == "Evidence Manager"
+    window.close()
 
 
-# def test_main(tmp_path):
-#     with patch("sys.exit") as mock_exit:
-#         with patch("PySide6.QtWidgets.QApplication.exec") as mock_exec:
-#             main(tmp_path)
-#         mock_exec.assert_called_once()
-#         mock_exit.assert_not_called()
+def test_sidebar_shows_empty_sets(qapp, tmp_path):
+    from evid.config import EvidConfig
+    from evid.gui.main_window import EvidMgrWindow
+
+    config = EvidConfig(data_dir=tmp_path)
+    window = EvidMgrWindow(config=config)
+    assert window._sidebar._list.count() == 0
+    window.close()
+
+
+def test_sidebar_create_set(qapp, tmp_path):
+    from evid.config import EvidConfig
+    from evid.gui.main_window import EvidMgrWindow
+
+    config = EvidConfig(data_dir=tmp_path)
+    window = EvidMgrWindow(config=config)
+    window._set_manager.create_set("Test Set")
+    window._sidebar.refresh()
+    assert window._sidebar._list.count() == 1
+    window.close()

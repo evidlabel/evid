@@ -1,12 +1,14 @@
 """BibTeX utility functions for evid."""
 
-from pathlib import Path
-import re
-import yaml
-import pandas as pd
-import demoji
-import logging
 import json
+import logging
+import re
+from pathlib import Path
+
+import demoji
+import pandas as pd
+import yaml
+
 from evid.core.models import InfoModel
 
 logger = logging.getLogger(__name__)
@@ -16,7 +18,6 @@ def replace_multiple_spaces(s):
     try:
         return re.sub(r" +", " ", s)
     except TypeError:
-        print(s)
         return ""
 
 
@@ -24,7 +25,6 @@ def replace_underscores(s):
     try:
         return re.sub(r"_", " ", s)
     except TypeError:
-        print(s)
         return ""
 
 
@@ -32,7 +32,6 @@ def remove_curly_brace_content(s):
     try:
         return re.sub(r"\{.*?\}", "", s).replace(".06em", "")
     except TypeError:
-        print(s)
         return ""
 
 
@@ -40,7 +39,6 @@ def remove_backslash_substrings(s):
     try:
         return re.sub(r"\\[^ ]*", "", s)
     except TypeError:
-        print(s)
         return ""
 
 
@@ -151,7 +149,7 @@ def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
             raise ValueError("DataFrame is empty")
         if "key" not in df.columns:
             raise KeyError("'key' column missing in JSON data")
-        df.rename(columns={"key": "label", "text": "quote"}, inplace=True)
+        df = df.rename(columns={"key": "label", "text": "quote"})
         df["date"] = pd.to_datetime(
             df.get("date", pd.Series([pd.NaT] * len(df))),
             dayfirst=False,
@@ -184,7 +182,7 @@ def json_to_bib(json_file: Path, output_file: Path, exclude_note: bool):
             bibtex_file.write(emojis_to_text("\n".join(main_lines)) + "\n")
 
             # Write snippet entries
-            for index, row in df.iterrows():
+            for _index, row in df.iterrows():
                 entry_lines = [f"@article{{ {row['latex_label']}  ,"]
 
                 note_value = row.get("note", "")

@@ -7,9 +7,9 @@ from rich.rule import Rule
 from ruamel import yaml
 from treeparse import argument, command, option
 
-from ..core.anonymizer import Anonymizer
-from ..utils.console import console, print_counts
-from ..utils.file_utils import export_to_typst, extract_text
+from did.core.anonymizer import Anonymizer
+from did.utils.console import console, print_counts
+from did.utils.file_utils import export_to_typst, extract_text
 
 
 def full(file, output, language):
@@ -65,6 +65,7 @@ def full(file, output, language):
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
+
 
 full_cmd = command(
     name="full",

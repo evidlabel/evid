@@ -1,11 +1,13 @@
 """Extract PDF metadata functions."""
 
 import logging
-from rich.logging import RichHandler
-from pathlib import Path
-import pypdf
-from evid.utils.text import normalize_text
 from io import BytesIO
+from pathlib import Path
+
+import pypdf
+from rich.logging import RichHandler
+
+from evid.utils.text import normalize_text
 
 # Configure Rich handler for colored logging
 logging.basicConfig(handlers=[RichHandler(rich_tracebacks=True)], level=logging.INFO)
@@ -16,7 +18,7 @@ def extract_pdf_metadata(
     pdf_source: Path | BytesIO, file_name: str
 ) -> tuple[str, str, str]:
     """Extract title, authors, and date from PDF as plain strings, preserving Danish characters."""
-    import fitz  # Import here to avoid frontend issues during import
+
     try:
         if isinstance(pdf_source, Path):
             with open(pdf_source, "rb") as f:

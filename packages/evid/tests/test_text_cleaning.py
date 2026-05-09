@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from evid.core.text_cleaning import clean_text_for_typst
 
 
@@ -77,9 +76,7 @@ def test_url_split_at_query_rejoined():
 
 def test_url_split_into_many_fragments_rejoined():
     """Multiple <wbr>-style fragments collapse into one URL."""
-    fragmented = (
-        "See\nhttps://example.com/\nvery/\nlong/\npath?x=1\nfor details."
-    )
+    fragmented = "See\nhttps://example.com/\nvery/\nlong/\npath?x=1\nfor details."
     out = clean_text_for_typst(fragmented)
     assert "https://example.com/very/long/path?x=1" in out
 

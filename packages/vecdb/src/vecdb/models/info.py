@@ -1,16 +1,16 @@
 """Pydantic model for info.yml metadata."""
 
 from pydantic import BaseModel
-from typing import Optional
 
 
 class DocumentInfo(BaseModel):
     """Metadata from info.yml (used for rich query results)."""
+
     title: str
-    url: Optional[str] = None
-    authors: Optional[str] = None
-    dates: Optional[str] = None
-    label: Optional[str] = None
+    url: str | None = None
+    authors: str | None = None
+    dates: str | None = None
+    label: str | None = None
     uuid: str
-    original_name: Optional[str] = None
-    tags: Optional[str] = ""
+    original_name: str | None = None
+    tags: str | None = ""

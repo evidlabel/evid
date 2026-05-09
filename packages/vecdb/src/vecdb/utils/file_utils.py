@@ -1,9 +1,8 @@
 """Utilities for discovering label.typ files and loading metadata from info.yml."""
 
-import os
 import glob
+import os
 from pathlib import Path
-from typing import List, Tuple
 
 from ..models.info import DocumentInfo
 
@@ -19,23 +18,25 @@ def load_info_yml(label_path: str) -> DocumentInfo:
     if not info_path.exists():
         # fallback
         return DocumentInfo(
-            title=Path(label_path).parent.name,
-            uuid=Path(label_path).parent.name
+            title=Path(label_path).parent.name, uuid=Path(label_path).parent.name
         )
     import yaml
-    with open(info_path, "r", encoding="utf-8") as f:
+
+    with open(info_path, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     return DocumentInfo.model_validate(data)
 
 
 def snippetize_document(file_path: str) -> list[str]:
     """Split into paragraphs (works great for Typst label.typ)."""
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         content = f.read()
     return [p.strip() for p in content.split("\n\n") if p.strip()]
 
 
-def get_documents_with_metadata(target_dir: str) -> Tuple[List[str], List[dict], List[str]]:
+def get_documents_with_metadata(
+    target_dir: str,
+) -> tuple[list[str], list[dict], list[str]]:
     """Helper: returns (documents, metadatas, ids) ready for bulk add."""
     label_files = get_label_files(target_dir)
     documents = []

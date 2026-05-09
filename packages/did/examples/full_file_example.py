@@ -1,10 +1,13 @@
 """Full file programmatic example of extraction and pseudonymization."""
 
-from pathlib import Path
-from did.core.anonymizer import Anonymizer
-from did.utils.file_utils import extract_text, anonymize_file, export_to_typst
 import io
-import ruamel.yaml as yaml
+import sys
+from pathlib import Path
+
+from ruamel import yaml
+
+from did.core.anonymizer import Anonymizer
+from did.utils.file_utils import anonymize_file, export_to_typst, extract_text
 
 # Ensure temp directory exists
 temp_dir = Path("examples/__temp")
@@ -20,16 +23,13 @@ anonymizer = Anonymizer(language="en")
 if input_file.exists():
     text = extract_text(input_file)
 else:
-    print(f"File {input_file} not found.")
-    exit(1)
+    sys.exit(1)
 
 # Detect entities in the extracted text
 anonymizer.detect_entities([text])
 
 # Generate YAML config
 yaml_config = anonymizer.generate_yaml()
-print("Generated YAML config:")
-print(yaml_config)
 
 # Load replacements from the generated config
 yaml_obj = yaml.YAML()
@@ -38,26 +38,17 @@ anonymizer.load_replacements(config_data)
 
 # Anonymize the text
 anonymized_text, counts = anonymizer.anonymize(text)
-print("\nAnonymized text:")
-print(anonymized_text)
-print("\nReplacement counts:")
-for key, value in counts.items():
+for value in counts.values():
     if value > 0:
-        print(f"  {key}: {value}")
+        pass
 
 # Example with file anonymization
 output_file = temp_dir / "output.md"
 counts = anonymize_file(input_file, anonymizer, output_file)
-print(f"\nFile anonymized to {output_file}")
-print("File replacement counts:")
-for key, value in counts.items():
+for value in counts.values():
     if value > 0:
-        print(f"  {key}: {value}")
+        pass
 
 # Typst export
 main_path = temp_dir / "test_document.typ"
 export_to_typst(input_file, anonymizer, main_path)
-print(f"\nTypst files written to {main_path.parent}")
-print(f" - {main_path}")
-print(f" - {main_path.parent / f'{main_path.stem}_vars.typ'}")
-print(f" - {main_path.parent / f'{main_path.stem}_fakevars.typ'}")

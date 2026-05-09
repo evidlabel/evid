@@ -1,11 +1,12 @@
 """Handle rebuttal document generation."""
 
-from pathlib import Path
 import logging
-import bibtexparser as bib
 import subprocess
+from pathlib import Path
 
-from evid import CONFIG
+import bibtexparser as bib
+
+from evid.config import EvidConfig
 from evid.core.bibtex import generate_bib_from_typ
 
 logger = logging.getLogger(__name__)
@@ -41,8 +42,8 @@ def base_rebuttal(bibfile: Path) -> str:
     try:
         bibdb = bib.load(open(bibfile))
     except Exception as e:
-        logger.error(f"Failed to load BibTeX file {bibfile}: {str(e)}")
-        raise ValueError(f"Invalid BibTeX file: {str(e)}")
+        logger.error(f"Failed to load BibTeX file {bibfile}: {e!s}")
+        raise ValueError(f"Invalid BibTeX file: {e!s}")
 
     body = ""
     for row in bibdb.entries:
@@ -99,11 +100,11 @@ def rebut_doc(workdir: Path):
         write_rebuttal(rebut_body, rebut_file)
 
         if rebut_file.exists():
-            subprocess.run([CONFIG["editor"], str(rebut_file)], check=True)
+            subprocess.run([EvidConfig.load().editor, str(rebut_file)], check=True)
         else:
             logger.warning(f"Rebuttal file {rebut_file} was not generated")
             raise RuntimeError("Rebuttal file was not generated")
 
     except Exception as e:
-        logger.error(f"Failed to generate rebuttal: {str(e)}")
+        logger.error(f"Failed to generate rebuttal: {e!s}")
         raise

@@ -13,7 +13,11 @@ def test_filter_non_overlapping():
             self.end = end
 
     base_results = [MockResult(0, 5), MockResult(10, 15)]
-    extra_results = [MockResult(5, 10), MockResult(15, 20), MockResult(0, 3)]  # 0-3 overlaps, 5-10 doesn't, 15-20 doesn't
+    extra_results = [
+        MockResult(5, 10),
+        MockResult(15, 20),
+        MockResult(0, 3),
+    ]  # 0-3 overlaps, 5-10 doesn't, 15-20 doesn't
     non_overlapping = filter_non_overlapping(base_results, extra_results)
     assert len(non_overlapping) == 2
     assert non_overlapping[0].start == 5

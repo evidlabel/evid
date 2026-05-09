@@ -1,46 +1,80 @@
-"""Handle dataset operations."""
+"""Handle dataset operations via evidmgr SetManager."""
 
-from pathlib import Path
-import sys
 import logging
+import sys
+from pathlib import Path
+
 from rich.console import Console
 from rich.table import Table
 
 try:
-    from git import Repo, InvalidGitRepositoryError
+    from git import InvalidGitRepositoryError, Repo
 except ImportError:
     Repo = None
+
+from evid.services.set_manager import SetManager
 
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Path helpers — all callers use these instead of raw path arithmetic
+# ---------------------------------------------------------------------------
+
+
+def set_dir(directory: Path, slug: str) -> Path:
+    """Return the evidmgr set directory: data_dir/sets/{slug}/."""
+    return directory / "sets" / slug
+
+
+def docs_dir(directory: Path, slug: str) -> Path:
+    """Return the evidmgr docs directory: data_dir/sets/{slug}/docs/."""
+    return directory / "sets" / slug / "docs"
+
+
+# ---------------------------------------------------------------------------
+# Dataset CRUD — backed by SetManager
+# ---------------------------------------------------------------------------
+
+
 def get_datasets(directory: Path) -> list[str]:
-    """Return a list of dataset names in the directory."""
-    return (
-        [
-            d.name
-            for d in directory.iterdir()
-            if d.is_dir() and not d.name.startswith(".")
-        ]
-        if directory.exists()
-        else []
-    )
+    """Return slugs of all sets in the evidmgr data directory."""
+    sets_dir = directory / "sets"
+    if not sets_dir.exists():
+        return []
+    return [
+        d.name for d in sets_dir.iterdir() if d.is_dir() and (d / "set.yml").exists()
+    ]
 
 
 def list_datasets(directory: Path) -> None:
     """List all available datasets."""
-    datasets = sorted(get_datasets(directory))
-    if not datasets:
+    try:
+        ev_sets = SetManager(directory).list_sets()
+    except Exception as e:
+        logger.error(f"Failed to list datasets: {e}")
+        print("No datasets found.")
+        return
+    if not ev_sets:
         print("No datasets found.")
         return
 
     console = Console()
     table = Table(title="Available datasets")
     table.add_column("Nr", justify="right")
-    table.add_column("Dataset")
+    table.add_column("Name")
+    table.add_column("Slug")
+    table.add_column("Type")
+    table.add_column("Created")
 
-    for i, dataset in enumerate(datasets, 1):
-        table.add_row(str(i), dataset)
+    for i, s in enumerate(ev_sets, 1):
+        table.add_row(
+            str(i),
+            s.name,
+            s.slug,
+            s.set_type.value,
+            s.created.strftime("%Y-%m-%d") if s.created else "",
+        )
 
     console.print(table)
 
@@ -48,24 +82,28 @@ def list_datasets(directory: Path) -> None:
 def select_dataset(
     directory: Path, prompt_message: str = "Select dataset", allow_create: bool = True
 ) -> str:
-    """Prompt user to select a dataset or create a new one if allowed."""
-    datasets = sorted(get_datasets(directory))
-    if not datasets:
+    """Prompt user to select a dataset; returns slug."""
+    try:
+        ev_sets = SetManager(directory).list_sets()
+    except Exception:
+        ev_sets = []
+
+    if not ev_sets:
         if not allow_create:
             sys.exit("No datasets found and creation is not allowed.")
-        dataset_name = input("No datasets found. Enter new dataset name: ").strip()
-        if dataset_name:
-            create_dataset(directory, dataset_name)
-            return dataset_name
+        name = input("No datasets found. Enter new dataset name: ").strip()
+        if name:
+            return create_dataset(directory, name)
         sys.exit("No dataset name provided.")
 
     console = Console()
     table = Table(title=prompt_message)
     table.add_column("Nr", justify="right")
-    table.add_column("Dataset")
+    table.add_column("Name")
+    table.add_column("Slug")
 
-    for i, dataset in enumerate(datasets, 1):
-        table.add_row(str(i), dataset)
+    for i, s in enumerate(ev_sets, 1):
+        table.add_row(str(i), s.name, s.slug)
 
     console.print(table)
 
@@ -76,32 +114,32 @@ def select_dataset(
     ).strip()
     try:
         choice_num = int(choice)
-        if 1 <= choice_num <= len(datasets):
-            return datasets[choice_num - 1]
-        else:
-            if not allow_create:
-                sys.exit("Invalid number and creation is not allowed.")
-            dataset_name = input("Invalid number. Enter new dataset name: ").strip()
-            if dataset_name:
-                create_dataset(directory, dataset_name)
-                return dataset_name
-            sys.exit("No dataset name provided.")
+        if 1 <= choice_num <= len(ev_sets):
+            return ev_sets[choice_num - 1].slug
+        if not allow_create:
+            sys.exit("Invalid number and creation is not allowed.")
+        name = input("Invalid number. Enter new dataset name: ").strip()
+        if name:
+            return create_dataset(directory, name)
+        sys.exit("No dataset name provided.")
     except ValueError:
         if not allow_create:
             sys.exit("Invalid selection and creation is not allowed.")
         if choice:
-            create_dataset(directory, choice)
-            return choice
+            return create_dataset(directory, choice)
         sys.exit("Invalid selection or no dataset name provided.")
 
 
-def create_dataset(directory: Path, dataset: str) -> None:
-    """Create a new dataset directory, failing if it already exists."""
-    dataset_path = directory / dataset
-    if dataset_path.exists():
-        sys.exit(f"Dataset '{dataset}' already exists.")
-    dataset_path.mkdir(parents=True, exist_ok=False)
-    print(f"Created dataset: {dataset_path}")
+def create_dataset(directory: Path, name: str) -> str:
+    """Create a new evidmgr set; return its slug."""
+    try:
+        ev_set = SetManager(directory).create_set(name)
+        print(f"Created dataset '{ev_set.name}' (slug: {ev_set.slug}) at {ev_set.path}")
+        return ev_set.slug
+    except FileExistsError:
+        sys.exit(f"Dataset '{name}' already exists.")
+    except Exception as e:
+        sys.exit(f"Failed to create dataset: {e}")
 
 
 def track_dataset(directory: Path, dataset: str = None) -> None:
@@ -114,21 +152,18 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
     if not dataset:
         dataset = select_dataset(directory, "Select dataset to track")
 
-    dataset_path = directory / dataset
+    dataset_path = set_dir(directory, dataset)
     if not dataset_path.exists():
         sys.exit(f"Dataset '{dataset}' does not exist.")
 
-    # Check if already a Git repository
     try:
         Repo(dataset_path)
         sys.exit(f"Dataset '{dataset}' is already tracked as a Git repository.")
     except InvalidGitRepositoryError:
-        pass  # Not a Git repository, proceed with initialization
+        pass
 
     try:
-        # Initialize Git repository
         repo = Repo.init(dataset_path)
-        # Create .gitignore file
         gitignore_content = """# Ignore everything by default
 */*
 # Allow specific files
@@ -141,13 +176,10 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
 """
         with (dataset_path / ".gitignore").open("w", encoding="utf-8") as f:
             f.write(gitignore_content)
-        # Add .gitignore to the repository
         repo.index.add([".gitignore"])
         repo.index.commit("Initial commit: Add .gitignore")
         logger.info(f"Initialized Git repository for dataset: {dataset_path}")
         print(f"Initialized Git repository for dataset: {dataset_path}")
     except Exception as e:
-        logger.error(
-            f"Failed to initialize Git repository for {dataset_path}: {str(e)}"
-        )
-        sys.exit(f"Failed to initialize Git repository: {str(e)}")
+        logger.error(f"Failed to initialize Git repository for {dataset_path}: {e!s}")
+        sys.exit(f"Failed to initialize Git repository: {e!s}")

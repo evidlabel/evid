@@ -4,28 +4,40 @@ build-backend = "hatchling.build"
 
 [project]
 name = "evid"
-version = "0.2.7"
-description = "Evidence management tool for PDFs and text documents."
-authors = [
-    {name = "Your Name", email = "your.email@example.com"},
-]
+version = "0.3.0"
+description = "Evidence management: PDF labeling, anonymization, vector search, and prompts."
 requires-python = ">=3.11"
 dependencies = [
-    "pydantic",
+    "pydantic>=2",
     "pyyaml",
-    "requests",
-    "beautifulsoup4",
-    "pypdf",
-    "PyMuPDF",
-    "frontend",
+    "ruamel.yaml>=0.17",
+    "python-slugify",
+    "PySide6",
     "arrow",
     "rich",
-    "treeparse==0.2.0",
-    "PySide6",
+    "gender-guesser",
+    "faker",
+    "requests",
+    "beautifulsoup4",
+    # from evid
+    "pypdf",
+    "PyMuPDF",
+    "treeparse>=0.2.5",
     "bibtexparser",
     "demoji",
     "pandas",
     "GitPython",
+    "frontend",
+    # from did
+    "flashtext~=2.7",
+    "spacy>=3.8.2,<4",
+    "rapidfuzz>=3.10.0,<4",
+    "presidio-analyzer>=2.2.0",
+    "presidio-anonymizer>=2.2.0",
+    "numpy",
+    # from vecdb
+    "chromadb",
+    "sentence-transformers",
 ]
 
 [project.scripts]
@@ -34,16 +46,11 @@ evid = "evid.cli.main:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/evid"]
 
-[tool.ruff]
-line-length = 88
-target-version = "py311"
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "DJ", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "INT", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
-ignore = ["S101", "S104", "COM812", "ISC001"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-skip-magic-trailing-comma = false
-line-ending = "auto"
+[tool.pytest.ini_options]
+addopts = "--tb=native"
+python_files = "test_*.py"
+python_functions = "test_*"
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks integration tests",
+]

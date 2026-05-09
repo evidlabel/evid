@@ -1,25 +1,27 @@
 """Handle evidence addition and management."""
 
-import logging
-from rich.logging import RichHandler
-import requests
-from io import BytesIO
-import shutil
-import uuid
-import sys
-from pathlib import Path
-from bs4 import BeautifulSoup
-from evid.core.text_cleaning import clean_text_for_typst
-from evid.core.label import create_label  # Moved to new file
-from evid.core.pdf_metadata import extract_pdf_metadata  # Moved to new file
-import arrow
-import yaml
-from evid.core.models import InfoModel  # Added for validation
 import hashlib
-from rich.console import Console
-from rich.table import Table
-from evid.utils.text import normalize_text
+import logging
+import shutil
+import sys
+import tempfile
+import uuid
+from io import BytesIO
+from pathlib import Path
 
+import arrow
+import requests
+import yaml
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.table import Table
+
+from evid.cli.dataset import docs_dir
+from evid.core.label import create_label  # Moved to new file
+from evid.core.models import InfoModel  # Added for validation
+from evid.core.pdf_metadata import extract_pdf_metadata  # Moved to new file
+from evid.core.typst_generation import _BROWSER_HEADERS, web_to_pdf
+from evid.utils.text import normalize_text
 
 # Configure Rich handler for colored logging
 logging.basicConfig(handlers=[RichHandler(rich_tracebacks=True)], level=logging.INFO)
@@ -30,10 +32,9 @@ def to_plain_dict(data):
     """Recursively convert data to plain dict with string values."""
     if isinstance(data, dict):
         return {k: to_plain_dict(v) for k, v in data.items()}
-    elif isinstance(data, list):
+    if isinstance(data, list):
         return [to_plain_dict(v) for v in data]
-    else:
-        return str(data)
+    return str(data)
 
 
 def add_evidence(
@@ -44,18 +45,19 @@ def add_evidence(
     autolabel: bool = False,
 ) -> None:
     """Add a PDF or text content to the specified dataset."""
-    is_url = source.startswith("http://") or source.startswith("https://")
+    is_url = source.startswith(("http://", "https://"))
     file_name = None
     is_pdf = False
     pdf_file = None
-    text_content = None
+    web_page_title = ""  # set when an HTML page is rendered to PDF via Typst
+    _web_tmp = None  # tempdir kept alive until target_path is written
 
     if is_url:
         try:
-            response = requests.get(source, timeout=10)
+            response = requests.get(source, timeout=15, headers=_BROWSER_HEADERS)
             response.raise_for_status()
             content_type = response.headers.get("Content-Type", "")
-            file_name = source.split("/")[-1] or "document"
+            file_name = source.rsplit("/", maxsplit=1)[-1] or "document"
 
             if "application/pdf" in content_type:
                 pdf_file = BytesIO(response.content)
@@ -63,16 +65,20 @@ def add_evidence(
                 is_pdf = True
                 content_bytes = pdf_file.getvalue()
             else:
-                soup = BeautifulSoup(response.text, "html.parser")
-                for elem in soup(["script", "style", "head", "nav", "footer"]):
-                    elem.decompose()
-                text_content = soup.get_text(separator="\n", strip=True)
-                text_content = clean_text_for_typst(normalize_text(text_content))
-                file_name = Path(file_name).stem + ".txt"
-                is_pdf = False
-                content_bytes = text_content.encode("utf-8")
+                # HTML — mirror the GUI's IngestUrlWorker: render the page to a
+                # Typst-generated PDF, then route through the PDF code path.
+                _web_tmp = tempfile.TemporaryDirectory()
+                rendered_pdf, web_page_title = web_to_pdf(
+                    source,
+                    Path(_web_tmp.name),
+                    html=response.text,
+                )
+                pdf_file = BytesIO(rendered_pdf.read_bytes())
+                file_name = rendered_pdf.name
+                is_pdf = True
+                content_bytes = pdf_file.getvalue()
         except requests.RequestException as e:
-            sys.exit(f"Failed to download content: {str(e)}")
+            sys.exit(f"Failed to download content: {e!s}")
     else:
         file_path = Path(source)
         if not file_path.exists():
@@ -88,7 +94,7 @@ def add_evidence(
     # Compute content-based UUID
     digest = hashlib.sha256(content_bytes).digest()[:16]
     unique_id = uuid.UUID(bytes=digest)
-    unique_dir = directory / dataset / unique_id.hex
+    unique_dir = docs_dir(directory, dataset) / unique_id.hex
 
     if unique_dir.exists():
         print(f"This document is already added in {dataset} at {unique_id.hex}")
@@ -107,19 +113,27 @@ def add_evidence(
         authors = ""
         date = ""
 
+    # For HTML pages rendered to PDF via Typst, prefer the parsed <title> and the
+    # page host over whatever extract_pdf_metadata pulled from the Typst output
+    # (which is usually empty / placeholder).
+    if web_page_title:
+        title = web_page_title
+        if not authors:
+            from urllib.parse import urlparse
+
+            authors = urlparse(source).netloc
+
     label_str = title.replace(" ", "_").lower()
 
     target_path = unique_dir / file_name
     if is_url:
-        if is_pdf:
-            pdf_file.seek(0)
-            with target_path.open("wb") as f:
-                f.write(pdf_file.getvalue())
-        else:
-            with target_path.open("w", encoding="utf-8") as f:
-                f.write(text_content)
+        pdf_file.seek(0)
+        with target_path.open("wb") as f:
+            f.write(pdf_file.getvalue())
     else:
         shutil.copy2(pdf_file, target_path)
+    if _web_tmp is not None:
+        _web_tmp.cleanup()
 
     info = {
         "original_name": file_name,
@@ -149,14 +163,47 @@ def add_evidence(
 
     logger.info(f"Added document to {unique_dir}")
 
+    # Generate label.typ so the vector index has text to embed
+    from evid.core.typst_generation import (
+        text_to_typst,
+        textpdf_to_typst,
+    )
+
+    typ_path = unique_dir / "label.typ"
+    try:
+        Path("static").mkdir(exist_ok=True)
+        if is_pdf:
+            textpdf_to_typst(target_path, typ_path)
+        else:
+            text_to_typst(target_path, typ_path)
+        logger.info("Generated label.typ for %s", unique_id.hex)
+    except Exception as e:
+        logger.warning("label.typ generation failed for %s: %s", unique_id.hex, e)
+
+    # Vector index
+    try:
+        from evid.services.doc_ingester import DocIngester
+        from evid.services.set_manager import SetManager
+        from evid.services.vec_service import VecService
+
+        evidence_set = SetManager(directory).load_set(dataset)
+        DocIngester(vec_service=VecService()).index_existing(unique_dir, evidence_set)
+        logger.info("Indexed %s into vector store", unique_id.hex)
+    except Exception as e:
+        logger.warning(
+            "Vector indexing failed for %s (run 'evid set index' to retry): %s",
+            unique_id.hex,
+            e,
+        )
+
     if label:
-        logger.info(f"Generating and opening label file for {file_name}...")
+        logger.info(f"Opening label file for {file_name}...")
         create_label(target_path, dataset, unique_id.hex, autolabel=autolabel)
 
 
 def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
     """Return a list of document metadata in the dataset."""
-    dataset_path = directory / dataset
+    dataset_path = docs_dir(directory, dataset)
     documents = []
     for d in dataset_path.iterdir():
         if d.is_dir() and not d.name.startswith("."):
@@ -220,8 +267,7 @@ def select_evidence(
         choice_num = int(choice)
         if 1 <= choice_num <= len(documents):
             return documents[choice_num - 1]["uuid"]
-        else:
-            sys.exit("Invalid number.")
+        sys.exit("Invalid number.")
     except ValueError:
         sys.exit("Invalid selection.")
 
@@ -240,7 +286,7 @@ def label_evidence(
     if not uuid:
         uuid = select_evidence(directory, dataset)
 
-    evidence_path = directory / dataset / uuid
+    evidence_path = docs_dir(directory, dataset) / uuid
     if not evidence_path.exists():
         sys.exit(f"Document {uuid} in {dataset} does not exist.")
 

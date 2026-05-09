@@ -14,12 +14,12 @@ def test_anonymize_danish_faker_example():
     anonymizer = Anonymizer(language="da")
     text = """# Rapport om Projektet
 
-Dette er en rapport skrevet af Dr. Aage Nørgaard og Emma Lauridsen. 
+Dette er en rapport skrevet af Dr. Aage Nørgaard og Emma Lauridsen.
 Vi arbejder på Adressen Vangsågade 271
-3790 Ringe. 
-Kontakt os på telefon 29973033 eller email ingeskov@example.com. 
-Projektet startede den 2020-12-12. 
-CPR-nummer: 506-03-1346. 
+3790 Ringe.
+Kontakt os på telefon 29973033 eller email ingeskov@example.com.
+Projektet startede den 2020-12-12.
+CPR-nummer: 506-03-1346.
 Konto: DK540955044992950649.
 
 Flere detaljer:
@@ -49,11 +49,11 @@ Flere detaljer:
     # Expected anonymized text from actual output
     expected_anonymized = """# Rapport om Projektet
 
-Dette er en rapport skrevet af #(P1V1) og #(P2V1). 
-Vi arbejder på Adressen #(A2V1) 
-Kontakt os på telefon #(PH1V1) eller email #(E2V1). 
-Projektet startede den #(GN9V1) 
-CPR-nummer: #(GN10V1) 
+Dette er en rapport skrevet af #(P1V1) og #(P2V1).
+Vi arbejder på Adressen #(A2V1)
+Kontakt os på telefon #(PH1V1) eller email #(E2V1).
+Projektet startede den #(GN9V1)
+CPR-nummer: #(GN10V1)
 Konto: #(ID1V1).
 
 Flere detaljer:

@@ -8,9 +8,9 @@ from rich.syntax import Syntax
 from ruamel import yaml
 from treeparse import argument, command, group, option
 
-from ..core.anonymizer import Anonymizer
-from ..utils.console import console, print_counts
-from ..utils.file_utils import anonymize_file, export_to_typst
+from did.core.anonymizer import Anonymizer
+from did.utils.console import console, print_counts
+from did.utils.file_utils import anonymize_file, export_to_typst
 
 
 def plain(file, config, output):
@@ -21,7 +21,9 @@ def plain(file, config, output):
     anonymizer = Anonymizer()
     input_path = Path(file)
     if output is None:
-        output = str(input_path.parent / (input_path.stem + "_anon" + input_path.suffix))
+        output = str(
+            input_path.parent / (input_path.stem + "_anon" + input_path.suffix)
+        )
     output_path = Path(output)
     try:
         console.print(Rule("pseudo plain"))
@@ -89,7 +91,11 @@ def typst(file, config, output):
         for p in (main_path, vars_path, fake_path):
             console.print(f"  [dim]•[/dim] [cyan]{p}[/cyan]")
 
-        for label, path in [("vars", vars_path), ("fakevars", fake_path), ("main", main_path)]:
+        for _label, path in [
+            ("vars", vars_path),
+            ("fakevars", fake_path),
+            ("main", main_path),
+        ]:
             console.print(f"\n[bold]Preview of {path.name}:[/bold]")
             with open(path, encoding="utf-8") as f:
                 content = f.read()
@@ -121,7 +127,13 @@ plain_cmd = command(
     ],
     options=[
         option(flags=["--config", "-c"], arg_type=str, help="Config file", sort_key=0),
-        option(flags=["--output", "-o"], arg_type=str, default=None, help="Output file path", sort_key=1),
+        option(
+            flags=["--output", "-o"],
+            arg_type=str,
+            default=None,
+            help="Output file path",
+            sort_key=1,
+        ),
     ],
 )
 pseudo_group.commands.append(plain_cmd)
@@ -135,7 +147,13 @@ typst_cmd = command(
     ],
     options=[
         option(flags=["--config", "-c"], arg_type=str, help="Config file", sort_key=0),
-        option(flags=["--output", "-o"], arg_type=str, default=None, help="Main Typst file path (default: <input>.typ)", sort_key=1),
+        option(
+            flags=["--output", "-o"],
+            arg_type=str,
+            default=None,
+            help="Main Typst file path (default: <input>.typ)",
+            sort_key=1,
+        ),
     ],
 )
 pseudo_group.commands.append(typst_cmd)
