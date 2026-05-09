@@ -80,6 +80,10 @@ target-version = "py311"
 select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "DJ", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "INT", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
 ignore = ["S101", "S104", "COM812", "ISC001"]
 
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["T201", "T203", "TRY003", "EM101", "EM102", "INP001"]
+"packages/*/tests/*" = ["S101"]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
