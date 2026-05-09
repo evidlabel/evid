@@ -67,6 +67,10 @@ dev = [
 addopts = "--import-mode=importlib"
 python_files = "test_*.py"
 python_functions = "test_*"
+# Only collect the evid package's tests. did/ and vecdb/ are workspace
+# members with their own (separately runnable) suites and aren't installed
+# into the root venv, so pytest cannot import them from here.
+testpaths = ["packages/evid/tests"]
 markers = [
     "slow: marks tests as slow",
     "integration: marks integration tests",
