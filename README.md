@@ -36,8 +36,6 @@ Launch the GUI (default when invoked with no arguments):
 evid
 ```
 
-<img src="docs/assets/image.png" alt="Docs tab" width="50%"/><img src="docs/assets/browse.png" alt="Search tab" width="50%"/>
-
 ## CLI
 
 ![CLI help](docs/assets/help.svg)
