@@ -1,12 +1,75 @@
-[tool.uv.workspace]
-members = ["packages/*"]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.uv]
-dev-dependencies = [
+[project]
+name = "evid"
+version = "0.3.0"
+description = "Evidence management: PDF labeling, anonymization, vector search, and prompts."
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2",
+    "pyyaml",
+    "ruamel.yaml>=0.17",
+    "python-slugify",
+    "PySide6",
+    "arrow",
+    "rich",
+    "gender-guesser",
+    "faker",
+    "requests",
+    "beautifulsoup4",
+    "pypdf",
+    "PyMuPDF",
+    "treeparse>=0.2.5",
+    "bibtexparser",
+    "demoji",
+    "pandas",
+    "GitPython",
+    "frontend",
+    "flashtext~=2.7",
+    "spacy>=3.8.2,<4",
+    "rapidfuzz>=3.10.0,<4",
+    "presidio-analyzer>=2.2.0",
+    "presidio-anonymizer>=2.2.0",
+    "en-core-web-md",
+    "da-core-news-lg",
+    "numpy",
+    "chromadb",
+    "sentence-transformers",
+]
+
+[project.scripts]
+evid = "evid.cli.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["packages/evid/src/evid"]
+
+[tool.hatch.build.targets.editable]
+packages = ["packages/evid/src/evid"]
+
+[tool.uv.workspace]
+members = ["packages/did"]
+
+[tool.uv.sources]
+en-core-web-md = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl" }
+da-core-news-lg = { url = "https://github.com/explosion/spacy-models/releases/download/da_core_news_lg-3.8.0/da_core_news_lg-3.8.0-py3-none-any.whl" }
+
+[dependency-groups]
+dev = [
     "pytest",
     "pytest-cov",
     "pytest-qt",
     "ruff",
+]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+python_files = "test_*.py"
+python_functions = "test_*"
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks integration tests",
 ]
 
 [tool.ruff]
