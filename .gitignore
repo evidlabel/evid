@@ -5,3 +5,15 @@ __pycache__
 *.lock
 codefold.json
 notes/
+
+# build/test artifacts
+.coverage
+pytest.log
+output.svg
+
+# CLI output dumps
+/out.*
+
+# third-party tool state
+.grk_cache.json
+.grkrc
