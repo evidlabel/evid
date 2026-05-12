@@ -225,7 +225,7 @@ class Sidebar(QWidget):
 
     # ── drag-and-drop: accept docs dragged from the docs table ───────────────
 
-    def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # noqa: N802
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         if obj is not self._list.viewport():
             return super().eventFilter(obj, event)
         ev_type = event.type()

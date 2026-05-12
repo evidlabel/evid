@@ -240,7 +240,7 @@ class SearchTab(QWidget):
             except Exception:
                 logger.exception("Failed to load set %s", slug)
 
-    def showEvent(self, event) -> None:  # noqa: N802
+    def showEvent(self, event) -> None:
         super().showEvent(event)
         self._focus_query()
 
@@ -513,6 +513,11 @@ class SearchTab(QWidget):
         act_add_prompt = menu.addAction(
             "Add to Prompt" if single else f"Add {len(uuids)} to Prompt"
         )
+        act_copy_prompt = menu.addAction(
+            "Copy prompt to clipboard"
+            if single
+            else f"Copy prompt for {len(uuids)} to clipboard"
+        )
 
         action = menu.exec(self._table.viewport().mapToGlobal(pos))
         if action is None:
@@ -559,6 +564,8 @@ class SearchTab(QWidget):
         elif action is act_add_prompt:
             for uuid in uuids:
                 self._add_uuid_to_prompt(uuid)
+        elif action is act_copy_prompt:
+            self._copy_prompt_to_clipboard(uuids)
 
     def _remove_tag_from_uuid(self, tag_name: str, uuid: str) -> None:
         if not self._evidence_set:
@@ -581,6 +588,25 @@ class SearchTab(QWidget):
                     yaml.safe_dump(info, f, allow_unicode=True)
         except Exception:
             logger.exception("Failed to remove tag from info.yml for %s", uuid)
+
+    def _copy_prompt_to_clipboard(self, uuids: list[str]) -> None:
+        if not self._evidence_set or not uuids:
+            return
+        from evid.core.prompt import quotes_markdown
+
+        workdirs = [self._evidence_set.path / "docs" / u for u in uuids]
+        md = quotes_markdown(workdirs)
+        if not md:
+            with contextlib.suppress(Exception):
+                self.window().statusBar().showMessage(
+                    "No labelled evidence in selection — nothing to copy", 3000
+                )
+            return
+        QApplication.clipboard().setText(md)
+        with contextlib.suppress(Exception):
+            self.window().statusBar().showMessage(
+                f"Prompt for {len(uuids)} doc(s) copied to clipboard", 3000
+            )
 
     def _add_uuid_to_prompt(self, uuid: str) -> None:
         parent = self.window()

@@ -68,7 +68,7 @@ class _TabCycleFilter(QObject):
         self._stack = stack_widget
         self._tab_bar = tab_bar
 
-    def eventFilter(self, obj: QObject, event: QEvent) -> bool:  # noqa: N802
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         if (
             event.type() == QEvent.Type.KeyPress
             and event.modifiers() & Qt.KeyboardModifier.ControlModifier

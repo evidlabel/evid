@@ -262,39 +262,39 @@ class FlowLayout(QLayout):
         self._h_spacing = h_spacing
         self._v_spacing = v_spacing
 
-    def addItem(self, item: QLayoutItem) -> None:  # noqa: N802
+    def addItem(self, item: QLayoutItem) -> None:
         self._items.append(item)
 
     def count(self) -> int:
         return len(self._items)
 
-    def itemAt(self, index: int) -> QLayoutItem | None:  # noqa: N802
+    def itemAt(self, index: int) -> QLayoutItem | None:
         if 0 <= index < len(self._items):
             return self._items[index]
         return None
 
-    def takeAt(self, index: int) -> QLayoutItem | None:  # noqa: N802
+    def takeAt(self, index: int) -> QLayoutItem | None:
         if 0 <= index < len(self._items):
             return self._items.pop(index)
         return None
 
-    def expandingDirections(self) -> Qt.Orientations:  # noqa: N802
+    def expandingDirections(self) -> Qt.Orientations:
         return Qt.Orientations(Qt.Orientation.Horizontal)
 
-    def hasHeightForWidth(self) -> bool:  # noqa: N802
+    def hasHeightForWidth(self) -> bool:
         return True
 
-    def heightForWidth(self, width: int) -> int:  # noqa: N802
+    def heightForWidth(self, width: int) -> int:
         return self._do_layout(QRect(0, 0, width, 0), test_only=True)
 
-    def setGeometry(self, rect: QRect) -> None:  # noqa: N802
+    def setGeometry(self, rect: QRect) -> None:
         super().setGeometry(rect)
         self._do_layout(rect, test_only=False)
 
-    def sizeHint(self) -> QSize:  # noqa: N802
+    def sizeHint(self) -> QSize:
         return self.minimumSize()
 
-    def minimumSize(self) -> QSize:  # noqa: N802
+    def minimumSize(self) -> QSize:
         size = QSize()
         for item in self._items:
             size = size.expandedTo(item.minimumSize())
@@ -389,12 +389,12 @@ class TagPill(QPushButton):
 
     # ── drag ──────────────────────────────────────────────────────────────
 
-    def mousePressEvent(self, event) -> None:  # noqa: N802
+    def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self._drag_start = event.pos()
         super().mousePressEvent(event)
 
-    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+    def mouseMoveEvent(self, event) -> None:
         if (
             self._drag_start is not None
             and event.buttons() & Qt.MouseButton.LeftButton
@@ -409,7 +409,7 @@ class TagPill(QPushButton):
         else:
             super().mouseMoveEvent(event)
 
-    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+    def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.RightButton or (
             event.button() == Qt.MouseButton.LeftButton
             and event.modifiers() & Qt.KeyboardModifier.AltModifier
@@ -432,10 +432,10 @@ class TagsCompleter(QCompleter):
         self.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
 
-    def splitPath(self, path: str) -> list[str]:  # noqa: N802
+    def splitPath(self, path: str) -> list[str]:
         return [path.rsplit(",", maxsplit=1)[-1].strip()]
 
-    def pathFromIndex(self, index) -> str:  # noqa: N802
+    def pathFromIndex(self, index) -> str:
         completion = super().pathFromIndex(index)
         widget = self.widget()
         if widget is None:
@@ -1992,7 +1992,7 @@ class DocsTab(QWidget):
 
     # ── drag-drop from pill pool onto table ────────────────────────────────
 
-    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+    def eventFilter(self, obj, event) -> bool:
         if obj is not self._table.viewport():
             return super().eventFilter(obj, event)
         ev_type = event.type()

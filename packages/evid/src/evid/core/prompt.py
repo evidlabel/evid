@@ -42,19 +42,19 @@ def _doc_chapter(workdir: Path) -> str | None:
     title = info.get("title", "Unknown")
     authors = info.get("authors", "Unknown")
     url = info.get("url", "")
-    pdf_path_full = str(workdir / info.get("original_name", ""))
-    home = str(Path.home())
-    pdf_path = (
-        pdf_path_full.replace(home, "HOME", 1)
-        if pdf_path_full.startswith(home)
-        else pdf_path_full
+    uuid = info.get("uuid") or workdir.name
+    dataset = (
+        workdir.parent.parent.name
+        if workdir.parent.name == "docs"
+        else workdir.parent.name
     )
 
     chapter = f"# {title}\n\n"
     chapter += f"**Author:** {authors}\n\n"
     if url:
         chapter += f"**Link:** {url}\n\n"
-    chapter += f"**PDF:** {pdf_path}\n\n"
+    chapter += f"**Dataset:** {dataset}\n\n"
+    chapter += f"**UUID:** {uuid}\n\n"
 
     labels = [item["value"] for item in data if item["value"].get("key") != "main"]
     for label in labels:

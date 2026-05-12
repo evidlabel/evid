@@ -124,7 +124,7 @@ class VecResult:
 def make_seed(doc_uuid: str, entity_idx: int, profile_name: str) -> int:
     """Deterministic seed keyed on (doc_uuid, entity_idx, profile_name)."""
     key = f"{doc_uuid}:{entity_idx}:{profile_name}".encode()
-    return int.from_bytes(hashlib.md5(key).digest()[:4], "little")  # noqa: S324
+    return int.from_bytes(hashlib.md5(key).digest()[:4], "little")
 
 
 def seeded_rng(doc_uuid: str, entity_idx: int, profile_name: str) -> random.Random:

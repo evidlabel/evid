@@ -24,3 +24,14 @@ recipes/
 
 # huge generated demo recording (regenerate locally; too large for git)
 docs/assets/demo.svg
+
+# YAML hygiene: only CI/pre-commit YAMLs are allowed in-tree.
+# Block everything else by default and re-allow the known-good paths.
+*.yml
+*.yaml
+!.github/workflows/*.yml
+!.github/workflows/*.yaml
+!.pre-commit-config.yaml
+!packages/*/.github/workflows/*.yml
+!packages/*/.github/workflows/*.yaml
+!packages/*/.pre-commit-config.yaml

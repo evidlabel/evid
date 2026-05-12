@@ -73,7 +73,7 @@ def import_evid_dir(
     Returns the list of imported EvidenceSets.
     """
     if progress is None:
-        progress = lambda done, total, msg: logger.info("[%d/%d] %s", done, total, msg)  # noqa: E731
+        progress = lambda done, total, msg: logger.info("[%d/%d] %s", done, total, msg)
 
     datasets = _scan_evid_dir(evid_dir)
     if not datasets:
@@ -117,7 +117,7 @@ def import_evid_dir_single(
     the directory whose children are UUID dirs).
     """
     if progress is None:
-        progress = lambda done, total, msg: logger.info("[%d/%d] %s", done, total, msg)  # noqa: E731
+        progress = lambda done, total, msg: logger.info("[%d/%d] %s", done, total, msg)
 
     uuid_dirs = [d for d in sorted(evid_dir.iterdir()) if _is_uuid_dir(d)]
     if not uuid_dirs:
