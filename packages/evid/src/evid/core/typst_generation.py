@@ -19,6 +19,17 @@ _BROWSER_HEADERS = {
 }
 
 
+def _typst_str_escape(s: str) -> str:
+    """Escape *s* for inclusion in a Typst double-quoted string literal."""
+    return (
+        s.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
+
+
 def web_to_pdf(url: str, output_dir: Path, html: str = None) -> tuple:
     """Fetch a web page, render it as a timestamped Typst document, compile to PDF.
 
@@ -50,17 +61,24 @@ def web_to_pdf(url: str, output_dir: Path, html: str = None) -> tuple:
     text = clean_text_for_typst(
         normalize_text(soup.get_text(separator="\n", strip=True))
     )
-    safe_title = page_title.replace("\\", "\\\\").replace('"', '\\"')
-    safe_url = url.replace("\\", "\\\\").replace('"', '\\"')
+    safe_title = _typst_str_escape(page_title)
+    safe_url = _typst_str_escape(url)
 
+    # Bind title and URL as string variables: when referenced in markup mode
+    # (`#page_title`, `#link(source_url)`), Typst prints the string content
+    # literally instead of parsing it — so hashtags, `*`, `_`, `[`, `$`, `@`
+    # etc. in scraped titles/URLs can't be misread as Typst syntax.
     typst_content = f"""#set page(margin: 2cm)
 #set document(date: datetime.today())
 
-= {safe_title}
+#let page_title = "{safe_title}"
+#let source_url = "{safe_url}"
+
+= #page_title
 
 #strong[Archived:] #datetime.today().display()
 
-#strong[Source:] {safe_url}
+#strong[Source:] #link(source_url)
 
 {text}
 """

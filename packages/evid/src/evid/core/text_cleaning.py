@@ -75,10 +75,23 @@ def clean_text_for_typst(text: str) -> str:
     # Join back
     text = "\n".join(processed_lines)
 
-    # Escape bare Typst special characters: #, * and $
+    # Escape bare Typst special characters. Each can otherwise open a
+    # delimiter that scraped text never closes:
+    #   #        → code escape ('unknown variable …')
+    #   *        → strong (usually recoverable, but escaped for symmetry)
+    #   $        → math ('unclosed delimiter')
+    #   _        → emphasis ('unclosed delimiter')
+    #   ` (BT)   → raw text ('unclosed raw text')
+    #   <        → label ('unclosed label')
+    #   [ / ]    → content block ('unclosed delimiter' when unbalanced)
     text = re.sub(r"(?<!\\)#", r"\\#", text)
     text = re.sub(r"(?<!\\)\*", r"\\*", text)
     text = re.sub(r"(?<!\\)\$", r"\\$", text)
+    text = re.sub(r"(?<!\\)_", r"\\_", text)
+    text = re.sub(r"(?<!\\)`", r"\\`", text)
+    text = re.sub(r"(?<!\\)<", r"\\<", text)
+    text = re.sub(r"(?<!\\)\[", r"\\[", text)
+    text = re.sub(r"(?<!\\)\]", r"\\]", text)
 
     # Escape line-leading '/' that Typst would parse as a term-list item.
     # Typst term syntax is `/ TERM: DESCRIPTION`; a bare '/' or '/' followed by
