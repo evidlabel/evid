@@ -181,9 +181,16 @@ class DocIngester:
                     typ_path.read_text(encoding="utf-8") if typ_path.exists() else ""
                 )
                 logger.debug("Embedding %d chars for %s", len(typ_text), doc_uuid)
-                self.vec_service.index_document(doc, typ_text, evidence_set)
-                meta["indexed"] = True
-                logger.info("Vector index updated for %s", doc_uuid)
+                # Run in a subprocess: a native crash in chromadb /
+                # sentence-transformers must not take down the host app.
+                ok, msg = self.vec_service.index_document_isolated(
+                    doc, typ_text, evidence_set
+                )
+                if ok:
+                    meta["indexed"] = True
+                    logger.info("Vector index updated for %s", doc_uuid)
+                else:
+                    logger.warning("Vector index skipped for %s: %s", doc_uuid, msg)
             except Exception:
                 logger.exception("VecService.index_document failed for %s", doc_uuid)
         else:
@@ -237,7 +244,12 @@ class DocIngester:
             "Indexing existing doc %s into '%s'", doc_dir.name, evidence_set.slug
         )
         try:
-            self.vec_service.index_document(doc, typ_text, evidence_set)
+            ok, msg = self.vec_service.index_document_isolated(
+                doc, typ_text, evidence_set
+            )
+            if not ok:
+                logger.warning("Isolated index failed for %s: %s", doc_dir.name, msg)
+                return False
         except Exception:
             logger.exception("VecService.index_document failed for %s", doc_dir.name)
             return False

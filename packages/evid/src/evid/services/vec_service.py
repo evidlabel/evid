@@ -94,6 +94,42 @@ class VecService:
             evidence_set.slug,
         )
 
+    def index_document_isolated(
+        self,
+        doc: Document,
+        typ_text: str,
+        evidence_set: EvidenceSet,
+        timeout: float = 600.0,
+    ) -> tuple[bool, str]:
+        """Index *doc* in a spawned subprocess.
+
+        ChromaDB / sentence-transformers / onnxruntime occasionally crash
+        natively (SIGSEGV) on some Linux setups. Running indexing in a child
+        process means such a crash kills the child, not the GUI. Returns
+        ``(ok, message)``.
+        """
+        from evid.vec.safe_index import index_in_subprocess
+
+        vecdb_dir = evidence_set.path / "vecdb"
+        ok, msg = index_in_subprocess(
+            vecdb_dir,
+            doc.uuid,
+            doc.label,
+            list(doc.tags),
+            typ_text,
+            timeout=timeout,
+        )
+        if ok:
+            logger.info("Indexed %s in '%s' (isolated)", doc.uuid, evidence_set.slug)
+        else:
+            logger.warning(
+                "Isolated indexing for %s in '%s' failed: %s",
+                doc.uuid,
+                evidence_set.slug,
+                msg,
+            )
+        return ok, msg
+
     def remove_document(self, doc_uuid: str, evidence_set: EvidenceSet) -> None:
         collection = self._collection(evidence_set)
         try:

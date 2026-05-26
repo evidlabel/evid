@@ -313,13 +313,25 @@ class CopyDocWorker(QThread):
                         if typ_path.exists()
                         else ""
                     )
-                    self._vec_service.index_document(doc, typ_text, self._dest_set)
-                    meta["indexed"] = True
-                    with (dest_doc_dir / "evidmgr_meta.yml").open(
-                        "w", encoding="utf-8"
-                    ) as fh:
-                        yaml.safe_dump(meta, fh)
-                    _log.info("Re-indexed %s into '%s'", doc_uuid, self._dest_set.slug)
+                    ok, msg = self._vec_service.index_document_isolated(
+                        doc, typ_text, self._dest_set
+                    )
+                    if ok:
+                        meta["indexed"] = True
+                        with (dest_doc_dir / "evidmgr_meta.yml").open(
+                            "w", encoding="utf-8"
+                        ) as fh:
+                            yaml.safe_dump(meta, fh)
+                        _log.info(
+                            "Re-indexed %s into '%s'", doc_uuid, self._dest_set.slug
+                        )
+                    else:
+                        _log.warning(
+                            "Vec re-index for %s in '%s' skipped: %s",
+                            doc_uuid,
+                            self._dest_set.slug,
+                            msg,
+                        )
                 except Exception:
                     _log.exception(
                         "Vec re-index failed for %s in '%s'",

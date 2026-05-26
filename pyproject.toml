@@ -141,7 +141,8 @@ ignore = ["S101", "S104", "COM812", "ISC001", "E501"]
   "BLE001", "G004", "PLC0415", "TRY003", "EM101", "EM102",
   "PLR2004", "PTH123", "PTH118", "RUF013", "FBT001", "FBT002",
   "TC001", "TC003", "ARG001", "ARG002", "RET504", "TRY400",
-  "TRY401", "ERA001", "PLW0603",
+  "TRY401", "ERA001", "PLW0603", "T201", "S110", "SIM105",
+  "PLR0913",
 ]
 "packages/evid/src/evid/commands/**" = [
   "T201", "TRY003", "TRY300", "TRY301", "TRY400", "TRY401",
