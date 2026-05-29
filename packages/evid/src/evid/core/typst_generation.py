@@ -11,11 +11,26 @@ from evid.core.text_cleaning import clean_text_for_typst
 logger = logging.getLogger(__name__)
 
 
+# A realistic browser header set. Some sites' bot-detection (WAFs) reject
+# requests that send only a User-Agent — notably any request missing
+# Accept-Language — with non-standard status codes (e.g. 454/455). Sending the
+# headers a real browser sends avoids those false-positive blocks.
 _BROWSER_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
+    ),
+    "Accept": (
+        "text/html,application/xhtml+xml,application/xml;q=0.9,"
+        "image/avif,image/webp,*/*;q=0.8"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
 }
 
 
