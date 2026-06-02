@@ -117,14 +117,14 @@ set_group.commands.append(
 set_group.commands.append(
     command(
         name="gather",
-        help="Export gathered BibTeX / Markdown / JSON from a set",
+        help="Export gathered BibTeX / Markdown / JSON / Hayagriva from a set",
         callback=gather_callback,
         arguments=[argument(name="dataset", arg_type=str)],
         options=[
             option(
                 flags=["-o", "--output"],
                 arg_type=str,
-                help="[required] Output file (.bib, .typ, .md, or .json)",
+                help="[required] Output file (.bib, .typ, .md, .json, .yaml, or .yml)",
             ),
             option(
                 flags=["--no-regen"],

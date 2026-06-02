@@ -44,9 +44,11 @@ def gather_dataset(
                influencing downstream LLMs with key name choices.
 
     Output format is inferred from the file extension:
-      .bib  — combined, deduplicated BibTeX
-      .typ  — Typst bibliography document + .bib; attempts typst compile
-      .md   — Markdown report listing all entries
+      .bib         — combined, deduplicated BibTeX
+      .typ         — Typst bibliography document + .bib; attempts typst compile
+      .md          — Markdown report listing all entries
+      .json        — JSON keyed by UUID
+      .yaml / .yml — Hayagriva YAML bibliography (Typst-native)
     """
     dataset_dir = directory / "sets" / dataset / "docs"
     if not dataset_dir.is_dir():
@@ -92,9 +94,12 @@ def gather_dataset(
         output.write_text(
             json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
         )
+    elif suffix in (".yaml", ".yml"):
+        output.write_text(_bib_to_hayagriva(fixed), encoding="utf-8")
     else:
         sys.exit(
-            f"Unsupported output format '{suffix}'. Use .bib, .typ, .md, or .json."
+            f"Unsupported output format '{suffix}'. "
+            "Use .bib, .typ, .md, .json, .yaml, or .yml."
         )
 
     _print_gather_stats(dataset_dir, dataset, output, errors)
@@ -438,6 +443,52 @@ def _dataset_to_json(dataset_dir: Path) -> dict:
             "snippets": snippets,
         }
     return result
+
+
+def _bib_to_hayagriva(bib_text: str) -> str:
+    """Convert combined BibTeX into a Hayagriva YAML bibliography.
+
+    Hayagriva is Typst's native bibliography format: a mapping keyed by
+    citation key.  Each ``@article`` entry becomes one Hayagriva entry with
+    kebab-case fields.  The snippet ``journal`` field (the containing document
+    title) is emitted as a ``parent`` relation.
+    """
+    db = btp.loads(bib_text)
+
+    def _flat(value: str) -> str:
+        """Collapse newlines and whitespace runs so scalars stay single-line."""
+        return " ".join(value.split())
+
+    out: dict[str, dict] = {}
+    for entry in db.entries:
+        key = entry["ID"]
+        item: dict = {"type": "article"}
+
+        title = _flat(entry.get("title", ""))
+        if title:
+            item["title"] = title
+        author = _flat(entry.get("author", ""))
+        if author:
+            item["author"] = author
+        date = entry.get("date", "")
+        if date:
+            item["date"] = date
+        url = entry.get("url", "")
+        if url:
+            item["url"] = url
+        pages = entry.get("pages", "")
+        if pages:
+            item["page-range"] = pages
+        journal = _flat(entry.get("journal", ""))
+        if journal:
+            item["parent"] = {"type": "article", "title": journal}
+        note = _flat(entry.get("note", ""))
+        if note:
+            item["note"] = note
+
+        out[key] = item
+
+    return yaml.safe_dump(out, allow_unicode=True, sort_keys=False, width=1000)
 
 
 def _bib_to_markdown(
