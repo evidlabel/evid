@@ -22,7 +22,7 @@ dependencies = [
     # from evid
     "pypdf",
     "PyMuPDF",
-    "treeparse>=0.2.5",
+    "treeparse>=0.2.8",
     "bibtexparser",
     "demoji",
     "pandas",

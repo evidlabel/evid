@@ -910,7 +910,7 @@ requires-dist = [
     { name = "ruamel-yaml", specifier = ">=0.17" },
     { name = "sentence-transformers" },
     { name = "spacy", specifier = ">=3.8.2,<4" },
-    { name = "treeparse", specifier = ">=0.2.5" },
+    { name = "treeparse", specifier = ">=0.2.8" },
 ]
 
 [package.metadata.requires-dev]
@@ -3583,16 +3583,16 @@ wheels = [
 
 [[package]]
 name = "treeparse"
-version = "0.2.5"
+version = "0.2.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "rich" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ad/e3/ce074c1a3480f2263e97fc7b774cdabc90aac30abfece52d612b6a07fc1c/treeparse-0.2.5.tar.gz", hash = "sha256:66280ed8a41b9884c71e00d0da959547f9274461c9d70491c024ad7eef45784a", size = 1490088, upload-time = "2026-04-07T19:02:16.457Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6d/57/420f859d353a3c333dd1042381c20c35d2ef4fc9787f2b717a61e915689e/treeparse-0.2.8.tar.gz", hash = "sha256:8a7aa3533fe08879fcc6df31a57041cb582959469d02bb79e15665cf4378b241", size = 18653, upload-time = "2026-06-02T14:26:12.743Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/90/d8/7b384528e61286b549aaf8636c1796f49d679e63df277231ff5f9d86baec/treeparse-0.2.5-py3-none-any.whl", hash = "sha256:a453d815b951c47eafb11b09323ac876543ac2adf040dd46430456f8fe5b0fa1", size = 23157, upload-time = "2026-04-07T19:02:14.698Z" },
+    { url = "https://files.pythonhosted.org/packages/8a/f8/ac1ccc4ece29bbad46e3df2eef4a741af26d0e0f841949d48e7bc4ebd4d9/treeparse-0.2.8-py3-none-any.whl", hash = "sha256:d6ac690a297306bfe0f311600f35f005cc5b33e6b0d5091259aea05e7f2684e5", size = 23540, upload-time = "2026-06-02T14:26:11.743Z" },
 ]
 
 [[package]]
