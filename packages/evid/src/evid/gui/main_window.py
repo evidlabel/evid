@@ -169,7 +169,6 @@ class EvidMgrWindow(QMainWindow):
 
     def _setup_tabs(self) -> None:
         from evid.gui.tabs.docs_tab import DocsTab
-        from evid.gui.tabs.prompt_tab import PromptTab
         from evid.gui.tabs.search_tab import SearchTab
 
         self._docs_tab = DocsTab(
@@ -178,12 +177,10 @@ class EvidMgrWindow(QMainWindow):
         self._search_tab = SearchTab(
             self._vec_service, self._tag_service, self._signals
         )
-        self._prompt_tab = PromptTab(self._tag_service, self._signals)
 
         for label, widget in [
             ("Docs", self._docs_tab),
             ("Search", self._search_tab),
-            ("Prompts", self._prompt_tab),
         ]:
             self._tab_bar.addTab(label)
             self._stack.addWidget(widget)

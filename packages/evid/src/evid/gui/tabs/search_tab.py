@@ -43,19 +43,6 @@ logger = logging.getLogger(__name__)
 _RESULT_COLS = ["Score", "Label", "Preview", "UUID"]
 
 
-def _add_token_to_layer_yaml(layers: list, layer_id: str, token: str) -> bool:
-    """Recursively find layer by id in raw YAML dicts and append token to evidence."""
-    for layer in layers:
-        if layer.get("id") == layer_id:
-            ev = layer.setdefault("evidence", [])
-            if token not in ev:
-                ev.append(token)
-            return True
-        if _add_token_to_layer_yaml(layer.get("layers", []), layer_id, token):
-            return True
-    return False
-
-
 class SearchTab(QWidget):
     def __init__(
         self,
@@ -218,11 +205,6 @@ class SearchTab(QWidget):
         self._prev_text.setPlaceholderText("Select a result to preview")
         pv.addWidget(self._prev_text, 1)
 
-        # ── add to prompt ─────────────────────────────────────────────────────
-        self._add_to_prompt_btn = QPushButton("Add to Prompt")
-        self._add_to_prompt_btn.clicked.connect(self._on_add_to_prompt)
-        pv.addWidget(self._add_to_prompt_btn)
-
         # ── footer ────────────────────────────────────────────────────────────
         self._prev_footer = QLabel("")
         self._prev_footer.setStyleSheet("color: #888; font-size: 11px;")
@@ -371,7 +353,9 @@ class SearchTab(QWidget):
             self._prev_uuid.setText(short_uuid)
             self._prev_uuid.setToolTip(doc.uuid)
             self._prev_current_uuid = doc.uuid
-            self._prev_text.setPlainText(res.chunk_text)
+            self._prev_text.setPlainText(
+                res.chunk_text or self._citations_preview(doc.uuid)
+            )
             self._prev_footer.setText(
                 f"Source: {doc.label[:60]}    \u2003Chunk {res.chunk_idx}"
             )
@@ -389,11 +373,20 @@ class SearchTab(QWidget):
             self._prev_uuid.setText(short_uuid)
             self._prev_uuid.setToolTip(doc.uuid)
             self._prev_current_uuid = doc.uuid
-            self._prev_text.setPlainText("")
+            self._prev_text.setPlainText(self._citations_preview(doc.uuid))
             self._prev_footer.setText("")
             self._prev_show_in_docs_btn.setEnabled(True)
         else:
             self._clear_preview()
+
+    def _citations_preview(self, uuid: str) -> str:
+        """Render a doc's labelled citations as markdown for the preview pane."""
+        if not self._evidence_set:
+            return ""
+        from evid.core.prompt import quotes_markdown
+
+        md = quotes_markdown([self._evidence_set.path / "docs" / uuid])
+        return md or "(no citations — document not yet labelled)"
 
     def _clear_preview(self) -> None:
         self._prev_label.setText("—")
@@ -430,16 +423,6 @@ class SearchTab(QWidget):
     def _on_preview_copy_uuid(self) -> None:
         if self._prev_current_uuid:
             QApplication.clipboard().setText(self._prev_current_uuid)
-
-    def _on_add_to_prompt(self) -> None:
-        uuid = self._prev_current_uuid
-        if not uuid:
-            return
-        self._add_uuid_to_prompt(uuid)
-        with contextlib.suppress(Exception):
-            self.window().statusBar().showMessage(
-                f"Added {uuid[:8]}\u2026 to Prompt", 3000
-            )
 
     def _selected_uuids(self) -> list[str]:
         rows = self._table.selectionModel().selectedRows()
@@ -510,13 +493,10 @@ class SearchTab(QWidget):
             menu.addSeparator()
         else:
             act_copy_uuid = None
-        act_add_prompt = menu.addAction(
-            "Add to Prompt" if single else f"Add {len(uuids)} to Prompt"
-        )
         act_copy_prompt = menu.addAction(
-            "Copy prompt to clipboard"
+            "Copy quotes to clipboard"
             if single
-            else f"Copy prompt for {len(uuids)} to clipboard"
+            else f"Copy quotes ({len(uuids)}) to clipboard"
         )
 
         action = menu.exec(self._table.viewport().mapToGlobal(pos))
@@ -561,9 +541,6 @@ class SearchTab(QWidget):
             )
         elif action is act_copy_uuid:
             QApplication.clipboard().setText(uuid0)
-        elif action is act_add_prompt:
-            for uuid in uuids:
-                self._add_uuid_to_prompt(uuid)
         elif action is act_copy_prompt:
             self._copy_prompt_to_clipboard(uuids)
 
@@ -607,44 +584,6 @@ class SearchTab(QWidget):
             self.window().statusBar().showMessage(
                 f"Prompt for {len(uuids)} doc(s) copied to clipboard", 3000
             )
-
-    def _add_uuid_to_prompt(self, uuid: str) -> None:
-        parent = self.window()
-        prompt_tab = getattr(parent, "_prompt_tab", None)
-        if prompt_tab is None or getattr(prompt_tab, "_recipe_path", None) is None:
-            with contextlib.suppress(Exception):
-                self.window().statusBar().showMessage(
-                    "No recipe open in Prompts tab", 3000
-                )
-            return
-        token = f"evid-{uuid}"
-        recipe_path = prompt_tab._recipe_path
-        current_item = prompt_tab._tree.currentItem()
-        layer_id = (
-            current_item.data(0, Qt.ItemDataRole.UserRole) if current_item else None
-        )
-        try:
-            with recipe_path.open("r", encoding="utf-8") as f:
-                data = yaml.safe_load(f) or {}
-            layers = data.get("layers", [])
-            if not layers:
-                return
-            if layer_id and _add_token_to_layer_yaml(layers, layer_id, token):
-                pass
-            else:
-                layers[0].setdefault("evidence", [])
-                if token not in layers[0]["evidence"]:
-                    layers[0]["evidence"].append(token)
-            with recipe_path.open("w", encoding="utf-8") as f:
-                yaml.safe_dump(
-                    data,
-                    f,
-                    allow_unicode=True,
-                    default_flow_style=False,
-                    sort_keys=False,
-                )
-        except Exception:
-            logger.exception("Failed to add %s to recipe", uuid)
 
     def _ask_tag_name(self) -> str:
         """Show a dialog with an editable combo of existing tags; return chosen name or ''."""

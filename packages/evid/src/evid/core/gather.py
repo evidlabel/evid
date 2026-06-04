@@ -488,7 +488,28 @@ def _bib_to_hayagriva(bib_text: str) -> str:
 
         out[key] = item
 
-    return yaml.safe_dump(out, allow_unicode=True, sort_keys=False, width=1000)
+    # Stamp each entry with a provenance watermark comment so a reader can see
+    # which tool produced it and from where. The comment is inert YAML (ignored
+    # on load); an entry with no watermark was not emitted by a tool.
+    import datetime
+
+    from evid import __version__ as _evid_version
+
+    gen_date = datetime.date.today().isoformat()
+    chunks: list[str] = []
+    for key, item in out.items():
+        wm = f"# generated-by: evid v{_evid_version} · {gen_date}"
+        url = item.get("url")
+        if url:
+            wm += f" · {url}"
+        chunks.append(
+            wm
+            + "\n"
+            + yaml.safe_dump(
+                {key: item}, allow_unicode=True, sort_keys=False, width=1000
+            )
+        )
+    return "".join(chunks)
 
 
 def _bib_to_markdown(

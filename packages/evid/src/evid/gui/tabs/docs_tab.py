@@ -1062,7 +1062,7 @@ class DocsTab(QWidget):
 
         if single:
             act_label = menu.addAction("Label")
-            act_open_dir = menu.addAction("Open dir")
+            act_open_dir = menu.addAction("Open folder")
             act_open_pdf = menu.addAction("Open PDF")
             act_open_pdf.setEnabled((doc.path / "original.pdf").exists())
             act_open_url = menu.addAction("Open URL")
@@ -1079,8 +1079,16 @@ class DocsTab(QWidget):
             tag_actions = {remove_menu.addAction(t): t for t in all_tags}
 
         menu.addSeparator()
-        act_copy_uuid = menu.addAction("Copy UUID") if single else None
-        act_copy_quotes = menu.addAction(f"Copy quotes ({len(docs)}) to clipboard")
+        if single:
+            act_copy_uuid = menu.addAction("Copy UUID")
+            menu.addSeparator()
+        else:
+            act_copy_uuid = None
+        act_copy_quotes = menu.addAction(
+            "Copy quotes to clipboard"
+            if single
+            else f"Copy quotes ({len(docs)}) to clipboard"
+        )
         menu.addSeparator()
         act_delete = menu.addAction(f"Delete {len(docs)} document(s)\u2026")
 
