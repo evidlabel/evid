@@ -1,0 +1,553 @@
+"""CLI callback functions."""
+
+import json
+import logging
+import re
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+import yaml
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.table import Table
+
+from evid.cli.dataset import (
+    create_dataset,
+    docs_dir,
+    get_datasets,
+    list_datasets,
+    select_dataset,
+    set_dir,
+    track_dataset,
+)
+from evid.cli.evidence import (
+    add_evidence,
+    get_evidence_list,
+    label_evidence,
+    select_evidence,
+)
+from evid.cli.tags import assign_tag, list_tags, remove_tag, show_tag
+from evid.core.bibtex import generate_bibtex
+from evid.core.gather import gather_dataset
+from evid.core.models import ConfigModel, InfoModel
+from evid.core.rebut_doc import rebut_doc
+from evid.models import Document
+
+# Set up logging with Rich handler
+logging.basicConfig(handlers=[RichHandler()], level=logging.DEBUG, rich_tracebacks=True)
+logger = logging.getLogger(__name__)
+
+DIRECTORY = None
+DIRECTORY_EXPLICIT = False  # True when --db was given on the command line
+
+
+# ── shared helpers ─────────────────────────────────────────────────────────────
+
+
+def _resolve_dataset(
+    dataset: str | None,
+    prompt: str = "Select dataset",
+    allow_create: bool = False,
+) -> str:
+    """Resolve a dataset name/number to a slug, prompting interactively if needed."""
+    if not dataset:
+        return select_dataset(DIRECTORY, prompt, allow_create=allow_create)
+    if dataset.isdigit():
+        datasets = sorted(get_datasets(DIRECTORY))
+        idx = int(dataset) - 1
+        if 0 <= idx < len(datasets):
+            return datasets[idx]
+        sys.exit(f"Invalid dataset number: {dataset}")
+    if not set_dir(DIRECTORY, dataset).exists():
+        sys.exit(f"Dataset '{dataset}' does not exist.")
+    return dataset
+
+
+def _print_vec_results(
+    results: list,
+    fmt: str,
+    query: str,
+    dataset: str,
+    n: int,
+) -> None:
+    if not results:
+        print(f"No results for '{query}'.")
+        return
+    if fmt == "json":
+        data = [
+            {
+                "rank": i + 1,
+                "score": round(r.score, 4),
+                "label": r.doc.label,
+                "uuid": r.doc.uuid,
+                "chunk": r.chunk_text,
+                "chunk_idx": r.chunk_idx,
+                "source_url": r.doc.source_url,
+            }
+            for i, r in enumerate(results)
+        ]
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    elif fmt == "md":
+        print(f'## Vector search: "{query}" — {dataset} (n={n})\n')
+        for i, r in enumerate(results, 1):
+            short = r.doc.uuid[:8] + "\u2026" + r.doc.uuid[-8:]
+            print(f"{i}. **{r.doc.label}** `score: {r.score:.3f}` `{short}`")
+            preview = r.chunk_text[:200].replace("\n", " ")
+            print(f"   > {preview}\n")
+    else:
+        console = Console()
+        table = Table(title=f'Vector search: "{query}" \u2014 {dataset}')
+        table.add_column("#", justify="right", style="dim", width=3)
+        table.add_column("Score", justify="right", width=7)
+        table.add_column("Label", ratio=3)
+        table.add_column("UUID", width=20)
+        table.add_column("Preview", ratio=4)
+        for i, r in enumerate(results, 1):
+            short = r.doc.uuid[:16] + "\u2026"
+            preview = r.chunk_text[:100].replace("\n", " ")
+            table.add_row(str(i), f"{r.score:.3f}", r.doc.label, short, preview)
+        console.print(table)
+
+
+def _print_meta_results(
+    docs: list[Document],
+    fmt: str,
+    pattern: str,
+    dataset: str,
+) -> None:
+    if not docs:
+        print(f"No results for '{pattern}'.")
+        return
+    if fmt == "json":
+        data = [
+            {
+                "uuid": d.uuid,
+                "label": d.label,
+                "source_url": d.source_url,
+                "tags": d.tags,
+            }
+            for d in docs
+        ]
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    elif fmt == "md":
+        print(f'## Meta search: "{pattern}" \u2014 {dataset}\n')
+        for i, d in enumerate(docs, 1):
+            short = d.uuid[:8] + "\u2026"
+            print(f"{i}. **{d.label}** `{short}`")
+            if d.source_url:
+                print(f"   <{d.source_url}>")
+            print()
+    else:
+        console = Console()
+        table = Table(title=f'Meta search: "{pattern}" \u2014 {dataset}')
+        table.add_column("#", justify="right", style="dim", width=3)
+        table.add_column("UUID", width=20)
+        table.add_column("Label", ratio=4)
+        table.add_column("Tags")
+        table.add_column("URL")
+        for i, d in enumerate(docs, 1):
+            short = d.uuid[:16] + "\u2026"
+            table.add_row(str(i), short, d.label, ", ".join(d.tags), d.source_url or "")
+        console.print(table)
+
+
+# ── set callbacks ──────────────────────────────────────────────────────────────
+
+
+def create_callback(db: str = None, dataset: str = None):
+    """Create a new dataset."""
+    if not dataset:
+        dataset = input("Enter new dataset name: ").strip()
+        if not dataset:
+            sys.exit("No dataset name provided.")
+    create_dataset(DIRECTORY, dataset)
+
+
+def track_callback(db: str = None, dataset: str = None):
+    """Track a dataset with Git."""
+    dataset = _resolve_dataset(dataset, "Select dataset to track")
+    track_dataset(DIRECTORY, dataset)
+
+
+def list_datasets_callback(db: str = None):
+    """List all available datasets."""
+    list_datasets(DIRECTORY)
+
+
+def gather_callback(
+    db: str = None,
+    dataset: str = None,
+    output: str = None,
+    no_regen: bool = False,
+    include_keys: bool = False,
+):
+    """Gather all BibTeX from a dataset into a single output file."""
+    dataset = _resolve_dataset(dataset, "Select dataset to gather", allow_create=False)
+    if not output:
+        sys.exit("--output / -o is required.")
+    gather_dataset(
+        DIRECTORY,
+        dataset,
+        Path(output).expanduser(),
+        regen=not no_regen,
+        include_keys=include_keys,
+    )
+
+
+# ── doc callbacks ──────────────────────────────────────────────────────────────
+
+
+def add_callback(
+    db: str = None,
+    source: str = None,
+    label: bool = False,
+    autolabel: bool = False,
+    dataset: str = None,
+):
+    """Add a document to a dataset."""
+    dataset = _resolve_dataset(dataset, "Select dataset for adding document")
+    add_evidence(DIRECTORY, dataset, source, label, autolabel)
+
+
+def bibtex_callback(db: str = None, dataset: str = None, uuid: str = None):
+    """Generate BibTeX for a document."""
+    dataset = _resolve_dataset(
+        dataset, "Select dataset for BibTeX generation", allow_create=False
+    )
+    if not uuid:
+        uuid = select_evidence(DIRECTORY, dataset)
+    typ_file = docs_dir(DIRECTORY, dataset) / uuid / "label.typ"
+    if not typ_file.exists():
+        sys.exit(f"label.typ not found in {dataset}/{uuid}")
+    generate_bibtex([typ_file])
+
+
+def label_callback(
+    db: str = None,
+    dataset: str = None,
+    uuid: str = None,
+    filename: str = "label.typ",
+):
+    """Open a document in the labeler."""
+    dataset = _resolve_dataset(dataset, "Select dataset to label", allow_create=False)
+    label_evidence(DIRECTORY, dataset, uuid, filename)
+
+
+def rebut_callback(db: str = None, dataset: str = None, uuid: str = None):
+    """Generate a rebuttal document."""
+    dataset = _resolve_dataset(
+        dataset, "Select dataset for rebuttal", allow_create=False
+    )
+    if not uuid:
+        uuid = select_evidence(DIRECTORY, dataset, "Select document for rebuttal")
+    workdir = docs_dir(DIRECTORY, dataset) / uuid
+    if not workdir.exists():
+        sys.exit(f"Document directory {workdir} does not exist.")
+    try:
+        rebut_doc(workdir)
+        print(f"Rebuttal generated for {dataset}/{uuid}")
+    except Exception as e:
+        sys.exit(f"Failed to generate rebuttal: {e!s}")
+
+
+def list_docs_callback(
+    db: str = None,
+    dataset: str = None,
+    format: str = "table",
+):
+    """List documents in a dataset."""
+    dataset = _resolve_dataset(dataset, "Select dataset to list", allow_create=False)
+    documents = get_evidence_list(DIRECTORY, dataset)
+    if not documents:
+        print("No documents found.")
+        return
+    if format == "json":
+        print(json.dumps(documents, ensure_ascii=False, indent=2))
+    elif format == "md":
+        print(f"## Documents \u2014 {dataset}\n")
+        for i, ev in enumerate(documents, 1):
+            print(f"{i}. **{ev['title']}** `{ev['uuid'][:8]}\u2026` ({ev['date']})")
+    else:
+        console = Console()
+        table = Table(title=f"Documents in {dataset}")
+        table.add_column("Nr", justify="right")
+        table.add_column("Date")
+        table.add_column("UUID")
+        table.add_column("Label")
+        for i, ev in enumerate(documents, 1):
+            table.add_row(str(i), ev["date"], ev["uuid"], ev["title"])
+        console.print(table)
+
+
+# ── tag callbacks ──────────────────────────────────────────────────────────────
+
+
+def tag_list_callback(db: str = None, dataset: str = None, format: str = "table"):
+    """List all tags with doc and snippet counts."""
+    tags = list_tags(DIRECTORY, dataset or None)
+    if not tags:
+        print("No tags found.")
+        return
+    if format == "json":
+        print(json.dumps(tags, ensure_ascii=False, indent=2))
+    elif format == "md":
+        title = f"## Tags{' \u2014 ' + dataset if dataset else ''}\n"
+        print(title)
+        for tag, counts in sorted(tags.items(), key=lambda x: (-x[1]["docs"], x[0])):
+            print(f"- **{tag}** ({counts['docs']} docs, {counts['snippets']} snippets)")
+    else:
+        console = Console()
+        table = Table(title="Tags" + (f" \u2014 {dataset}" if dataset else ""))
+        table.add_column("Tag")
+        table.add_column("Docs", justify="right")
+        table.add_column("Snippets", justify="right")
+        for tag, counts in sorted(tags.items(), key=lambda x: (-x[1]["docs"], x[0])):
+            table.add_row(tag, str(counts["docs"]), str(counts["snippets"]))
+        console.print(table)
+
+
+def tag_show_callback(
+    db: str = None,
+    tag: str = None,
+    dataset: str = None,
+    format: str = "table",
+):
+    """Show all docs carrying a given tag."""
+    if not tag:
+        sys.exit("TAG argument is required.")
+    docs = show_tag(DIRECTORY, tag, dataset or None)
+    if not docs:
+        print(f"No documents found with tag '{tag}'.")
+        return
+    if format == "json":
+        print(json.dumps(docs, ensure_ascii=False, indent=2))
+    elif format == "md":
+        print(f"## Tag: {tag}\n")
+        for d in docs:
+            print(f"- **{d['label']}** `{d['uuid'][:8]}\u2026` ({d['slug']})")
+            if d["url"]:
+                print(f"  <{d['url']}>")
+    else:
+        console = Console()
+        table = Table(title=f"Tag: {tag}")
+        table.add_column("UUID")
+        table.add_column("Dataset")
+        table.add_column("Snippets", justify="right")
+        table.add_column("Label")
+        table.add_column("URL")
+        for doc in docs:
+            uuid_link = f"[link=vscode://file/{doc['path']}]{doc['uuid'][:8]}[/link]"
+            table.add_row(
+                uuid_link, doc["slug"], doc["snippets"], doc["label"], doc["url"]
+            )
+        console.print(table)
+
+
+def tag_assign_callback(db: str = None, uuid: str = None, tag: str = None):
+    """Add a tag to a document by UUID."""
+    if not uuid or not tag:
+        sys.exit("Both UUID and TAG arguments are required.")
+    ok, msg = assign_tag(DIRECTORY, uuid, tag)
+    if ok:
+        print(msg)
+    else:
+        sys.exit(msg)
+
+
+def tag_remove_callback(db: str = None, tag: str = None, dataset: str = None):
+    """Remove a tag from all documents that carry it."""
+    if not tag:
+        sys.exit("TAG argument is required.")
+    ok, msg = remove_tag(DIRECTORY, tag, dataset=dataset)
+    if ok:
+        print(msg)
+    else:
+        sys.exit(msg)
+
+
+# ── search callbacks ───────────────────────────────────────────────────────────
+
+
+def search_vec_callback(
+    db: str = None,
+    query: str = None,
+    dataset: str = None,
+    n: int = 10,
+    tag: str = None,
+    format: str = "table",
+):
+    """Run a semantic vector search."""
+    if not query:
+        sys.exit("QUERY argument is required.")
+    dataset = _resolve_dataset(dataset, "Select dataset to search", allow_create=False)
+
+    from evid.services.set_manager import SetManager
+    from evid.services.vec_service import VecService
+
+    try:
+        evidence_set = SetManager(DIRECTORY).load_set(dataset)
+    except FileNotFoundError:
+        sys.exit(f"Dataset '{dataset}' not found.")
+
+    try:
+        results = VecService().query(
+            evidence_set,
+            query,
+            n_results=n,
+            filter_tags=[tag] if tag else None,
+        )
+    except Exception as exc:
+        sys.exit(f"Vector search failed: {exc}")
+
+    _print_vec_results(results, fmt=format, query=query, dataset=dataset, n=n)
+
+
+def search_meta_callback(
+    db: str = None,
+    pattern: str = None,
+    dataset: str = None,
+    format: str = "table",
+):
+    """Run a regex search over document metadata (info.yml fields)."""
+    if not pattern:
+        sys.exit("PATTERN argument is required.")
+    dataset = _resolve_dataset(dataset, "Select dataset to search", allow_create=False)
+
+    docs_directory = set_dir(DIRECTORY, dataset) / "docs"
+    if not docs_directory.exists():
+        print(f"No docs directory for '{dataset}'.")
+        return
+
+    results: list[Document] = []
+    for doc_dir in sorted(docs_directory.iterdir()):
+        if not doc_dir.is_dir():
+            continue
+        info_path = doc_dir / "info.yml"
+        if not info_path.exists():
+            continue
+        try:
+            with info_path.open("r", encoding="utf-8") as f:
+                raw = yaml.safe_load(f) or {}
+            info = InfoModel(**raw)
+        except Exception:
+            logger.debug("Skipping bad info.yml in %s", doc_dir.name)
+            continue
+
+        haystack = " ".join(str(v) for v in raw.values() if v is not None)
+        try:
+            if not re.search(pattern, haystack, re.IGNORECASE):
+                continue
+        except re.error:
+            if pattern.lower() not in haystack.lower():
+                continue
+
+        raw_tags = info.tags if isinstance(info.tags, str) else ",".join(info.tags)
+        tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
+        results.append(
+            Document(
+                uuid=info.uuid or doc_dir.name,
+                path=doc_dir,
+                label=info.title or info.label or doc_dir.name,
+                tags=tags,
+                added=datetime.now(tz=UTC),
+                source_url=info.url or "",
+            )
+        )
+
+    _print_meta_results(results, fmt=format, pattern=pattern, dataset=dataset)
+
+
+# ── other callbacks ────────────────────────────────────────────────────────────
+
+
+def gui_callback(db: str = None):
+    """Launch the GUI."""
+    try:
+        from evid.gui.main_window import main as gui_main
+
+        gui_main(DIRECTORY if DIRECTORY_EXPLICIT else None)
+    except ImportError:
+        print(
+            "GUI requires evidmgr and PySide6. Install with: pip install evidmgr pyside6"
+        )
+        sys.exit(1)
+
+
+def update_callback(db: str = None):
+    """Update configuration file."""
+    config_path = Path.home() / ".evidrc"
+    if config_path.exists():
+        try:
+            with config_path.open("r") as f:
+                user_config = yaml.safe_load(f) or {}
+        except yaml.YAMLError:
+            user_config = {}
+            print("Invalid YAML in .evidrc, starting fresh.")
+    else:
+        user_config = {}
+
+    try:
+        config_model = ConfigModel(**user_config)
+    except ValueError:
+        default_config = ConfigModel().model_dump()
+        merged = {**default_config, **user_config}
+        config_model = ConfigModel(**merged)
+
+    config = config_model.model_dump()
+    with config_path.open("w") as f:
+        yaml.dump(config, f, allow_unicode=True)
+    print(f".evidrc updated at {config_path}.")
+
+
+def show_callback(db: str = None):
+    """Show current configuration."""
+    config_path = Path.home() / ".evidrc"
+    defaults = ConfigModel().model_dump()
+    user_config = {}
+    if config_path.exists():
+        try:
+            with config_path.open("r") as f:
+                user_config = yaml.safe_load(f) or {}
+        except yaml.YAMLError:
+            print("Invalid YAML in .evidrc, using defaults.")
+
+    try:
+        config_model = ConfigModel(**user_config)
+        merged = config_model.model_dump()
+    except ValueError:
+        merged = {**defaults, **user_config}
+        config_model = ConfigModel(**merged)
+        merged = config_model.model_dump()
+
+    print(
+        f"Config file: {config_path if config_path.exists() else 'Not found, using defaults'}"
+    )
+    for key, value in merged.items():
+        if key in user_config and user_config[key] != defaults.get(key):
+            source = f"overridden in {config_path}"
+        else:
+            source = "default"
+        print(f"  {key}: {value} ({source})")
+
+
+def export_prompt_callback(
+    db: str = None,
+    recipe: str = None,
+    output: str = None,
+):
+    """Export a recipe YAML to a Markdown prompt document."""
+    from evid.commands.export_prompt import (
+        export_markdown,
+        get_evid_api,
+    )
+
+    if not recipe:
+        sys.exit("--recipe is required.")
+    if not output:
+        sys.exit("--output is required.")
+    export_markdown(
+        recipe_path=Path(recipe).expanduser(),
+        output_path=Path(output).expanduser(),
+        evid_api=get_evid_api(DIRECTORY),
+    )

@@ -1,0 +1,110 @@
+"""Handle rebuttal document generation."""
+
+import logging
+import subprocess
+from pathlib import Path
+
+import bibtexparser as bib
+
+from evid.config import EvidConfig
+from evid.core.bibtex import generate_bib_from_typ
+
+logger = logging.getLogger(__name__)
+
+TYPST_TEMPLATE = r"""#set text(lang: "da")
+#set text(font: "New Computer Modern", size: 12pt)
+
+#let bcite(key) = {
+  block(
+    stroke: (left: 0.5pt + black),
+    inset: (left: 1em, right: 1em, top: 0.5em, bottom: 0.5em),
+    [#cite(key, form: "full")]
+  )
+}
+
+#grid(
+  columns: (auto, 1fr),
+  gutter: 1em,
+  strong("Topic"),   "",
+  strong("Reference"), "",
+  strong("Author"),   "",
+  strong("Date"), datetime.today().display("[day]-[month]-[year]"),
+)
+
+POINTS
+
+#bibliography("BIBPATH", title: "Referencer", style: "ieee", full: true)
+"""
+
+
+def base_rebuttal(bibfile: Path) -> str:
+    """Generate Typst rebuttal content from a BibTeX file."""
+    try:
+        bibdb = bib.load(open(bibfile))
+    except Exception as e:
+        logger.error(f"Failed to load BibTeX file {bibfile}: {e!s}")
+        raise ValueError(f"Invalid BibTeX file: {e!s}")
+
+    body = ""
+    for row in bibdb.entries:
+        # Determine the note key, prioritizing 'nonote' (as per exclude_note=True in BibTeX gen)
+        if "nonote" in row:
+            note_key = "nonote"
+        elif "note" in row:
+            note_key = "note"
+        else:
+            note_key = None
+
+        if note_key and row[note_key].strip():
+            note = row[note_key]
+            prompt = "\n".join(f"// {line}" for line in note.splitlines())
+            body += f"{prompt}\n+ Regarding: #bcite(<{row['ID']}>)\n"
+        else:
+            # No note, just add the citation
+            body += f"+ Regarding: #bcite(<{row['ID']}>)\n"
+            logger.info(f"No note for entry {row.get('ID', 'unknown')}; omitting note.")
+
+    if not body.strip():
+        # Fallback if no entries at all
+        body = "// No entries available for rebuttal.\n+ No items to rebut.\n"
+        logger.info("No entries found; using fallback content.")
+
+    rebuttal_body = TYPST_TEMPLATE.replace("POINTS", body).replace(
+        "BIBPATH", bibfile.name
+    )
+    return rebuttal_body
+
+
+def write_rebuttal(body: str, output_file: Path):
+    """Write rebuttal content to file if it doesn't exist."""
+    if not output_file.exists():
+        with open(output_file, "w", encoding="utf-8") as rebuttal_file:
+            rebuttal_file.write(body)
+            logger.info(f"Written a new {output_file}")
+    else:
+        logger.info(f"{output_file} already exists. Not overwriting.")
+
+
+def rebut_doc(workdir: Path):
+    """Generate rebuttal document from evidence directory."""
+    typ_file = workdir / "label.typ"
+    rebut_file = workdir / "rebut.typ"
+    bib_file = workdir / "label.bib"
+
+    try:
+        success, msg = generate_bib_from_typ(typ_file)
+        if not success:
+            raise RuntimeError(msg)
+
+        rebut_body = base_rebuttal(bib_file)
+        write_rebuttal(rebut_body, rebut_file)
+
+        if rebut_file.exists():
+            subprocess.run([EvidConfig.load().editor, str(rebut_file)], check=True)
+        else:
+            logger.warning(f"Rebuttal file {rebut_file} was not generated")
+            raise RuntimeError("Rebuttal file was not generated")
+
+    except Exception as e:
+        logger.error(f"Failed to generate rebuttal: {e!s}")
+        raise

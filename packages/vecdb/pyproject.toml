@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vecdb"
+version = "0.1.0"
+dependencies = [
+ "chromadb",
+ "treeparse",
+ "numpy",
+ "sentence-transformers",
+ "rich",
+ "pyyaml",
+ "pydantic",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.setuptools.packages]
+find = {where = ["src"]}
+
+[project.scripts]
+vecdb = "vecdb.cli:main"

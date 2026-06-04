@@ -1,0 +1,212 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "evid"
+version = "0.3.1"
+description = "Evidence management: PDF labeling, anonymization, vector search, and prompts."
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2",
+    "pyyaml",
+    "ruamel.yaml>=0.17",
+    "python-slugify",
+    "PySide6",
+    "arrow",
+    "rich",
+    "gender-guesser",
+    "faker",
+    "requests",
+    "beautifulsoup4",
+    "pypdf",
+    "PyMuPDF",
+    "treeparse>=0.2.8",
+    "bibtexparser",
+    "demoji",
+    "pandas",
+    "GitPython",
+    "frontend",
+    "flashtext~=2.7",
+    "spacy>=3.8.2,<4",
+    "rapidfuzz>=3.10.0,<4",
+    "presidio-analyzer>=2.2.0",
+    "presidio-anonymizer>=2.2.0",
+    "en-core-web-md",
+    "da-core-news-lg",
+    "numpy",
+    "chromadb",
+    "sentence-transformers",
+]
+
+[project.scripts]
+evid = "evid.cli.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["packages/evid/src/evid"]
+
+[tool.hatch.build.targets.editable]
+packages = ["packages/evid/src/evid"]
+
+[tool.uv.workspace]
+members = ["packages/did"]
+
+[tool.uv.sources]
+en-core-web-md = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl" }
+da-core-news-lg = { url = "https://github.com/explosion/spacy-models/releases/download/da_core_news_lg-3.8.0/da_core_news_lg-3.8.0-py3-none-any.whl" }
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pytest-qt",
+    "ruff",
+]
+
+[tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
+python_files = "test_*.py"
+python_functions = "test_*"
+# Only collect the evid package's tests. did/ and vecdb/ are workspace
+# members with their own (separately runnable) suites and aren't installed
+# into the root venv, so pytest cannot import them from here.
+testpaths = ["packages/evid/tests"]
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks integration tests",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "DJ", "EM", "EXE", "FA", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SLOT", "SIM", "TID", "TCH", "INT", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
+ignore = ["S101", "S104", "COM812", "ISC001", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/*" = ["T201", "T203", "TRY003", "EM101", "EM102", "INP001", "EXE001"]
+# conftest.py is a pytest hook file, not part of an importable package
+"**/conftest.py" = ["INP001"]
+"packages/*/tests/*" = [
+  "S101", "S105", "S106", "S108", "S311", "S603", "S607",
+  "PLR2004", "SLF001", "ARG001", "ARG002", "PT011", "FBT001",
+  "FBT002", "FBT003", "DTZ005", "DTZ003", "T201", "PLR0913",
+  "PLR0915", "INP001", "BLE001", "PLC0415", "G004", "TRY003",
+  "EM101", "EM102", "PTH123", "PTH118", "PTH100", "PTH103",
+  "PTH120", "RUF043", "F401", "F841", "E402", "PLW1510",
+]
+# evid CLI: print() is the user-facing output channel
+"packages/evid/src/evid/cli/**" = [
+  "T201", "T203", "TRY003", "TRY300", "TRY301", "TRY400",
+  "TRY401", "EM101", "EM102", "BLE001", "PLR0911", "PLR0912",
+  "PLR0913", "PLR0915", "C901", "FBT001", "FBT002", "FBT003",
+  "PLR2004", "PLC0415", "G004", "PTH123", "PTH118", "RUF013",
+  "RUF034", "RET504", "ERA001", "ARG001", "ARG002", "A002",
+  "S506", "S603", "S607", "PLW1510",
+]
+# Qt GUI: lazy imports, blind excepts, private member access are idiomatic
+"packages/evid/src/evid/gui/**" = [
+  "T201", "PLC0415", "BLE001", "SLF001", "G004", "TRY003",
+  "EM101", "EM102", "FBT001", "FBT002", "FBT003", "PLR0911",
+  "PLR0912", "PLR0913", "PLR0915", "PLR2004", "C901", "ARG001",
+  "ARG002", "ARG004", "ARG005", "RUF012", "RUF013", "RUF001",
+  "TRY300", "TRY301", "TRY302", "TRY400", "TRY401", "TRY002",
+  "TRY004", "RET504", "ERA001", "PTH123", "PTH118", "PTH100",
+  "PTH103", "PTH107", "PTH109", "PTH110", "PTH111", "PTH113",
+  "PTH117", "PTH120", "PTH202", "PTH207", "DTZ005", "DTZ003",
+  "S110", "S112", "S603", "S607", "PERF401", "PERF402",
+  "PERF403", "B904", "B023", "TC001", "TC003", "TID252",
+  "N806", "PIE810", "RUF015", "RUF034", "PLW0603", "SIM102",
+  "F821", "N802",
+]
+# evid migrated services/anon/vec/commands: legacy patterns from evidmgr
+"packages/evid/src/evid/services/**" = [
+  "BLE001", "G004", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
+  "C901", "TRY003", "TRY300", "TRY301", "TRY400", "TRY401",
+  "EM101", "EM102", "PLC0415", "RUF013", "RUF012", "PTH123",
+  "PTH118", "FBT001", "FBT002", "FBT003", "PLR2004", "ERA001",
+  "PERF401", "S110", "S112", "SLF001", "ARG001", "ARG002",
+  "ARG004", "RET504", "B904", "TC001", "TC003", "TID252",
+  "S603", "S607", "PD003", "F401", "SIM102", "SIM105", "SIM115",
+  "DTZ011", "PLW0603", "N806", "E731",
+]
+"packages/evid/src/evid/anon/**" = [
+  "BLE001", "G004", "PLC0415", "TRY003", "TRY300", "TRY301",
+  "TRY400", "TRY401", "EM101", "EM102", "PTH123", "PTH118",
+  "RUF013", "FBT001", "FBT002", "FBT003", "PLR0912", "PLR0913",
+  "PLR0915", "C901", "PLR2004", "ARG001", "ARG002", "ARG004",
+  "ERA001", "T201", "TC001", "TC003", "RET504", "B904", "S110",
+  "S112", "S311", "RUF012", "RUF013", "PERF401", "PLC0206",
+]
+"packages/evid/src/evid/vec/**" = [
+  "BLE001", "G004", "PLC0415", "TRY003", "EM101", "EM102",
+  "PLR2004", "PTH123", "PTH118", "RUF013", "FBT001", "FBT002",
+  "TC001", "TC003", "ARG001", "ARG002", "RET504", "TRY400",
+  "TRY401", "ERA001", "PLW0603", "T201", "S110", "SIM105",
+  "PLR0913",
+]
+"packages/evid/src/evid/commands/**" = [
+  "T201", "TRY003", "TRY300", "TRY301", "TRY400", "TRY401",
+  "EM101", "EM102", "BLE001", "PLR0912", "PLR0913", "PLR0915",
+  "PLR2004", "C901", "PLC0415", "G004", "PTH123", "PTH118",
+  "RUF013", "FBT001", "FBT002", "ARG001", "ARG002", "TC001",
+  "TC003", "RET504", "ERA001",
+]
+"packages/evid/src/evid/core/**" = [
+  "BLE001", "G004", "PLC0415", "PTH123", "PTH118", "PTH111",
+  "TRY003", "TRY300", "TRY301", "TRY400", "TRY401", "EM101",
+  "EM102", "RUF013", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
+  "C901", "PLR2004", "FBT001", "FBT002", "FBT003", "RET504",
+  "ARG001", "ARG002", "TC001", "TC003", "ERA001", "PERF401",
+  "S110", "S112", "S603", "S607", "B904", "RUF012", "DTZ011",
+  "F401", "SIM115", "PLW1510", "PD003",
+]
+"packages/evid/src/evid/__init__.py" = [
+  "BLE001", "G004", "PTH123", "PTH118", "TRY003", "EM101",
+]
+"packages/evid/src/evid/config.py" = [
+  "BLE001", "G004", "PTH123", "PTH118", "TRY003", "EM101",
+  "RUF013", "FBT001", "FBT002",
+]
+"packages/evid/src/evid/models.py" = [
+  "RUF013", "FBT001", "FBT002", "TC001", "TC003", "S311", "S324",
+]
+# squash-imported did/ — legacy style not worth refactoring
+"packages/did/**" = [
+  "T201", "T203", "BLE001", "G004", "TRY003", "TRY002",
+  "TRY004", "TRY301", "TRY302", "TRY300", "EM101", "EM102",
+  "PLR2004", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
+  "PLR1714", "PLR1722", "C901", "PLC0415", "FBT001", "FBT002",
+  "FBT003", "RUF013", "RUF012", "RUF034", "RUF001", "RUF015",
+  "PTH123", "PTH118", "PTH100", "PTH103", "PTH109", "PTH111",
+  "PTH120", "PTH207", "ARG001", "ARG002", "ARG004", "ARG005",
+  "SLF001", "DTZ005", "DTZ003", "DTZ011", "ERA001", "PERF401",
+  "PERF402", "PERF403", "TRY400", "TRY401", "RET504", "RET505",
+  "S110", "S112", "S603", "S607", "S506", "S311", "S306",
+  "B023", "B904", "B905", "TID252", "TC001", "TC003", "TC004",
+  "PIE810", "C401", "F401", "F841", "F821", "I001", "N802",
+  "N806", "PD002", "PD003", "PT011", "EXE001", "SIM102",
+  "SIM108", "SIM113", "SIM115", "SIM117", "SIM118", "E402",
+  "INP001", "A002", "PLW0603", "PLW1510", "PLC0206", "PGH003",
+  "PGH004",
+]
+# vecdb subpackage — legacy style
+"packages/vecdb/**" = [
+  "T201", "BLE001", "G004", "TRY003", "TRY002", "TRY004",
+  "TRY300", "TRY301", "EM101", "EM102", "PLR2004", "PLR0911",
+  "PLR0912", "PLR0913", "PLR0915", "C901", "PLC0415", "FBT001",
+  "FBT002", "FBT003", "RUF013", "RUF012", "PTH103", "PTH118",
+  "PTH123", "PTH100", "PTH120", "PTH207",
+  "ARG001", "ARG002", "SLF001", "DTZ005", "DTZ003", "ERA001",
+  "PERF401", "TRY400", "TRY401", "RET504", "S110", "S112",
+  "S603", "S607", "S311", "B904", "TID252", "TC001", "TC003",
+  "INP001", "PT011", "A002", "PLW0603", "PLW1510", "F401",
+  "F841", "E402",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

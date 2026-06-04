@@ -1,0 +1,37 @@
+*pyc
+.pytest_cache
+__pycache__
+*txt
+*.lock
+codefold.json
+notes/
+
+# build/test artifacts
+.coverage
+pytest.log
+output.svg
+
+# CLI output dumps
+/out.*
+
+# third-party tool state
+.grk_cache.json
+.grkrc
+
+# private working content
+questioning/
+recipes/
+
+# huge generated demo recording (regenerate locally; too large for git)
+docs/assets/demo.svg
+
+# YAML hygiene: only CI/pre-commit YAMLs are allowed in-tree.
+# Block everything else by default and re-allow the known-good paths.
+*.yml
+*.yaml
+!.github/workflows/*.yml
+!.github/workflows/*.yaml
+!.pre-commit-config.yaml
+!packages/*/.github/workflows/*.yml
+!packages/*/.github/workflows/*.yaml
+!packages/*/.pre-commit-config.yaml
