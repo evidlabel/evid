@@ -78,7 +78,7 @@ app = cli(
             flags=["-d", "--db"],
             arg_type=str,
             default=str(EvidConfig.load().data_dir),
-            help="Data directory (default: ~/.local/share/evidmgr)",
+            help="Data directory (default: ~/.local/share/evid)",
         ),
     ],
 )

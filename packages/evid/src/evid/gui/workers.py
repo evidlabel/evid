@@ -80,9 +80,13 @@ class UrlFetchWorker(QThread):
     def __init__(self, url: str) -> None:
         super().__init__()
         self._url = url
+        self._cancelled = False
         self.temp_dir: object = (
             None  # tempfile.TemporaryDirectory, kept alive by caller
         )
+
+    def cancel(self) -> None:
+        self._cancelled = True
 
     def run(self) -> None:
         import logging
@@ -91,6 +95,10 @@ class UrlFetchWorker(QThread):
         from urllib.parse import urlparse
 
         _log = logging.getLogger(__name__)
+
+        if self._cancelled:
+            self.error.emit("Cancelled")
+            return
 
         try:
             import requests
@@ -102,6 +110,9 @@ class UrlFetchWorker(QThread):
 
             _log.info("Fetching URL: %s", self._url)
             response = requests.get(self._url, timeout=15, headers=_BROWSER_HEADERS)
+            if self._cancelled:
+                self.error.emit("Cancelled")
+                return
             response.raise_for_status()
             content_type = response.headers.get("Content-Type", "")
             _log.debug(
@@ -278,8 +289,9 @@ class CopyDocWorker(QThread):
             meta = {"notes": "", "indexed": False, "anon_pending": False}
             if self._dest_set.set_type == SetType.ANON:
                 meta["anon_pending"] = True
-            with (dest_doc_dir / "evidmgr_meta.yml").open("w", encoding="utf-8") as fh:
-                yaml.safe_dump(meta, fh)
+            from evid.core.evid_meta import write_meta
+
+            write_meta(dest_doc_dir, meta)
 
             self.progress.emit(3, 3, "Indexing into vector store…")
             if self._vec_service is not None:
@@ -318,10 +330,9 @@ class CopyDocWorker(QThread):
                     )
                     if ok:
                         meta["indexed"] = True
-                        with (dest_doc_dir / "evidmgr_meta.yml").open(
-                            "w", encoding="utf-8"
-                        ) as fh:
-                            yaml.safe_dump(meta, fh)
+                        from evid.core.evid_meta import write_meta
+
+                        write_meta(dest_doc_dir, meta)
                         _log.info(
                             "Re-indexed %s into '%s'", doc_uuid, self._dest_set.slug
                         )
@@ -364,5 +375,71 @@ class AnonExtractWorker(QThread):
                 self._evidence_set, self._doc_uuids, self._language
             )
             self.finished.emit(str(path))
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class MetaSearchWorker(QThread):
+    """Run meta (regex) search over info.yml in a background thread."""
+
+    finished = Signal(list)  # list[Document]
+    error = Signal(str)
+
+    def __init__(self, evidence_set: EvidenceSet, pattern: str) -> None:
+        super().__init__()
+        self._evidence_set = evidence_set
+        self._pattern = pattern
+
+    def run(self) -> None:
+        try:
+            from evid.core.doc_loader import search_meta_documents
+
+            docs = search_meta_documents(self._evidence_set.path, self._pattern)
+            self.finished.emit(docs)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class VectorSearchWorker(QThread):
+    """Run vector similarity search in a background thread."""
+
+    finished = Signal(list)  # list[VecResult]
+    error = Signal(str)
+
+    def __init__(
+        self, vec_service, evidence_set: EvidenceSet, query: str, n_results: int
+    ):
+        super().__init__()
+        self._vec_service = vec_service
+        self._evidence_set = evidence_set
+        self._query = query
+        self._n_results = n_results
+
+    def run(self) -> None:
+        try:
+            results = self._vec_service.query(
+                self._evidence_set, self._query, n_results=self._n_results
+            )
+            self.finished.emit(results)
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class GenerateFakesWorker(QThread):
+    """Generate fake entity values in a background thread."""
+
+    finished = Signal()
+    error = Signal(str)
+
+    def __init__(self, anon_service, yaml_path: Path, language: str) -> None:
+        super().__init__()
+        self._svc = anon_service
+        self._yaml_path = yaml_path
+        self._language = language
+
+    def run(self) -> None:
+        try:
+            self._svc.generate_fakes(self._yaml_path, self._language)
+            self.finished.emit()
         except Exception as exc:
             self.error.emit(str(exc))

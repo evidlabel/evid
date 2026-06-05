@@ -125,73 +125,79 @@ def show_tag(
 
 
 def assign_tag(directory: Path, uuid: str, tag: str) -> tuple[bool, str]:
-    """Add *tag* to the info.yml for the document matching *uuid*.
+    """Add *tag* to the document matching *uuid* (TagService + info.yml).
 
     Accepts full UUID or a unique prefix.  Returns ``(True, message)`` on
     success or ``(False, message)`` if the UUID was not found.
     """
+    from evid.services.doc_tags import assign_doc_tag
+    from evid.services.tag_service import TagService
+
     tag = tag.strip()
     if not tag:
         return False, "Tag must not be empty."
 
     needle = uuid.strip().lower()
-    matched: Path | None = None
+    matched_slug: str | None = None
+    matched_dir: Path | None = None
+    matched_uuid: str | None = None
 
-    for _slug, uuid_dir, info in iter_docs(directory):
+    for slug, uuid_dir, info in iter_docs(directory):
         if info.uuid.lower().startswith(needle):
-            if matched is not None:
+            if matched_dir is not None:
                 return False, f"UUID prefix '{uuid}' is ambiguous — be more specific."
-            matched = uuid_dir
+            matched_slug = slug
+            matched_dir = uuid_dir
+            matched_uuid = info.uuid
 
-    if matched is None:
+    if matched_dir is None or matched_slug is None or matched_uuid is None:
         return False, f"No document found matching UUID '{uuid}'."
 
-    info_file = matched / "info.yml"
-    with info_file.open(encoding="utf-8") as fh:
-        raw = yaml.safe_load(fh) or {}
-
-    existing = _parse_tags(str(raw.get("tags", "")))
-    if tag.lower() in [t.lower() for t in existing]:
-        return True, f"Tag '{tag}' already present on {info_file.parent.name}."
-
-    existing.append(tag)
-    raw["tags"] = ", ".join(sorted(existing))
-
-    with info_file.open("w", encoding="utf-8") as fh:
-        yaml.dump(raw, fh, allow_unicode=True)
-
-    return True, f"Tag '{tag}' added to {info_file.parent.name}."
+    tag_service = TagService(directory)
+    qualified = TagService.qualify(tag, matched_slug)
+    info_file = matched_dir / "info.yml"
+    added = assign_doc_tag(
+        tag_service, matched_slug, matched_uuid, info_file, qualified
+    )
+    if added:
+        return True, f"Tag '{qualified}' added to {matched_dir.name}."
+    return True, f"Tag '{qualified}' already present on {matched_dir.name}."
 
 
 def remove_tag(
     directory: Path, tag: str, dataset: str | None = None
 ) -> tuple[bool, str]:
-    """Remove *tag* from every document that carries it.
+    """Remove *tag* from every document that carries it (TagService + info.yml).
 
     Scoped to *dataset* if given, otherwise all datasets.  Returns
     ``(True, message)`` with a count, or ``(False, message)`` if the tag
     was not found on any document.
     """
+    from evid.services.doc_tags import remove_doc_tag
+    from evid.services.tag_service import TagService
+
     tag = tag.strip()
     if not tag:
         return False, "Tag must not be empty."
 
     lower_tag = tag.lower()
     count = 0
+    tag_service = TagService(directory)
 
-    for _slug, uuid_dir, info in iter_docs(directory, dataset):
+    for slug, uuid_dir, info in iter_docs(directory, dataset):
         existing = _parse_tags(str(info.tags or ""))
-        updated = [t for t in existing if t.lower() != lower_tag]
-        if len(updated) == len(existing):
+        matching = [t for t in existing if t.lower() == lower_tag]
+        if not matching:
             continue
-
-        info_file = uuid_dir / "info.yml"
-        with info_file.open(encoding="utf-8") as fh:
-            raw = yaml.safe_load(fh) or {}
-        raw["tags"] = ", ".join(sorted(updated))
-        with info_file.open("w", encoding="utf-8") as fh:
-            yaml.dump(raw, fh, allow_unicode=True)
-        count += 1
+        for tag_name in matching:
+            if remove_doc_tag(
+                tag_service,
+                slug,
+                info.uuid,
+                uuid_dir / "info.yml",
+                tag_name,
+            ):
+                count += 1
 
     if count == 0:
         return False, f"Tag '{tag}' not found on any document."

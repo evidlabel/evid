@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QObject, Qt
@@ -16,7 +17,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-DOC_MIME_TYPE = "application/x-evidmgr-doc"
+DOC_MIME_TYPE = "application/x-evid-doc"
+DOC_MIME_LEGACY = "application/x-evidmgr-doc"
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from evid.gui.signals import AppSignals
@@ -55,6 +59,7 @@ class Sidebar(QWidget):
         layout.addWidget(QLabel("Evidence Sets"))
         self._list = QListWidget()
         self._list.itemClicked.connect(self._on_set_clicked)
+        self._list.currentItemChanged.connect(self._on_current_item_changed)
         self._list.viewport().setAcceptDrops(True)
         self._list.viewport().installEventFilter(self)
         layout.addWidget(self._list)
@@ -74,21 +79,38 @@ class Sidebar(QWidget):
     # ── public ──────────────────────────────────────────────────────────────
 
     def refresh(self) -> None:
-
+        active_slug = self._active_set.slug if self._active_set else None
         self._sets = self._set_manager.list_sets()
         self._list.clear()
         for s in self._sets:
             item = self._make_item(s)
             self._list.addItem(item)
-        if self._list.count() > 0:
-            self._list.setCurrentRow(0)
+        if self._list.count() == 0:
+            self._active_set = None
+            return
+        row = 0
+        if active_slug:
+            for i in range(self._list.count()):
+                item = self._list.item(i)
+                if item and item.data(Qt.ItemDataRole.UserRole) == active_slug:
+                    row = i
+                    break
+        self._list.setCurrentRow(row)
+        item = self._list.item(row)
+        if item:
+            self._on_set_clicked(item)
 
     def select_first(self) -> None:
         """Select and activate the top set. Call after all signal slots are connected."""
-        if self._list.count() > 0:
-            item = self._list.item(0)
-            self._list.setCurrentItem(item)
-            self._on_set_clicked(item)
+        if self._list.count() == 0:
+            return
+        item = self._list.item(0)
+        self._list.setCurrentItem(item)
+        slug = item.data(Qt.ItemDataRole.UserRole)
+        self._active_set = self._set_manager.load_set(slug)
+        # Always emit — sidebar.refresh() may have activated this set before tabs
+        # connected their slots, in which case _on_set_clicked would no-op.
+        self._signals.set_selected.emit(slug)
 
     def active_set(self) -> EvidenceSet | None:
         return self._active_set
@@ -114,8 +136,18 @@ class Sidebar(QWidget):
         item.setData(Qt.ItemDataRole.UserRole, s.slug)
         return item
 
+    def _on_current_item_changed(
+        self,
+        current: QListWidgetItem | None,
+        _previous: QListWidgetItem | None,
+    ) -> None:
+        if current is not None:
+            self._on_set_clicked(current)
+
     def _on_set_clicked(self, item: QListWidgetItem) -> None:
         slug = item.data(Qt.ItemDataRole.UserRole)
+        if self._active_set and self._active_set.slug == slug:
+            return
         self._active_set = self._set_manager.load_set(slug)
         self._signals.set_selected.emit(slug)
 
@@ -126,6 +158,7 @@ class Sidebar(QWidget):
         try:
             self._active_set = self._set_manager.load_set(self._active_set.slug)
         except Exception:
+            logger.exception("Failed to reload set after anon mode change")
             return
         for i in range(self._list.count()):
             item = self._list.item(i)
@@ -229,12 +262,16 @@ class Sidebar(QWidget):
         if obj is not self._list.viewport():
             return super().eventFilter(obj, event)
         ev_type = event.type()
+
+        def _has_doc_mime(mime) -> bool:
+            return mime.hasFormat(DOC_MIME_TYPE) or mime.hasFormat(DOC_MIME_LEGACY)
+
         if ev_type == QEvent.Type.DragEnter:
-            if event.mimeData().hasFormat(DOC_MIME_TYPE):
+            if _has_doc_mime(event.mimeData()):
                 event.acceptProposedAction()
                 return True
         elif ev_type == QEvent.Type.DragMove:
-            if event.mimeData().hasFormat(DOC_MIME_TYPE):
+            if _has_doc_mime(event.mimeData()):
                 item = self._list.itemAt(event.position().toPoint())
                 if item:
                     self._list.setCurrentItem(item)
@@ -245,11 +282,16 @@ class Sidebar(QWidget):
             self._restore_active_selection()
             return True
         elif ev_type == QEvent.Type.Drop:
-            if event.mimeData().hasFormat(DOC_MIME_TYPE):
+            if _has_doc_mime(event.mimeData()):
                 item = self._list.itemAt(event.position().toPoint())
                 if item:
                     dest_slug = item.data(Qt.ItemDataRole.UserRole)
-                    raw = event.mimeData().data(DOC_MIME_TYPE).toStdString()
+                    mime = (
+                        DOC_MIME_TYPE
+                        if event.mimeData().hasFormat(DOC_MIME_TYPE)
+                        else DOC_MIME_LEGACY
+                    )
+                    raw = event.mimeData().data(mime).toStdString()
                     try:
                         payload = json.loads(raw)
                         src_slug = payload["src_slug"]

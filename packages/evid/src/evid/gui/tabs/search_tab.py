@@ -5,10 +5,8 @@ from __future__ import annotations
 import contextlib
 import logging
 import subprocess
-from datetime import UTC
 from typing import TYPE_CHECKING
 
-import yaml
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
@@ -58,6 +56,7 @@ class SearchTab(QWidget):
         self._results: list[VecResult] = []
         self._meta_docs: list[Document] = []
         self._workers: list = []
+        self._search_busy = False
         self._prev_current_uuid: str | None = None
         from evid.gui.label_controller import LabelController
 
@@ -102,11 +101,11 @@ class SearchTab(QWidget):
         self._n_spin.setRange(1, 100)
         self._n_spin.setValue(10)
         self._n_spin.setPrefix("n=")
-        vec_btn = QPushButton("Search")
-        vec_btn.clicked.connect(self._run_vector_search)
+        self._vec_search_btn = QPushButton("Search")
+        self._vec_search_btn.clicked.connect(self._run_vector_search)
         qrow.addWidget(self._query_edit)
         qrow.addWidget(self._n_spin)
-        qrow.addWidget(vec_btn)
+        qrow.addWidget(self._vec_search_btn)
         vv.addLayout(qrow)
         layout.addWidget(self._vec_widget, 0)
 
@@ -154,6 +153,8 @@ class SearchTab(QWidget):
     # ── preview panel ─────────────────────────────────────────────────────────
 
     def _build_preview_panel(self) -> QWidget:
+        from evid.gui.theme import muted_label_stylesheet
+
         panel = QWidget()
         pv = QVBoxLayout(panel)
         pv.setContentsMargins(4, 0, 0, 0)
@@ -164,7 +165,7 @@ class SearchTab(QWidget):
         row0.addWidget(QLabel("Tags:"))
         self._prev_tags = QLabel("")
         self._prev_tags.setWordWrap(True)
-        self._prev_tags.setStyleSheet("color: #aaa; font-size: 11px;")
+        self._prev_tags.setStyleSheet(muted_label_stylesheet())
         row0.addWidget(self._prev_tags, 1)
         pv.addLayout(row0)
 
@@ -207,7 +208,7 @@ class SearchTab(QWidget):
 
         # ── footer ────────────────────────────────────────────────────────────
         self._prev_footer = QLabel("")
-        self._prev_footer.setStyleSheet("color: #888; font-size: 11px;")
+        self._prev_footer.setStyleSheet(muted_label_stylesheet())
         pv.addWidget(self._prev_footer)
 
         return panel
@@ -238,78 +239,78 @@ class SearchTab(QWidget):
         self._focus_query()
 
     def _run_meta_search(self) -> None:
-        if not self._evidence_set:
+        if not self._evidence_set or self._search_busy:
             return
-        import re
-        from datetime import datetime
-
-        from evid.core.models import InfoModel
-        from evid.models import Document
+        from evid.gui.workers import MetaSearchWorker
 
         pattern = self._meta_filter.text().strip()
-        docs_dir = self._evidence_set.path / "docs"
-        if not docs_dir.exists():
-            return
-        results = []
-        for doc_dir in sorted(docs_dir.iterdir()):
-            if not doc_dir.is_dir():
-                continue
-            info_path = doc_dir / "info.yml"
-            if not info_path.exists():
-                continue
-            try:
-                with info_path.open("r", encoding="utf-8") as f:
-                    raw = yaml.safe_load(f) or {}
-                info = InfoModel(**raw)
-            except Exception:
-                logger.debug("Skipping bad info.yml in %s", doc_dir.name)
-                continue
+        self._set_search_busy(True)
+        worker = MetaSearchWorker(self._evidence_set, pattern)
+        worker.finished.connect(self._on_meta_search_done)
+        worker.error.connect(self._on_search_error)
+        self._workers.append(worker)
+        worker.start()
 
-            # Search across all values in info.yml flattened to a single string
-            haystack = " ".join(str(v) for v in raw.values() if v is not None)
-            if pattern:
-                try:
-                    if not re.search(pattern, haystack, re.IGNORECASE):
-                        continue
-                except re.error:
-                    if pattern.lower() not in haystack.lower():
-                        continue
-
-            tags = [t.strip() for t in info.tags.split(",") if t.strip()]
-            results.append(
-                Document(
-                    uuid=info.uuid or doc_dir.name,
-                    path=doc_dir,
-                    label=info.title or info.label,
-                    tags=tags,
-                    added=datetime.now(tz=UTC),
-                    source_url=info.url,
-                )
-            )
-        self._fill_table_from_docs(results)
+    def _on_meta_search_done(self, docs: list) -> None:
+        try:
+            self._fill_table_from_docs(docs)
+        finally:
+            self._set_search_busy(False)
 
     def _run_vector_search(self) -> None:
         if not self._evidence_set:
             QMessageBox.warning(self, "No set", "Select an evidence set first.")
             return
+        if self._search_busy:
+            return
         query = self._query_edit.text().strip()
         if not query:
             return
+        from evid.gui.workers import VectorSearchWorker
+
+        self._set_search_busy(True)
+        worker = VectorSearchWorker(
+            self._vec_service,
+            self._evidence_set,
+            query,
+            self._n_spin.value(),
+        )
+        worker.finished.connect(self._on_vector_search_done)
+        worker.error.connect(self._on_search_error)
+        self._workers.append(worker)
+        worker.start()
+
+    def _on_vector_search_done(self, results: list) -> None:
         try:
-            self._results = self._vec_service.query(
-                self._evidence_set,
-                query,
-                n_results=self._n_spin.value(),
-            )
+            self._results = results
             self._fill_table_from_vec_results(self._results)
-        except Exception as exc:
-            logger.error("Vector search failed: %s", exc)
-            QMessageBox.critical(self, "Search failed", str(exc))
+        finally:
+            self._set_search_busy(False)
+
+    def _on_search_error(self, msg: str) -> None:
+        self._set_search_busy(False)
+        logger.error("Search failed: %s", msg)
+        QMessageBox.critical(self, "Search failed", msg)
+
+    def _set_search_busy(self, busy: bool) -> None:
+        self._search_busy = busy
+        self._meta_search_btn.setEnabled(not busy)
+        self._meta_filter.setEnabled(not busy)
+        self._vec_search_btn.setEnabled(not busy)
+        self._query_edit.setEnabled(not busy)
+        self._n_spin.setEnabled(not busy)
 
     def _fill_table_from_docs(self, docs: list[Document]) -> None:
         self._results = []
         self._meta_docs = list(docs)
         self._table.setRowCount(0)
+        if not docs:
+            self._table.insertRow(0)
+            empty = QTableWidgetItem("(No matching documents)")
+            empty.setFlags(Qt.ItemFlag.NoItemFlags)
+            self._table.setItem(0, 1, empty)
+            self._clear_preview()
+            return
         for doc in docs:
             row = self._table.rowCount()
             self._table.insertRow(row)
@@ -322,6 +323,13 @@ class SearchTab(QWidget):
     def _fill_table_from_vec_results(self, results: list[VecResult]) -> None:
         self._meta_docs = []
         self._table.setRowCount(0)
+        if not results:
+            self._table.insertRow(0)
+            empty = QTableWidgetItem("(No results)")
+            empty.setFlags(Qt.ItemFlag.NoItemFlags)
+            self._table.setItem(0, 1, empty)
+            self._clear_preview()
+            return
         for res in results:
             row = self._table.rowCount()
             self._table.insertRow(row)
@@ -342,6 +350,7 @@ class SearchTab(QWidget):
         if row >= 0 and row < len(self._results):
             res = self._results[row]
             doc = res.doc
+            self._prev_tags.setText(", ".join(doc.tags) if doc.tags else "—")
             self._prev_label.setText(doc.label)
             self._prev_label.setToolTip(doc.label)
             self._prev_score.setText(f"{res.score:.3f}")
@@ -362,6 +371,7 @@ class SearchTab(QWidget):
             self._prev_show_in_docs_btn.setEnabled(True)
         elif row >= 0 and row < len(self._meta_docs):
             doc = self._meta_docs[row]
+            self._prev_tags.setText(", ".join(doc.tags) if doc.tags else "—")
             self._prev_label.setText(doc.label)
             self._prev_label.setToolTip(doc.label)
             self._prev_score.setText("")
@@ -389,6 +399,7 @@ class SearchTab(QWidget):
         return md or "(no citations — document not yet labelled)"
 
     def _clear_preview(self) -> None:
+        self._prev_tags.setText("—")
         self._prev_label.setText("—")
         self._prev_label.setToolTip("")
         self._prev_score.setText("")
@@ -415,10 +426,11 @@ class SearchTab(QWidget):
         if doc.source_url:
             QDesktopServices.openUrl(QUrl(doc.source_url))
             return
-        for candidate in [doc.path / "original.pdf", *doc.path.glob("*.pdf")]:
-            if candidate.exists():
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(candidate)))
-                return
+        from evid.services.doc_tags import resolve_doc_pdf
+
+        pdf = resolve_doc_pdf(doc.path)
+        if pdf:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(pdf)))
 
     def _on_preview_copy_uuid(self) -> None:
         if self._prev_current_uuid:
@@ -469,8 +481,10 @@ class SearchTab(QWidget):
                 self._evidence_set.path / "docs" / uuid0 if self._evidence_set else None
             )
             act_open_pdf = menu.addAction("Open PDF")
+            from evid.services.doc_tags import resolve_doc_pdf
+
             act_open_pdf.setEnabled(
-                bool(doc_dir and (doc_dir / "original.pdf").exists())
+                bool(doc_dir and resolve_doc_pdf(doc_dir) is not None)
             )
             act_open_url = menu.addAction("Open URL")
             act_open_url.setEnabled(bool(doc0 and getattr(doc0, "source_url", "")))
@@ -508,26 +522,34 @@ class SearchTab(QWidget):
         elif action is act_open_dir:
             self._open_dir(uuid0)
         elif action is act_open_pdf and doc_dir:
-            subprocess.Popen(["xdg-open", str(doc_dir / "original.pdf")])
+            from evid.services.doc_tags import resolve_doc_pdf
+
+            pdf = resolve_doc_pdf(doc_dir)
+            if pdf:
+                subprocess.Popen(["xdg-open", str(pdf)])
         elif action is act_open_url and doc0:
             QDesktopServices.openUrl(QUrl(doc0.source_url))
         elif action is act_tag:
             if not self._evidence_set:
                 return
-            from evid.models import TagItem
+            from evid.services.doc_tags import assign_doc_tag
 
             tag_name = self._ask_tag_name()
             if not tag_name:
                 return
             tag_name = self._tag_service.qualify(tag_name, self._evidence_set.slug)
-            try:
-                self._tag_service.get_tag(tag_name)
-            except KeyError:
-                self._tag_service.create_tag(tag_name, self._evidence_set.slug)
-            self._tag_service.add_items(
-                tag_name,
-                [TagItem(set_slug=self._evidence_set.slug, doc_uuid=u) for u in uuids],
-            )
+            for uuid in uuids:
+                info_path = self._evidence_set.path / "docs" / uuid / "info.yml"
+                try:
+                    assign_doc_tag(
+                        self._tag_service,
+                        self._evidence_set.slug,
+                        uuid,
+                        info_path,
+                        tag_name,
+                    )
+                except Exception:
+                    logger.exception("Failed to assign tag to %s", uuid)
             self.window().statusBar().showMessage(
                 f"{len(uuids)} docs tagged '{tag_name}'", 3000
             )
@@ -545,26 +567,21 @@ class SearchTab(QWidget):
             self._copy_prompt_to_clipboard(uuids)
 
     def _remove_tag_from_uuid(self, tag_name: str, uuid: str) -> None:
+        from evid.services.doc_tags import remove_doc_tag
+
         if not self._evidence_set:
             return
-        try:
-            self._tag_service.remove_item(tag_name, self._evidence_set.slug, uuid)
-        except Exception:
-            logger.debug("Tag %s not in TagService for %s", tag_name, uuid)
         info_path = self._evidence_set.path / "docs" / uuid / "info.yml"
         try:
-            info: dict = {}
-            if info_path.exists():
-                with info_path.open("r", encoding="utf-8") as f:
-                    info = yaml.safe_load(f) or {}
-            existing = [t.strip() for t in info.get("tags", "").split(",") if t.strip()]
-            if tag_name in existing:
-                existing.remove(tag_name)
-                info["tags"] = ", ".join(existing)
-                with info_path.open("w", encoding="utf-8") as f:
-                    yaml.safe_dump(info, f, allow_unicode=True)
+            remove_doc_tag(
+                self._tag_service,
+                self._evidence_set.slug,
+                uuid,
+                info_path,
+                tag_name,
+            )
         except Exception:
-            logger.exception("Failed to remove tag from info.yml for %s", uuid)
+            logger.exception("Failed to remove tag %s from %s", tag_name, uuid)
 
     def _copy_prompt_to_clipboard(self, uuids: list[str]) -> None:
         if not self._evidence_set or not uuids:

@@ -50,3 +50,17 @@ def test_sidebar_create_set(qapp, tmp_path):
     window._sidebar.refresh()
     assert window._sidebar._list.count() == 1
     window.close()
+
+
+def test_docs_tab_loads_selected_set_on_startup(qapp, tmp_path):
+    from evid.config import EvidConfig
+    from evid.gui.main_window import EvidMgrWindow
+
+    config = EvidConfig(data_dir=tmp_path)
+    window = EvidMgrWindow(config=config)
+    window._set_manager.create_set("Startup Set")
+    window._sidebar.refresh()
+    window._sidebar.select_first()
+    assert window._docs_tab._evidence_set is not None
+    assert window._docs_tab._evidence_set.slug == window._sidebar.active_set().slug
+    window.close()

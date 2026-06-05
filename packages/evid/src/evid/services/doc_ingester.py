@@ -142,8 +142,9 @@ class DocIngester:
             "indexed": False,
             "anon_pending": False,
         }
-        with (doc_dir / "evidmgr_meta.yml").open("w", encoding="utf-8") as f:
-            yaml.safe_dump(meta, f, allow_unicode=True)
+        from evid.core.evid_meta import write_meta
+
+        write_meta(doc_dir, meta)
 
         # ── 4. Generate .typ file ─────────────────────────────────────────────
         p(4, n, "Extracting text to Typst")
@@ -202,8 +203,9 @@ class DocIngester:
 
         if evidence_set.set_type == SetType.ANON:
             meta["anon_pending"] = True
-        with (doc_dir / "evidmgr_meta.yml").open("w", encoding="utf-8") as f:
-            yaml.safe_dump(meta, f, allow_unicode=True)
+        from evid.core.evid_meta import write_meta
+
+        write_meta(doc_dir, meta)
 
         logger.info("Ingested %s into set '%s'", doc_uuid, evidence_set.slug)
         return doc
@@ -254,15 +256,11 @@ class DocIngester:
             logger.exception("VecService.index_document failed for %s", doc_dir.name)
             return False
 
-        # Mark indexed
-        meta_path = doc_dir / "evidmgr_meta.yml"
-        meta = {}
-        if meta_path.exists():
-            with meta_path.open("r", encoding="utf-8") as f:
-                meta = yaml.safe_load(f) or {}
+        from evid.core.evid_meta import read_meta, write_meta
+
+        meta = read_meta(doc_dir)
         meta["indexed"] = True
-        with meta_path.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(meta, f, allow_unicode=True)
+        write_meta(doc_dir, meta)
 
         logger.info(
             "Indexed existing doc %s into set '%s'", doc_dir.name, evidence_set.slug
@@ -295,14 +293,11 @@ class DocIngester:
         from evid.models import Document
 
         info_path = doc_dir / "info.yml"
-        meta_path = doc_dir / "evidmgr_meta.yml"
+        from evid.core.evid_meta import read_meta
 
         with info_path.open("r", encoding="utf-8") as f:
             info = yaml.safe_load(f) or {}
-        meta = {}
-        if meta_path.exists():
-            with meta_path.open("r", encoding="utf-8") as f:
-                meta = yaml.safe_load(f) or {}
+        meta = read_meta(doc_dir)
 
         tags_raw = info.get("tags", "")
         if isinstance(tags_raw, list):

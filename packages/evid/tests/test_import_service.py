@@ -99,8 +99,11 @@ def test_import_evid_dir_writes_meta(tmp_path):
     import_evid_dir(db, sm)
     docs = sm.list_documents("dataset1")
     for doc_dir in docs:
-        meta_path = doc_dir / "evidmgr_meta.yml"
-        assert meta_path.exists(), f"evidmgr_meta.yml missing in {doc_dir}"
+        from evid.core.evid_meta import META_CURRENT, read_meta
+
+        meta_path = doc_dir / META_CURRENT
+        assert meta_path.exists(), f"{META_CURRENT} missing in {doc_dir}"
+        meta = read_meta(doc_dir)
         with meta_path.open() as f:
             meta = yaml.safe_load(f)
         assert meta["indexed"] is False
@@ -162,8 +165,9 @@ def test_import_anon_set_marks_anon_pending(tmp_path):
     import_evid_dir(db, sm, set_type="anon")
     docs = sm.list_documents("dataset1")
     for doc_dir in docs:
-        with (doc_dir / "evidmgr_meta.yml").open() as f:
-            meta = yaml.safe_load(f)
+        from evid.core.evid_meta import read_meta
+
+        meta = read_meta(doc_dir)
         assert meta["anon_pending"] is True
 
 

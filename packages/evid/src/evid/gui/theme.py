@@ -62,6 +62,70 @@ def set_dark_theme(widget: QWidget) -> None:
     """)
 
 
+def tag_pill_styles() -> dict[str, str]:
+    """Stylesheet fragments for TagPill states (default / active / carried)."""
+    if is_dark_mode():
+        return {
+            "default": (
+                "QPushButton{border-radius:10px;padding:2px 8px;"
+                "border:1px solid #666;background:#3a3a3a;color:#dcdcdc;font-size:11px;}"
+                "QPushButton:hover{background:#4a4a4a;}"
+            ),
+            "active": (
+                "QPushButton{border-radius:10px;padding:2px 8px;"
+                "border:1px solid #005a9e;background:#0078d4;color:#fff;font-size:11px;}"
+                "QPushButton:hover{background:#006cbe;}"
+            ),
+            "carried": (
+                "QPushButton{border-radius:10px;padding:2px 8px;"
+                "border:1px solid #2e7d32;background:#1e3a22;color:#a5d6a7;font-size:11px;}"
+                "QPushButton:hover{background:#2a4f2e;}"
+            ),
+        }
+    return {
+        "default": (
+            "QPushButton{border-radius:10px;padding:2px 8px;"
+            "border:1px solid #999;background:#e8e8e8;color:#222;font-size:11px;}"
+            "QPushButton:hover{background:#d0d0d0;}"
+        ),
+        "active": (
+            "QPushButton{border-radius:10px;padding:2px 8px;"
+            "border:1px solid #005a9e;background:#0078d4;color:#fff;font-size:11px;}"
+            "QPushButton:hover{background:#006cbe;}"
+        ),
+        "carried": (
+            "QPushButton{border-radius:10px;padding:2px 8px;"
+            "border:1px solid #2e7d32;background:#c8e6c9;color:#1b5e20;font-size:11px;}"
+            "QPushButton:hover{background:#b5ddb7;}"
+        ),
+    }
+
+
+def anon_header_stylesheet() -> str:
+    if is_dark_mode():
+        return (
+            "QFrame { background:#3d3520; border:2px solid #c97a00; "
+            "border-radius:4px; padding:2px; }"
+        )
+    return (
+        "QFrame { background:#fff3cd; border:2px solid #c97a00; "
+        "border-radius:4px; padding:2px; }"
+    )
+
+
+def anon_header_label_stylesheet() -> str:
+    color = "#e8c070" if is_dark_mode() else "#7a4800"
+    return f"font-weight:bold; color:{color}; border:none;"
+
+
+def muted_label_stylesheet() -> str:
+    return (
+        "color: #888; font-size: 11px;"
+        if not is_dark_mode()
+        else ("color: #aaa; font-size: 11px;")
+    )
+
+
 def set_light_theme(widget: QWidget) -> None:
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window, QColor("#f0f0f0"))

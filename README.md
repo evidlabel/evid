@@ -4,6 +4,8 @@
 
 `evid` is a PDF evidence management tool for labelling, citing, and searching documents — primarily for legal and research workflows. It provides both a GUI and a full-featured CLI.
 
+Agent-oriented usage: see **[`SKILL.md`](SKILL.md)** in this directory (plus [`references/integrations.md`](references/integrations.md) for other evidskills tools).
+
 ## Features
 
 - Ingest PDFs or URLs; extract text and metadata automatically
@@ -11,13 +13,13 @@
 - Export labelled snippets to BibTeX for citation in LaTeX/Typst
 - Semantic vector search across all ingested documents
 - Regex metadata search over document fields
-- Tag documents and filter by tag
+- Tag documents (synced across `info.yml` and a global `tags.yml` registry)
 - Generate rebuttal documents from collected evidence
 - Anonymise documents (placeholder / fake entity substitution)
 
 ## Requirements
 
-- Python 3.12+
+- Python 3.11+
 - [`uv`](https://docs.astral.sh/uv/) (recommended) or pip
 - [`typst`](https://typst.app) binary on `PATH` — required for label extraction
 - PySide6 — installed automatically with the package (GUI only)
@@ -28,13 +30,43 @@
 uv pip install "evid @ git+https://github.com/evidlabel/evid.git"
 ```
 
+## Data directory
+
+Evidence sets and the tag registry live under a single **data directory**:
+
+| Path | Purpose |
+|------|---------|
+| `{data_dir}/sets/<slug>/` | One evidence set (`set.yml`, `docs/`) |
+| `{data_dir}/sets/<slug>/docs/<uuid>/` | One document (`info.yml`, `label.*`, PDF) |
+| `{data_dir}/tags.yml` | Cross-set tag registry |
+
+**Default:** `~/.local/share/evid`. If you still have data under `~/.local/share/evidmgr`, it is picked up automatically.
+
+**Override:** `evid -d /path/to/store …` or set `data_dir` in `~/.local/share/evid/evid.yml` (used by the GUI).
+
+Per-document sidecar metadata is `evid_meta.yml` (`indexed`, `anon_pending`, `notes`). Legacy `evidmgr_meta.yml` files are read and migrated on the next write.
+
 ## GUI
 
-Launch the GUI (default when invoked with no arguments):
+Launch with no subcommand (opens the **Evidence Manager** window):
 
 ```bash
 evid
+# or explicitly:
+evid gui
 ```
+
+- **Sidebar** — evidence sets; select one to load it in the tabs.
+- **Docs** — ingest, list, detail edit, labelling, tags, anonymization sub-tab.
+- **Search** — meta (regex over `info.yml`) and vector (semantic) search.
+
+**Docs table shortcuts**
+
+- Drag across rows to select a range; Ctrl+click toggles; Shift+click extends.
+- **Alt+drag** a row onto another set in the sidebar to copy the document.
+- Ctrl+PageUp / Ctrl+PageDown switch between Docs and Search.
+
+On startup, the first set in the sidebar is selected and loaded in Docs automatically.
 
 ## CLI
 
@@ -58,9 +90,11 @@ evid set gather my-research -o refs.bib
 
 # List and tag documents
 evid doc list --dataset my-research --format md
-evid tag assign <uuid> my-tag
+evid tag assign <uuid> my-tag --dataset my-research
 evid tag list
 ```
+
+Tags are written to both the document’s `info.yml` and `{data_dir}/tags.yml`.
 
 ### Search
 
@@ -93,12 +127,24 @@ evid search meta "2024" --dataset litc --format md
 ### Configuration
 
 ```bash
-evid config show    # show current settings
+evid config show    # show ~/.evidrc (editor and related CLI preferences)
 evid config update  # write defaults to ~/.evidrc
 ```
 
-`~/.evidrc` (YAML):
+`~/.evidrc` (YAML) — example:
+
 ```yaml
-default_dir: ~/Documents/evid
 editor: code
+default_dir: ~/Documents/evid   # legacy CLI preference field
+```
+
+The runtime data store for `evid set` / `evid doc` uses `EvidConfig.data_dir` (default `~/.local/share/evid`, with legacy `evidmgr` migration) unless you pass `-d` / `--db`.
+
+GUI settings are also stored under `{data_dir}/evid.yml`.
+
+## Development
+
+```bash
+uv run pytest -v
+HEADLESS=1 uv run pytest -v   # includes GUI smoke tests
 ```

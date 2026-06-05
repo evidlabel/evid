@@ -2,9 +2,7 @@
 
 import json
 import logging
-import re
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -30,7 +28,7 @@ from evid.cli.evidence import (
 from evid.cli.tags import assign_tag, list_tags, remove_tag, show_tag
 from evid.core.bibtex import generate_bibtex
 from evid.core.gather import gather_dataset
-from evid.core.models import ConfigModel, InfoModel
+from evid.core.models import ConfigModel
 from evid.core.rebut_doc import rebut_doc
 from evid.models import Document
 
@@ -414,47 +412,10 @@ def search_meta_callback(
         sys.exit("PATTERN argument is required.")
     dataset = _resolve_dataset(dataset, "Select dataset to search", allow_create=False)
 
-    docs_directory = set_dir(DIRECTORY, dataset) / "docs"
-    if not docs_directory.exists():
-        print(f"No docs directory for '{dataset}'.")
-        return
+    from evid.core.doc_loader import search_meta_documents
 
-    results: list[Document] = []
-    for doc_dir in sorted(docs_directory.iterdir()):
-        if not doc_dir.is_dir():
-            continue
-        info_path = doc_dir / "info.yml"
-        if not info_path.exists():
-            continue
-        try:
-            with info_path.open("r", encoding="utf-8") as f:
-                raw = yaml.safe_load(f) or {}
-            info = InfoModel(**raw)
-        except Exception:
-            logger.debug("Skipping bad info.yml in %s", doc_dir.name)
-            continue
-
-        haystack = " ".join(str(v) for v in raw.values() if v is not None)
-        try:
-            if not re.search(pattern, haystack, re.IGNORECASE):
-                continue
-        except re.error:
-            if pattern.lower() not in haystack.lower():
-                continue
-
-        raw_tags = info.tags if isinstance(info.tags, str) else ",".join(info.tags)
-        tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
-        results.append(
-            Document(
-                uuid=info.uuid or doc_dir.name,
-                path=doc_dir,
-                label=info.title or info.label or doc_dir.name,
-                tags=tags,
-                added=datetime.now(tz=UTC),
-                source_url=info.url or "",
-            )
-        )
-
+    set_path = set_dir(DIRECTORY, dataset)
+    results = search_meta_documents(set_path, pattern)
     _print_meta_results(results, fmt=format, pattern=pattern, dataset=dataset)
 
 
@@ -468,9 +429,7 @@ def gui_callback(db: str = None):
 
         gui_main(DIRECTORY if DIRECTORY_EXPLICIT else None)
     except ImportError:
-        print(
-            "GUI requires evidmgr and PySide6. Install with: pip install evidmgr pyside6"
-        )
+        print("GUI requires evid and PySide6. Install with: pip install evid pyside6")
         sys.exit(1)
 
 

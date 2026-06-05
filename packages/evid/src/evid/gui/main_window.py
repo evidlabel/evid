@@ -84,7 +84,7 @@ class _TabCycleFilter(QObject):
         return False
 
 
-class EvidMgrWindow(QMainWindow):
+class EvidWindow(QMainWindow):
     def __init__(self, config: EvidConfig | None = None) -> None:
         super().__init__()
         self._config = config or EvidConfig.load()
@@ -187,6 +187,10 @@ class EvidMgrWindow(QMainWindow):
 
         self._signals.copy_doc_to_set.connect(self._on_copy_doc_to_set)
         self._signals.doc_navigate.connect(self._on_doc_navigate)
+        self._signals.doc_ingested.connect(self._on_doc_ingested)
+        self._signals.labels_updated.connect(self._on_labels_updated)
+        self._signals.ingestion_error.connect(self._on_ingestion_error)
+        self._signals.anon_yaml_created.connect(self._on_anon_yaml_created)
 
     def _on_copy_doc_to_set(self, src_slug: str, doc_uuid: str, dest_slug: str) -> None:
         try:
@@ -206,6 +210,22 @@ class EvidMgrWindow(QMainWindow):
         self._tab_bar.setCurrentIndex(0)  # Docs tab
         self._docs_tab.navigate_to_doc(uuid)
 
+    def _on_doc_ingested(self, set_slug: str, doc_uuid: str) -> None:
+        if self._sidebar.active_set() and self._sidebar.active_set().slug == set_slug:
+            self._docs_tab.reload_current_set()
+
+    def _on_labels_updated(self, set_slug: str, doc_uuid: str) -> None:
+        if self._sidebar.active_set() and self._sidebar.active_set().slug == set_slug:
+            self._docs_tab.reload_current_set()
+
+    def _on_ingestion_error(self, msg: str) -> None:
+        logger.error("Ingestion error: %s", msg)
+        self.statusBar().showMessage(f"Ingest failed: {msg[:120]}", 8000)
+
+    def _on_anon_yaml_created(self, set_slug: str) -> None:
+        if self._sidebar.active_set() and self._sidebar.active_set().slug == set_slug:
+            self._docs_tab.reload_current_set()
+
     def _setup_shortcuts(self) -> None:
         self._tab_filter = _TabCycleFilter(self._stack, self._tab_bar)
         QApplication.instance().installEventFilter(self._tab_filter)
@@ -224,7 +244,11 @@ def main(db_dir: Path | None = None) -> None:
         config = EvidConfig.load()
         config.data_dir = _Path(db_dir)
     app = QApplication(sys.argv)
-    window = EvidMgrWindow(config=config)
+    window = EvidWindow(config=config)
     window.show()
     if not headless:
         sys.exit(app.exec())
+
+
+# Backward-compatible alias
+EvidMgrWindow = EvidWindow

@@ -65,7 +65,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _COLS = ["F", "J", "Label", "Added", "UUID"]
-_DOC_MIME_TYPE = "application/x-evidmgr-doc"
+_DOC_MIME_TYPE = "application/x-evid-doc"
 _ENTITY_COLS = ["Type", "Original", "Placeholder", "Fake", "Variants"]
 
 
@@ -336,23 +336,16 @@ class TagPill(QPushButton):
     _STATE_ACTIVE = "active"
     _STATE_CARRIED = "carried"
 
-    _STYLES = {
-        _STATE_DEFAULT: (
-            "QPushButton{border-radius:10px;padding:2px 8px;"
-            "border:1px solid #999;background:#e8e8e8;color:#222;font-size:11px;}"
-            "QPushButton:hover{background:#d0d0d0;}"
-        ),
-        _STATE_ACTIVE: (
-            "QPushButton{border-radius:10px;padding:2px 8px;"
-            "border:1px solid #005a9e;background:#0078d4;color:#fff;font-size:11px;}"
-            "QPushButton:hover{background:#006cbe;}"
-        ),
-        _STATE_CARRIED: (
-            "QPushButton{border-radius:10px;padding:2px 8px;"
-            "border:1px solid #2e7d32;background:#c8e6c9;color:#1b5e20;font-size:11px;}"
-            "QPushButton:hover{background:#b5ddb7;}"
-        ),
-    }
+    @classmethod
+    def _styles(cls) -> dict[str, str]:
+        from evid.gui.theme import tag_pill_styles
+
+        s = tag_pill_styles()
+        return {
+            cls._STATE_DEFAULT: s["default"],
+            cls._STATE_ACTIVE: s["active"],
+            cls._STATE_CARRIED: s["carried"],
+        }
 
     def __init__(self, tag_name: str, count: int, parent=None) -> None:
         super().__init__(parent)
@@ -383,9 +376,8 @@ class TagPill(QPushButton):
         self.setText(f"  {self._tag_name}  ×  {self._count}  ")
 
     def _refresh_style(self) -> None:
-        self.setStyleSheet(
-            self._STYLES.get(self._state, self._STYLES[self._STATE_DEFAULT])
-        )
+        styles = self._styles()
+        self.setStyleSheet(styles.get(self._state, styles[self._STATE_DEFAULT]))
 
     # ── drag ──────────────────────────────────────────────────────────────
 
@@ -599,13 +591,13 @@ class DocsTab(QWidget):
         # ── anon mode header (shown only for ANON sets) ───────────────────
         self._anon_header = QFrame()
         self._anon_header.setFrameShape(QFrame.Shape.StyledPanel)
-        self._anon_header.setStyleSheet(
-            "QFrame { background:#fff3cd; border:2px solid #c97a00; border-radius:4px; padding:2px; }"
-        )
+        from evid.gui.theme import anon_header_label_stylesheet, anon_header_stylesheet
+
+        self._anon_header.setStyleSheet(anon_header_stylesheet())
         ah = QHBoxLayout(self._anon_header)
         ah.setContentsMargins(8, 4, 8, 4)
         lbl = QLabel("Anonymization mode:")
-        lbl.setStyleSheet("font-weight:bold; color:#7a4800; border:none;")
+        lbl.setStyleSheet(anon_header_label_stylesheet())
         ah.addWidget(lbl)
 
         self._rb_real = QRadioButton("Real")
@@ -613,7 +605,7 @@ class DocsTab(QWidget):
         self._rb_fake = QRadioButton("Fake")
         self._rb_real.setChecked(True)
         for rb in (self._rb_real, self._rb_placeholder, self._rb_fake):
-            rb.setStyleSheet("color:#7a4800; font-weight:bold; border:none;")
+            rb.setStyleSheet(anon_header_label_stylesheet())
             ah.addWidget(rb)
 
         self._anon_btn_group = QButtonGroup(self)
@@ -672,6 +664,11 @@ class DocsTab(QWidget):
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self._table.setToolTip(
+            "Drag across rows to select a range. "
+            "Ctrl+click toggles a row; Shift+click extends the selection. "
+            "Alt+drag a row to copy it to another set (drop on the sidebar)."
+        )
         hh = self._table.horizontalHeader()
         from PySide6.QtWidgets import QHeaderView
 
@@ -880,6 +877,11 @@ class DocsTab(QWidget):
 
     # ── public ───────────────────────────────────────────────────────────
 
+    def reload_current_set(self) -> None:
+        """Reload the active set if one is selected (preserves table selection)."""
+        if self._evidence_set:
+            self._reload_preserving_selection()
+
     def reload(self, evidence_set: EvidenceSet) -> None:
         from evid.models import AnonMode, SetType
 
@@ -937,7 +939,8 @@ class DocsTab(QWidget):
                 continue
             try:
                 info_path = doc_dir / "info.yml"
-                meta_path = doc_dir / "evidmgr_meta.yml"
+                from evid.core.evid_meta import read_meta
+
                 info = {}
                 if info_path.exists():
                     try:
@@ -948,10 +951,7 @@ class DocsTab(QWidget):
                             "Skipping %s — bad info.yml: %s", doc_dir.name, exc
                         )
                         continue
-                meta = {}
-                if meta_path.exists():
-                    with meta_path.open("r", encoding="utf-8") as f:
-                        meta = yaml.safe_load(f) or {}
+                meta = read_meta(doc_dir)
                 tags_raw = info.get("tags", "")
                 if isinstance(tags_raw, list):
                     tags = [str(t).strip() for t in tags_raw if str(t).strip()]
@@ -991,10 +991,18 @@ class DocsTab(QWidget):
 
     def _refresh_table(self, docs: list[Document]) -> None:
         self._table.setRowCount(0)
+        if not docs:
+            self._table.insertRow(0)
+            empty = QTableWidgetItem("(No documents in this set)")
+            empty.setFlags(Qt.ItemFlag.NoItemFlags)
+            self._table.setItem(0, 2, empty)
+            return
         for doc in docs:
             row = self._table.rowCount()
             self._table.insertRow(row)
-            has_file = (doc.path / "original.pdf").exists()
+            from evid.services.doc_tags import resolve_doc_pdf
+
+            has_file = resolve_doc_pdf(doc.path) is not None
             has_json = (doc.path / "label.json").exists()
             self._table.setItem(row, 0, QTableWidgetItem("✓" if has_file else "✗"))
             self._table.setItem(row, 1, QTableWidgetItem("✓" if has_json else "✗"))
@@ -1064,7 +1072,9 @@ class DocsTab(QWidget):
             act_label = menu.addAction("Label")
             act_open_dir = menu.addAction("Open folder")
             act_open_pdf = menu.addAction("Open PDF")
-            act_open_pdf.setEnabled((doc.path / "original.pdf").exists())
+            from evid.services.doc_tags import resolve_doc_pdf
+
+            act_open_pdf.setEnabled(resolve_doc_pdf(doc.path) is not None)
             act_open_url = menu.addAction("Open URL")
             act_open_url.setEnabled(bool(doc.source_url))
             menu.addSeparator()
@@ -1101,7 +1111,11 @@ class DocsTab(QWidget):
         elif action is act_open_dir:
             self._on_open_dir()
         elif action is act_open_pdf and doc:
-            subprocess.Popen(["xdg-open", str(doc.path / "original.pdf")])
+            from evid.services.doc_tags import resolve_doc_pdf
+
+            pdf = resolve_doc_pdf(doc.path)
+            if pdf:
+                subprocess.Popen(["xdg-open", str(pdf)])
         elif action is act_open_url and doc:
             from PySide6.QtCore import QUrl
             from PySide6.QtGui import QDesktopServices
@@ -1209,16 +1223,14 @@ class DocsTab(QWidget):
             self._label_keys_list.clear()
             self._label_key_text.clear()
             return
+        from evid.core.evid_meta import read_meta
+
         info: dict = {}
-        meta: dict = {}
         info_path = doc.path / "info.yml"
-        meta_path = doc.path / "evidmgr_meta.yml"
         if info_path.exists():
             with info_path.open("r", encoding="utf-8") as f:
                 info = yaml.safe_load(f) or {}
-        if meta_path.exists():
-            with meta_path.open("r", encoding="utf-8") as f:
-                meta = yaml.safe_load(f) or {}
+        meta = read_meta(doc.path)
 
         # Compact UUID display
         self._detail_uuid_full = doc.uuid
@@ -1242,10 +1254,10 @@ class DocsTab(QWidget):
         doc = self._selected_doc()
         if not doc or not self._evidence_set:
             return
+        from evid.core.evid_meta import read_meta, write_meta
         from evid.core.models import InfoModel
 
         info_path = doc.path / "info.yml"
-        meta_path = doc.path / "evidmgr_meta.yml"
 
         info: dict = {}
         if info_path.exists():
@@ -1268,13 +1280,9 @@ class DocsTab(QWidget):
         with info_path.open("w", encoding="utf-8") as f:
             yaml.safe_dump(info, f, allow_unicode=True)
 
-        meta: dict = {}
-        if meta_path.exists():
-            with meta_path.open("r", encoding="utf-8") as f:
-                meta = yaml.safe_load(f) or {}
+        meta = read_meta(doc.path)
         meta["notes"] = self._detail_notes.toPlainText()
-        with meta_path.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(meta, f, allow_unicode=True)
+        write_meta(doc.path, meta)
 
         self._docs = self._load_documents()
         self._refresh_table(self._get_filtered_docs())
@@ -1420,11 +1428,30 @@ class DocsTab(QWidget):
         if not self._current_yaml_path or not self._evidence_set:
             return
         parent = self.window()
-        if hasattr(parent, "_anon_service"):
-            parent._anon_service.generate_fakes(
-                self._current_yaml_path, self._evidence_set.anon_language
-            )
-            self._load_entities_to_table(self._current_yaml_path)
+        if not hasattr(parent, "_anon_service"):
+            return
+        from evid.gui.workers import GenerateFakesWorker
+
+        progress_dlg = QProgressDialog("Generating fake values…", None, 0, 0, self)
+        progress_dlg.setWindowTitle("Anonymize")
+        progress_dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        progress_dlg.show()
+
+        worker = GenerateFakesWorker(
+            parent._anon_service,
+            self._current_yaml_path,
+            self._evidence_set.anon_language,
+        )
+        worker.finished.connect(
+            lambda: self._load_entities_to_table(self._current_yaml_path)
+        )
+        worker.finished.connect(progress_dlg.close)
+        worker.error.connect(progress_dlg.close)
+        worker.error.connect(
+            lambda msg: QMessageBox.critical(self, "Generate fakes failed", msg)
+        )
+        self._workers.append(worker)
+        worker.start()
 
     def _on_generate_yaml(self) -> None:
         if not self._evidence_set:
@@ -1474,11 +1501,18 @@ class DocsTab(QWidget):
         parent = self.window()
         if not hasattr(parent, "_anon_service"):
             return
+        progress_dlg = QProgressDialog(
+            "Extracting entities from selected documents…", None, 0, 0, self
+        )
+        progress_dlg.setWindowTitle("Anonymize")
+        progress_dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        progress_dlg.show()
+
         worker = AnonExtractWorker(parent._anon_service, self._evidence_set, selected)
-        worker.finished.connect(
-            self._on_anon_extract_done
-        )  # AutoConnection → main thread
+        worker.finished.connect(self._on_anon_extract_done)
         worker.error.connect(self._on_anon_extract_error)
+        worker.finished.connect(progress_dlg.close)
+        worker.error.connect(progress_dlg.close)
         self._workers.append(worker)
         worker.start()
 
@@ -1570,6 +1604,7 @@ class DocsTab(QWidget):
         self._fetch_worker = worker
         worker.ready.connect(self._on_url_ready)  # AutoConnection → main thread
         worker.error.connect(self._on_url_error)
+        fetch_dlg.canceled.connect(worker.cancel)
         self._workers.append(worker)
         worker.start()
 
@@ -1606,7 +1641,8 @@ class DocsTab(QWidget):
             self._fetch_worker = None
             if fetch_dlg:
                 fetch_dlg.close()
-            QMessageBox.critical(self, "URL fetch failed", msg)
+            if msg != "Cancelled":
+                QMessageBox.critical(self, "URL fetch failed", msg)
         except Exception:
             logger.exception("Error handling URL fetch error")
 
@@ -1822,56 +1858,37 @@ class DocsTab(QWidget):
 
     def _assign_tag_to_doc(self, tag_name: str, doc: Document) -> None:
         """Add *tag_name* to *doc* in both TagService and info.yml."""
-        from evid.models import TagItem
+        from evid.services.doc_tags import assign_doc_tag
 
         if not self._evidence_set:
             return
         try:
-            self._tag_service.get_tag(tag_name)
-        except KeyError:
-            self._tag_service.create_tag(tag_name, self._evidence_set.slug)
-        self._tag_service.add_items(
-            tag_name, [TagItem(set_slug=self._evidence_set.slug, doc_uuid=doc.uuid)]
-        )
-
-        info_path = doc.path / "info.yml"
-        try:
-            info: dict = {}
-            if info_path.exists():
-                with info_path.open("r", encoding="utf-8") as f:
-                    info = yaml.safe_load(f) or {}
-            existing = [t.strip() for t in info.get("tags", "").split(",") if t.strip()]
-            if tag_name not in existing:
-                existing.append(tag_name)
-                info["tags"] = ", ".join(existing)
-                with info_path.open("w", encoding="utf-8") as f:
-                    yaml.safe_dump(info, f, allow_unicode=True)
+            assign_doc_tag(
+                self._tag_service,
+                self._evidence_set.slug,
+                doc.uuid,
+                doc.path / "info.yml",
+                tag_name,
+            )
         except Exception:
-            logger.exception("Failed to update info.yml tags for %s", doc.uuid)
+            logger.exception("Failed to assign tag %s to %s", tag_name, doc.uuid)
 
     def _remove_tag_from_doc(self, tag_name: str, doc: Document) -> None:
         """Remove *tag_name* from *doc* in TagService and info.yml."""
+        from evid.services.doc_tags import remove_doc_tag
+
         if not self._evidence_set:
             return
         try:
-            self._tag_service.remove_item(tag_name, self._evidence_set.slug, doc.uuid)
+            remove_doc_tag(
+                self._tag_service,
+                self._evidence_set.slug,
+                doc.uuid,
+                doc.path / "info.yml",
+                tag_name,
+            )
         except Exception:
-            logger.debug("Tag %s not in TagService for %s", tag_name, doc.uuid)
-
-        info_path = doc.path / "info.yml"
-        try:
-            info: dict = {}
-            if info_path.exists():
-                with info_path.open("r", encoding="utf-8") as f:
-                    info = yaml.safe_load(f) or {}
-            existing = [t.strip() for t in info.get("tags", "").split(",") if t.strip()]
-            if tag_name in existing:
-                existing.remove(tag_name)
-                info["tags"] = ", ".join(existing)
-                with info_path.open("w", encoding="utf-8") as f:
-                    yaml.safe_dump(info, f, allow_unicode=True)
-        except Exception:
-            logger.exception("Failed to remove tag from info.yml for %s", doc.uuid)
+            logger.exception("Failed to remove tag %s from %s", tag_name, doc.uuid)
 
     # ── UUID row actions ──────────────────────────────────────────────────
 
@@ -2012,9 +2029,12 @@ class DocsTab(QWidget):
                 )
             return False
         if ev_type == QEvent.Type.MouseMove:
+            # Alt+drag copies to another set; plain left-drag is left to Qt for
+            # range / rubber-band multi-select (ExtendedSelection).
             if (
                 self._doc_drag_start is not None
                 and event.buttons() & Qt.MouseButton.LeftButton
+                and event.modifiers() & Qt.KeyboardModifier.AltModifier
             ):
                 from PySide6.QtWidgets import QApplication
 
@@ -2125,10 +2145,26 @@ class DocsTab(QWidget):
         from evid.gui.workers import CopyDocWorker
         from evid.services.vec_service import VecService
 
+        progress_dlg = QProgressDialog(
+            f"Copying {src_doc_dir.name[:8]}…", None, 0, 3, self
+        )
+        progress_dlg.setWindowTitle("Copy document")
+        progress_dlg.setWindowModality(Qt.WindowModality.WindowModal)
+        progress_dlg.show()
+
         worker_vec = VecService()
         worker = CopyDocWorker(src_doc_dir, dest_set, vec_service=worker_vec)
+
+        def _on_copy_progress(step: int, total: int, msg: str) -> None:
+            progress_dlg.setMaximum(total)
+            progress_dlg.setValue(step)
+            progress_dlg.setLabelText(msg)
+
+        worker.progress.connect(_on_copy_progress)
         worker.finished.connect(self._on_copy_done)
         worker.error.connect(self._on_copy_error)
+        worker.finished.connect(progress_dlg.close)
+        worker.error.connect(progress_dlg.close)
         self._workers.append(worker)
         worker.start()
 

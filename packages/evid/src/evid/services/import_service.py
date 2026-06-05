@@ -186,13 +186,13 @@ def _import_doc(src_dir: Path, dest_docs_dir: Path, set_type: str) -> None:
     # Copy the whole UUID dir (info.yml, original file, label.* if present)
     shutil.copytree(src_dir, dest_dir)
 
-    # Write evidmgr_meta.yml if it doesn't already exist
-    meta_path = dest_dir / "evidmgr_meta.yml"
-    if not meta_path.exists():
+    from evid.core.evid_meta import meta_path as get_meta_path
+    from evid.core.evid_meta import write_meta
+
+    if not get_meta_path(dest_dir).exists():
         meta = dict(_DEFAULT_META)
         if set_type == "anon":
             meta["anon_pending"] = True
-        with meta_path.open("w", encoding="utf-8") as f:
-            yaml.safe_dump(meta, f, allow_unicode=True)
+        write_meta(dest_dir, meta)
 
     logger.debug("Imported doc %s", src_dir.name)

@@ -76,11 +76,12 @@ class LabelController(QObject):
 
     @staticmethod
     def _find_source(doc_dir: Path) -> Path | None:
-        for name in ("original.pdf",):
-            p = doc_dir / name
-            if p.exists():
-                return p
-        for pattern in ("*.pdf", "*.txt"):
+        from evid.services.doc_tags import resolve_doc_pdf
+
+        pdf = resolve_doc_pdf(doc_dir)
+        if pdf:
+            return pdf
+        for pattern in ("*.txt",):
             candidates = list(doc_dir.glob(pattern))
             if candidates:
                 return candidates[0]

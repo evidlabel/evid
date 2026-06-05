@@ -234,16 +234,13 @@ class VecService:
         from evid.models import Document
 
         info_path = doc_dir / "info.yml"
-        meta_path = doc_dir / "evidmgr_meta.yml"
+        from evid.core.evid_meta import read_meta
 
         info = {}
         if info_path.exists():
             with info_path.open("r", encoding="utf-8") as f:
                 info = yaml.safe_load(f) or {}
-        meta = {}
-        if meta_path.exists():
-            with meta_path.open("r", encoding="utf-8") as f:
-                meta = yaml.safe_load(f) or {}
+        meta = read_meta(doc_dir)
 
         tags_raw = info.get("tags", "")
         if isinstance(tags_raw, list):
