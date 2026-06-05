@@ -31,8 +31,9 @@ jobs:
           uv pip install -e .
           # shellplot's setup.py imports pkg_resources without declaring
           # setuptools as a build requirement — pre-install it and disable
-          # build isolation so the build can find it.
-          uv pip install setuptools
+          # build isolation so the build can find it. setuptools >=81 dropped
+          # the bundled pkg_resources, so pin below that to keep it importable.
+          uv pip install "setuptools<81"
           uv pip install --no-build-isolation shellplot
 
       - name: Regenerate help.svg
