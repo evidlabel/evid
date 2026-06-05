@@ -4,7 +4,7 @@
 
 `evid` is a PDF evidence management tool for labelling, citing, and searching documents — primarily for legal and research workflows. It provides both a GUI and a full-featured CLI.
 
-Agent-oriented usage: see **[`SKILL.md`](SKILL.md)** in this directory (plus [`references/integrations.md`](references/integrations.md) for other evidskills tools).
+Agent-oriented usage: see **[`SKILL.md`](SKILL.md)** in this directory.
 
 ## Features
 
