@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QThread, Signal
 
 if TYPE_CHECKING:
-    from evid.models import Document, EvidenceSet
+    from evid.models import EvidenceSet
     from evid.services.doc_ingester import DocIngester
 
 
@@ -31,6 +31,7 @@ class IngestWorker(QThread):
         tags: list[str] | None = None,
         source_url: str = "",
         temp_dir: object = None,
+        do_index: bool = True,
     ) -> None:
         super().__init__()
         self._ingester = ingester
@@ -43,6 +44,7 @@ class IngestWorker(QThread):
         self._tags = tags or []
         self._source_url = source_url
         self._temp_dir = temp_dir
+        self._do_index = do_index
 
     def run(self) -> None:
         def on_progress(step: int, total: int, msg: str) -> None:
@@ -60,10 +62,75 @@ class IngestWorker(QThread):
                 tags=self._tags,
                 source_url=self._source_url,
                 temp_dir=self._temp_dir,
+                do_index=self._do_index,
             )
             self.finished.emit(doc.uuid)
         except Exception as exc:
             self.error.emit(str(exc))
+
+
+class IndexQueueWorker(QThread):
+    """Serialized background vecdb indexing queue.
+
+    A single long-lived thread that indexes documents one at a time, so only one
+    ChromaDB-writing subprocess ever touches a given set's vecdb at a moment —
+    no file-lock contention. Submit jobs with ``enqueue(doc_dir, evidence_set)``
+    from the GUI thread; stop cleanly with ``stop()``.
+    """
+
+    item_done = Signal(str, str, bool)  # set_slug, doc_uuid, ok
+    queue_changed = Signal(int)  # jobs still pending (incl. the in-flight one)
+    idle = Signal()  # emitted when the queue drains
+
+    def __init__(self) -> None:
+        super().__init__()
+        import queue as _queue
+        import threading
+
+        self._queue: _queue.Queue = _queue.Queue()
+        self._lock = threading.Lock()
+        self._pending = 0
+
+    def enqueue(self, doc_dir: Path, evidence_set: EvidenceSet) -> None:
+        with self._lock:
+            self._pending += 1
+            pending = self._pending
+        self._queue.put((doc_dir, evidence_set))
+        self.queue_changed.emit(pending)
+
+    def stop(self) -> None:
+        """Ask the worker to exit after finishing any in-flight job."""
+        self._queue.put(None)
+
+    def run(self) -> None:
+        import logging
+
+        from evid.services.doc_ingester import DocIngester
+        from evid.services.vec_service import VecService
+
+        _log = logging.getLogger(__name__)
+        ingester = DocIngester(vec_service=VecService())
+        while True:
+            job = self._queue.get()
+            if job is None:
+                break
+            doc_dir, evidence_set = job
+            doc_uuid = doc_dir.name
+            ok = False
+            try:
+                _log.info(
+                    "Background indexing %s into '%s'", doc_uuid, evidence_set.slug
+                )
+                ok = bool(ingester.index_existing(doc_dir, evidence_set))
+            except Exception as exc:
+                _log.exception("Background index failed for %s: %s", doc_uuid, exc)
+            with self._lock:
+                self._pending = max(0, self._pending - 1)
+                pending = self._pending
+            self.item_done.emit(evidence_set.slug, doc_uuid, ok)
+            self.queue_changed.emit(pending)
+            if pending == 0:
+                self.idle.emit()
 
 
 class UrlFetchWorker(QThread):
@@ -152,42 +219,6 @@ class UrlFetchWorker(QThread):
             self.ready.emit(str(pdf_path), page_title or "", authors, self._url)
         except Exception as exc:
             self.error.emit(str(exc))
-
-
-class IndexWorker(QThread):
-    """Index a list of already-imported documents into the vector store."""
-
-    progress = Signal(int, int, str)  # done, total, message
-    finished = Signal()
-    error = Signal(str)
-
-    def __init__(
-        self,
-        ingester: DocIngester,
-        docs: list[Document],
-        evidence_set: EvidenceSet,
-    ) -> None:
-        super().__init__()
-        self._ingester = ingester
-        self._docs = docs
-        self._evidence_set = evidence_set
-
-    def run(self) -> None:
-        import logging
-
-        _log = logging.getLogger(__name__)
-        total = len(self._docs)
-        _log.info("IndexWorker: %d document(s) to index", total)
-        for done, doc in enumerate(self._docs, 1):
-            self.progress.emit(done, total, f"Indexing {doc.label[:60]}…")
-            _log.debug("[%d/%d] Indexing %s (%s)", done, total, doc.label, doc.uuid)
-            try:
-                self._ingester.index_existing(doc.path, self._evidence_set)
-            except Exception as exc:
-                self.error.emit(f"{doc.uuid}: {exc}")
-                return
-        _log.info("IndexWorker: finished indexing %d document(s)", total)
-        self.finished.emit()
 
 
 class LabelWorker(QThread):

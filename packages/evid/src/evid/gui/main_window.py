@@ -226,6 +226,13 @@ class EvidWindow(QMainWindow):
         if self._sidebar.active_set() and self._sidebar.active_set().slug == set_slug:
             self._docs_tab.reload_current_set()
 
+    def closeEvent(self, event) -> None:
+        try:
+            self._docs_tab.shutdown()
+        except Exception:
+            logger.exception("Error shutting down docs tab")
+        super().closeEvent(event)
+
     def _setup_shortcuts(self) -> None:
         self._tab_filter = _TabCycleFilter(self._stack, self._tab_bar)
         QApplication.instance().installEventFilter(self._tab_filter)

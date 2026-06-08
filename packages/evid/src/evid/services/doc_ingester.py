@@ -51,12 +51,17 @@ class DocIngester:
         tags: list[str] | None = None,
         source_url: str = "",
         temp_dir: object = None,
+        do_index: bool = True,
     ) -> Document:
         """Ingest a single PDF into *evidence_set*. Returns the new Document.
 
         User-supplied *title*, *authors*, *dates* win over values auto-extracted
         from PDF metadata.  *temp_dir* (a ``tempfile.TemporaryDirectory``) is
         cleaned up after the file is copied, if provided.
+
+        When *do_index* is False the slow step-6 vector index is skipped; the doc
+        is added but left ``indexed=False`` so it can be indexed later (e.g. via a
+        background queue or ``index_existing``).
         """
         tags = tags or []
         p = self.progress
@@ -174,9 +179,11 @@ class DocIngester:
             logger.exception("generate_bib_from_typ failed for %s", doc_uuid)
 
         # ── 6. Vector index ───────────────────────────────────────────────────
-        p(6, n, "Indexing into vector store")
         doc = self._make_document(doc_dir, doc_uuid, doc_label, tags, source_url)
-        if self.vec_service is not None:
+        if not do_index:
+            logger.debug("Skipping vector index for %s (do_index=False)", doc_uuid)
+        elif self.vec_service is not None:
+            p(6, n, "Indexing into vector store")
             try:
                 typ_text = (
                     typ_path.read_text(encoding="utf-8") if typ_path.exists() else ""

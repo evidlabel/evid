@@ -586,25 +586,3 @@ def show_callback(db: str = None):
         else:
             source = "default"
         print(f"  {key}: {value} ({source})")
-
-
-def export_prompt_callback(
-    db: str = None,
-    recipe: str = None,
-    output: str = None,
-):
-    """Export a recipe YAML to a Markdown prompt document."""
-    from evid.commands.export_prompt import (
-        export_markdown,
-        get_evid_api,
-    )
-
-    if not recipe:
-        sys.exit("--recipe is required.")
-    if not output:
-        sys.exit("--output is required.")
-    export_markdown(
-        recipe_path=Path(recipe).expanduser(),
-        output_path=Path(output).expanduser(),
-        evid_api=get_evid_api(DIRECTORY),
-    )

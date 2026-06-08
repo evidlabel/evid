@@ -1,2 +1,0 @@
-- What is the background context for this case?
-- What prior decisions or policies are relevant?

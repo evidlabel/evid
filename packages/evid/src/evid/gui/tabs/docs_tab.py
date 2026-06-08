@@ -567,10 +567,10 @@ class DocsTab(QWidget):
         self._evidence_set: EvidenceSet | None = None
         self._docs: list[Document] = []
         self._workers: list = []
+        # Long-lived serialized background vecdb index queue (created lazily).
+        self._index_queue: object = None
         self._current_yaml_path: Path | None = None
         # Active progress dialogs (one per operation type; only one of each runs at a time)
-        self._ingest_dlg: QProgressDialog | None = None
-        self._index_dlg: QProgressDialog | None = None
         self._fetch_dlg: QProgressDialog | None = None
         from evid.gui.label_controller import LabelController
 
@@ -1672,17 +1672,10 @@ class DocsTab(QWidget):
             logger.exception("Duplicate check failed; proceeding with ingest")
         from evid.gui.workers import IngestWorker
         from evid.services.doc_ingester import DocIngester
-        from evid.services.vec_service import VecService
 
-        progress_dlg = QProgressDialog(f"Ingesting {pdf_path.name}…", None, 0, 7, self)
-        progress_dlg.setWindowTitle("Ingesting")
-        progress_dlg.setWindowModality(Qt.WindowModality.WindowModal)
-        progress_dlg.show()
-
-        if self._evidence_set:
-            self._vec_service.close(self._evidence_set.slug)
-        worker_vec = VecService()
-        worker_ingester = DocIngester(vec_service=worker_vec)
+        # Fast add only — the slow vecdb step is deferred to the serialized
+        # background queue (see _on_ingest_done) so the GUI stays usable.
+        worker_ingester = DocIngester(vec_service=None)
 
         worker = IngestWorker(
             worker_ingester,
@@ -1695,35 +1688,54 @@ class DocsTab(QWidget):
             tags=dlg.tags,
             source_url=dlg.url,
             temp_dir=getattr(dlg, "_temp_dir", None),
+            do_index=False,
         )
-        self._ingest_dlg = progress_dlg
         worker.progress.connect(
             self._on_ingest_progress
         )  # AutoConnection → main thread
         worker.finished.connect(self._on_ingest_done)
         worker.error.connect(self._on_ingest_error)
         self._workers.append(worker)
+        self._status(f"Adding {pdf_path.name}…")
         worker.start()
 
+    def _status(self, msg: str, timeout: int = 0) -> None:
+        """Show a non-blocking message in the main-window status bar."""
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            self.window().statusBar().showMessage(msg, timeout)
+
+    def _ensure_index_queue(self):
+        """Lazily create and start the single background index queue worker."""
+        if self._index_queue is None:
+            from evid.gui.workers import IndexQueueWorker
+
+            q = IndexQueueWorker()
+            q.item_done.connect(self._on_bg_index_item_done)
+            q.queue_changed.connect(self._on_bg_index_queue_changed)
+            q.idle.connect(self._on_bg_index_idle)
+            q.start()
+            self._index_queue = q
+        return self._index_queue
+
     def _on_ingest_progress(self, step: int, total: int, msg: str) -> None:
-        try:
-            if self._ingest_dlg:
-                self._ingest_dlg.setValue(step)
-                self._ingest_dlg.setLabelText(msg)
-        except Exception:
-            logger.exception("Error updating ingest progress")
+        self._status(f"{msg}…")
 
     def _on_ingest_done(self, doc_uuid: str) -> None:
         try:
-            if self._ingest_dlg:
-                self._ingest_dlg.close()
-                self._ingest_dlg = None
             if self._evidence_set:
                 self._signals.doc_ingested.emit(self._evidence_set.slug, doc_uuid)
             self._docs = self._load_documents()
             self._refresh_table(self._get_filtered_docs())
             self._pill_pool.rebuild(self._docs)
             self._pill_pool.set_active_tags(self._active_tag_filter)
+            # Defer the slow vecdb index to the serialized background queue.
+            if self._evidence_set:
+                doc_dir = self._evidence_set.path / "docs" / doc_uuid
+                # Release the main client so the indexing subprocess owns the vecdb.
+                self._vec_service.close(self._evidence_set.slug)
+                self._ensure_index_queue().enqueue(doc_dir, self._evidence_set)
             if self._open_in_labeller_after_ingest:
                 self._open_in_labeller_after_ingest = False
                 for row in range(self._table.rowCount()):
@@ -1737,13 +1749,41 @@ class DocsTab(QWidget):
 
     def _on_ingest_error(self, msg: str) -> None:
         try:
-            if self._ingest_dlg:
-                self._ingest_dlg.close()
-                self._ingest_dlg = None
+            self._status("")
             QMessageBox.critical(self, "Ingest failed", msg)
             self._signals.ingestion_error.emit(msg)
         except Exception:
             logger.exception("Error handling ingest failure: %s", msg)
+
+    # ── background index queue ──────────────────────────────────────────────
+
+    def _on_bg_index_item_done(self, set_slug: str, doc_uuid: str, ok: bool) -> None:
+        try:
+            if not ok:
+                logger.warning("Background index did not complete for %s", doc_uuid)
+            if self._evidence_set and self._evidence_set.slug == set_slug:
+                self._docs = self._load_documents()
+                self._refresh_table(self._get_filtered_docs())
+            self._signals.doc_indexed.emit(set_slug, doc_uuid)
+        except Exception:
+            logger.exception("Error handling background index of %s", doc_uuid)
+
+    def _on_bg_index_queue_changed(self, pending: int) -> None:
+        if pending > 0:
+            self._status(f"Indexing in background ({pending} queued)…")
+
+    def _on_bg_index_idle(self) -> None:
+        self._status("Indexing complete", 4000)
+
+    def shutdown(self) -> None:
+        """Stop the background index queue cleanly (called on app close)."""
+        q = self._index_queue
+        if q is not None:
+            try:
+                q.stop()
+                q.wait(5000)
+            except Exception:
+                logger.exception("Error stopping background index queue")
 
     # ── indexing ──────────────────────────────────────────────────────────
 
@@ -1758,58 +1798,13 @@ class DocsTab(QWidget):
             )
             return
 
-        progress_dlg = QProgressDialog(
-            f"Indexing {len(unindexed)} document(s)…", None, 0, len(unindexed), self
-        )
-        progress_dlg.setWindowTitle("Indexing")
-        progress_dlg.setWindowModality(Qt.WindowModality.WindowModal)
-        progress_dlg.show()
-
-        from evid.gui.workers import IndexWorker
-        from evid.services.doc_ingester import DocIngester
-        from evid.services.vec_service import VecService
-
+        # Route through the serialized background queue so the GUI stays usable.
+        # Release the main client so the indexing subprocesses own the vecdb.
         self._vec_service.close(self._evidence_set.slug)
-        worker_vec = VecService()
-        worker_ingester = DocIngester(vec_service=worker_vec)
-
-        self._index_dlg = progress_dlg
-        worker = IndexWorker(worker_ingester, unindexed, self._evidence_set)
-        worker.progress.connect(self._on_index_progress)  # AutoConnection → main thread
-        worker.finished.connect(self._on_index_done)
-        worker.error.connect(self._on_index_error)
-        self._workers.append(worker)
-        worker.start()
-
-    def _on_index_progress(self, done: int, total: int, msg: str) -> None:
-        try:
-            if self._index_dlg:
-                self._index_dlg.setValue(done)
-                self._index_dlg.setLabelText(msg)
-        except Exception:
-            logger.exception("Error updating index progress")
-
-    def _on_index_done(self) -> None:
-        try:
-            if self._index_dlg:
-                self._index_dlg.close()
-                self._index_dlg = None
-            self._docs = self._load_documents()
-            self._refresh_table(self._docs)
-            if self._evidence_set:
-                self._signals.doc_indexed.emit(self._evidence_set.slug, "")
-        except Exception:
-            logger.exception("Error completing index operation")
-
-    def _on_index_error(self, msg: str) -> None:
-        try:
-            if self._index_dlg:
-                self._index_dlg.close()
-                self._index_dlg = None
-            QMessageBox.critical(self, "Indexing failed", msg)
-            self._signals.ingestion_error.emit(msg)
-        except Exception:
-            logger.exception("Error handling index failure: %s", msg)
+        q = self._ensure_index_queue()
+        for doc in unindexed:
+            q.enqueue(doc.path, self._evidence_set)
+        self._status(f"Indexing {len(unindexed)} document(s) in background…")
 
     # ── editor / dir ──────────────────────────────────────────────────────
 

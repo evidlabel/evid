@@ -10,7 +10,6 @@ from evid.cli.callbacks import (
     add_callback,
     bibtex_callback,
     create_callback,
-    export_prompt_callback,
     gather_callback,
     gui_callback,
     label_callback,
@@ -372,23 +371,6 @@ config_group.commands.append(
         name="update",
         help="Initialize or update .evidrc with defaults",
         callback=update_callback,
-    )
-)
-
-# ── prompt ─────────────────────────────────────────────────────────────────────
-
-prompt_group = group(name="prompt", help="Recipe and prompt operations")
-app.subgroups.append(prompt_group)
-
-prompt_group.commands.append(
-    command(
-        name="export",
-        help="Export a recipe YAML to a Markdown prompt document",
-        callback=export_prompt_callback,
-        options=[
-            option(flags=["--recipe"], arg_type=str, help="Path to recipe YAML"),
-            option(flags=["-o", "--output"], arg_type=str, help="Output .md path"),
-        ],
     )
 )
 
