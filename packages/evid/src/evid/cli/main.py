@@ -16,6 +16,7 @@ from evid.cli.callbacks import (
     label_callback,
     list_datasets_callback,
     list_docs_callback,
+    quote_callback,
     rebut_callback,
     search_meta_callback,
     search_vec_callback,
@@ -44,10 +45,16 @@ _DATASET_OPTION = option(
 
 
 def main():
-    # Parse --db manually before treeparse sees argv
+    # Parse --db / --verbose manually before treeparse sees argv
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("-d", "--db", default=None)
+    parser.add_argument("-v", "--verbose", action="store_true")
     args, unknown = parser.parse_known_args()
+
+    from evid.logging_config import configure_logging
+
+    configure_logging(verbose=args.verbose)
+
     import evid.cli.callbacks
 
     evid.cli.callbacks.DIRECTORY_EXPLICIT = args.db is not None
@@ -161,6 +168,11 @@ doc_group.commands.append(
                 flag=True,
                 help="Auto-label paragraphs when opening labeler",
             ),
+            option(
+                flags=["--no-index"],
+                flag=True,
+                help="Skip building the vector index (faster, quieter; not searchable until re-indexed)",
+            ),
         ],
     )
 )
@@ -200,6 +212,47 @@ doc_group.commands.append(
         options=[
             _DATASET_OPTION,
             option(flags=["-u", "--uuid"], arg_type=str, help="Document UUID"),
+        ],
+    )
+)
+
+doc_group.commands.append(
+    command(
+        name="quote",
+        help="Machine-extract verbatim quotes from a doc (fuzzy) into machine.hayagriva",
+        callback=quote_callback,
+        options=[
+            _DATASET_OPTION,
+            option(flags=["-u", "--uuid"], arg_type=str, help="Document UUID"),
+            option(
+                flags=["--from"],
+                dest="from_path",
+                arg_type=str,
+                help="quotes.json of candidate quotes (JSON, non-citable input)",
+            ),
+            option(
+                flags=["--from-search"],
+                dest="from_search",
+                arg_type=str,
+                help="Seed candidates from a vector search over the set (one of --from/--from-search)",
+            ),
+            option(
+                flags=["-n", "--n"],
+                arg_type=int,
+                default=5,
+                help="With --from-search: number of top chunks to use as candidates",
+            ),
+            option(
+                flags=["--min-ratio"],
+                arg_type=float,
+                default=0.78,
+                help="Fuzzy match threshold (0-1)",
+            ),
+            option(
+                flags=["--refresh"],
+                flag=True,
+                help="Re-extract the cached text.txt before matching",
+            ),
         ],
     )
 )

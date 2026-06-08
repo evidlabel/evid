@@ -63,13 +63,20 @@ def gather_dataset(
         for err in errors:
             logger.warning(err)
 
-    if not bib_texts:
+    # Machine quotes (machine.hayagriva, written by `evid doc quote`) are merged
+    # in alongside the manual #lab snippets — and may be the only content present.
+    machine_entries = _collect_machine_hayagriva(dataset_dir)
+
+    if not bib_texts and not machine_entries:
         sys.exit(f"No BibTeX content collected from dataset '{dataset}'.")
 
     combined = "\n".join(bib_texts)
     fixed = _fix_duplicate_keys(combined)
 
     suffix = output.suffix.lower()
+    if suffix in (".bib", ".typ"):
+        fixed = _merge_machine_bibtex(combined, machine_entries)
+
     if suffix == ".bib":
         output.write_text(fixed, encoding="utf-8")
     elif suffix == ".typ":
@@ -95,7 +102,11 @@ def gather_dataset(
             json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
         )
     elif suffix in (".yaml", ".yml"):
-        output.write_text(_bib_to_hayagriva(fixed), encoding="utf-8")
+        manual = _bib_to_hayagriva(fixed)
+        output.write_text(
+            manual + _machine_hayagriva_block(manual, machine_entries),
+            encoding="utf-8",
+        )
     else:
         sys.exit(
             f"Unsupported output format '{suffix}'. "
@@ -166,6 +177,121 @@ def _collect_bibs_existing(dataset_dir: Path) -> tuple[list[str], list[str]]:
         bib_texts.append(bib_file.read_text(encoding="utf-8"))
 
     return bib_texts, errors
+
+
+def _load_machine_entries(uuid_dir: Path) -> dict[str, dict]:
+    """Parse a doc's machine.hayagriva into a {key: item} dict (empty if absent)."""
+    mfile = uuid_dir / "machine.hayagriva"
+    if not mfile.exists():
+        return {}
+    try:
+        data = yaml.safe_load(mfile.read_text(encoding="utf-8"))
+    except Exception as exc:
+        logger.warning(
+            "Could not parse machine.hayagriva in %s: %s", uuid_dir.name, exc
+        )
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def _collect_machine_hayagriva(dataset_dir: Path) -> dict[str, dict]:
+    """Merge every doc's machine.hayagriva entries into one {key: item} dict.
+
+    Keys are namespaced by uuid prefix, so entries from different docs do not
+    collide; within a doc the file already holds a single ``:main``.
+    """
+    merged: dict[str, dict] = {}
+    for uuid_dir in sorted(d for d in dataset_dir.iterdir() if d.is_dir()):
+        for key, item in _load_machine_entries(uuid_dir).items():
+            merged.setdefault(key, item)
+    return merged
+
+
+def _machine_hayagriva_block(manual_yaml: str, entries: dict[str, dict]) -> str:
+    """Serialise machine entries not already present in the manual Hayagriva.
+
+    Skips keys already emitted by the manual ``label.bib`` pipeline (notably a
+    shared ``<prefix>:main``) so the merged YAML has no duplicate keys, while
+    preserving machine-only fields like ``serial-number`` and ``page``.
+    """
+    if not entries:
+        return ""
+    try:
+        manual_keys = set(yaml.safe_load(manual_yaml) or {})
+    except Exception:
+        manual_keys = set()
+
+    import datetime
+
+    from evid import __version__ as _evid_version
+
+    gen_date = datetime.date.today().isoformat()
+    chunks: list[str] = []
+    for key, item in entries.items():
+        if key in manual_keys:
+            continue
+        wm = f"# generated-by: evid v{_evid_version} · {gen_date}"
+        url = item.get("url") if isinstance(item, dict) else None
+        if url:
+            wm += f" · {url}"
+        chunks.append(
+            wm
+            + "\n"
+            + yaml.safe_dump(
+                {key: item}, allow_unicode=True, sort_keys=False, width=1000
+            )
+        )
+    return "".join(chunks)
+
+
+def _machine_to_bibtex(entries: dict[str, dict]) -> str:
+    """Convert machine Hayagriva quote entries into BibTeX @article entries.
+
+    ``:main`` entries are skipped (the manual pipeline supplies document-level
+    entries; machine quote entries are self-contained). ``serial-number`` has no
+    BibTeX field and is dropped — BibTeX is a lossy export. Use a ``.yaml`` gather
+    for full fidelity.
+    """
+    main_titles = {
+        k.rsplit(":", 1)[0]: v.get("title", "")
+        for k, v in entries.items()
+        if k.endswith(":main") and isinstance(v, dict)
+    }
+
+    db = btp.bibdatabase.BibDatabase()
+    bib_entries = []
+    for key, item in entries.items():
+        if key.endswith(":main") or not isinstance(item, dict):
+            continue
+        entry = {"ENTRYTYPE": "article", "ID": key}
+        if item.get("title"):
+            entry["title"] = " ".join(str(item["title"]).split())
+        if item.get("author"):
+            entry["author"] = str(item["author"])
+        if item.get("date"):
+            entry["date"] = str(item["date"])
+        if item.get("url"):
+            entry["url"] = str(item["url"])
+        if item.get("page-range"):
+            entry["pages"] = str(item["page-range"])
+        prefix = key.rsplit(":", 1)[0]
+        if main_titles.get(prefix):
+            entry["journal"] = " ".join(str(main_titles[prefix]).split())
+        bib_entries.append(entry)
+
+    if not bib_entries:
+        return ""
+    db.entries = bib_entries
+    return BibTexWriter().write(db)
+
+
+def _merge_machine_bibtex(combined: str, entries: dict[str, dict]) -> str:
+    """Combine manual BibTeX with machine quote BibTeX, deduplicating keys."""
+    machine = _machine_to_bibtex(entries)
+    merged = combined if not machine else f"{combined}\n{machine}"
+    return _fix_duplicate_keys(merged)
 
 
 def _fix_duplicate_keys(bib_text: str) -> str:
@@ -277,6 +403,7 @@ def _print_gather_stats(
     n_docs = sum(1 for d in uuid_dirs if (d / "info.yml").exists())
     n_with_bib = sum(1 for d in uuid_dirs if (d / "label.bib").exists())
     n_snippets = 0
+    n_machine = 0
     for d in uuid_dirs:
         bib_file = d / "label.bib"
         if bib_file.exists():
@@ -290,6 +417,7 @@ def _print_gather_stats(
                 )
             except Exception:
                 pass
+        n_machine += sum(1 for k in _load_machine_entries(d) if not k.endswith(":main"))
 
     console = Console()
     table = Table(title=f"gather: {dataset}", show_header=True)
@@ -299,6 +427,8 @@ def _print_gather_stats(
     table.add_row("Documents", str(n_docs))
     table.add_row("With snippets", str(n_with_bib))
     table.add_row("Snippets", str(n_snippets))
+    if n_machine:
+        table.add_row("Machine quotes", str(n_machine))
     if errors:
         table.add_row("Warnings", str(len(errors)), end_section=True)
     console.print(table)
@@ -348,6 +478,14 @@ def _dataset_to_markdown(
                 logger.warning(
                     "Could not parse label.bib in %s: %s", uuid_dir.name, exc
                 )
+
+        for key, item in _load_machine_entries(uuid_dir).items():
+            if key.endswith(":main") or not isinstance(item, dict):
+                continue
+            label = key.split(":", 1)[1] if ":" in key else key
+            snippets.append(
+                (label, str(item.get("page-range", "")), str(item.get("title", "")))
+            )
 
         docs.append((info, snippets))
 
@@ -433,6 +571,14 @@ def _dataset_to_json(dataset_dir: Path) -> dict:
                 logger.warning(
                     "Could not parse label.bib in %s: %s", uuid_dir.name, exc
                 )
+
+        for key, item in _load_machine_entries(uuid_dir).items():
+            if key.endswith(":main") or not isinstance(item, dict):
+                continue
+            snippets[key] = {
+                "pageno": str(item.get("page-range", "")),
+                "text": str(item.get("title", "")),
+            }
 
         result[info.uuid] = {
             "url": info.url,

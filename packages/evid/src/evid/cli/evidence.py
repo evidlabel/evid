@@ -8,23 +8,22 @@ import tempfile
 import uuid
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import unquote
 
 import arrow
 import requests
 import yaml
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.table import Table
 
 from evid.cli.dataset import docs_dir
 from evid.core.label import create_label  # Moved to new file
 from evid.core.models import InfoModel  # Added for validation
-from evid.core.pdf_metadata import extract_pdf_metadata  # Moved to new file
+from evid.core.pdf_metadata import extract_html_date, extract_pdf_metadata
 from evid.core.typst_generation import _BROWSER_HEADERS, web_to_pdf
 from evid.utils.text import normalize_text
 
-# Configure Rich handler for colored logging
-logging.basicConfig(handlers=[RichHandler(rich_tracebacks=True)], level=logging.INFO)
+# Logging is configured centrally in evid.logging_config (called from main()).
 logger = logging.getLogger(__name__)
 
 
@@ -43,6 +42,7 @@ def add_evidence(
     source: str,
     label: bool = False,
     autolabel: bool = False,
+    no_index: bool = False,
 ) -> None:
     """Add a PDF or text content to the specified dataset."""
     is_url = source.startswith(("http://", "https://"))
@@ -50,6 +50,7 @@ def add_evidence(
     is_pdf = False
     pdf_file = None
     web_page_title = ""  # set when an HTML page is rendered to PDF via Typst
+    web_page_date = ""  # published date parsed from the page's own HTML metadata
     _web_tmp = None  # tempdir kept alive until target_path is written
 
     if is_url:
@@ -57,7 +58,10 @@ def add_evidence(
             response = requests.get(source, timeout=15, headers=_BROWSER_HEADERS)
             response.raise_for_status()
             content_type = response.headers.get("Content-Type", "")
-            file_name = source.rsplit("/", maxsplit=1)[-1] or "document"
+            # Decode percent-encoding so non-ASCII filenames (e.g. Danish
+            # "%C3%A5" → "å") become the real characters in the title/label,
+            # not the raw URL escapes.
+            file_name = unquote(source.rsplit("/", maxsplit=1)[-1]) or "document"
 
             if "application/pdf" in content_type:
                 pdf_file = BytesIO(response.content)
@@ -73,6 +77,9 @@ def add_evidence(
                     Path(_web_tmp.name),
                     html=response.text,
                 )
+                # Parse the page's own publish date; the rendered PDF's creation
+                # date is "now", which would otherwise become a wrong citation date.
+                web_page_date = extract_html_date(response.text)
                 pdf_file = BytesIO(rendered_pdf.read_bytes())
                 file_name = rendered_pdf.name
                 is_pdf = True
@@ -122,6 +129,8 @@ def add_evidence(
             from urllib.parse import urlparse
 
             authors = urlparse(source).netloc
+        # Prefer the page's own date; never the rendered PDF's "today" creation date.
+        date = web_page_date
 
     label_str = title.replace(" ", "_").lower()
 
@@ -180,21 +189,27 @@ def add_evidence(
     except Exception as e:
         logger.warning("label.typ generation failed for %s: %s", unique_id.hex, e)
 
-    # Vector index
-    try:
-        from evid.services.doc_ingester import DocIngester
-        from evid.services.set_manager import SetManager
-        from evid.services.vec_service import VecService
+    # Vector index (skipped with --no-index — faster, quieter add; the doc is then
+    # not vector-searchable until re-indexed).
+    if no_index:
+        logger.info("Skipping vector index for %s (--no-index)", unique_id.hex)
+    else:
+        try:
+            from evid.services.doc_ingester import DocIngester
+            from evid.services.set_manager import SetManager
+            from evid.services.vec_service import VecService
 
-        evidence_set = SetManager(directory).load_set(dataset)
-        DocIngester(vec_service=VecService()).index_existing(unique_dir, evidence_set)
-        logger.info("Indexed %s into vector store", unique_id.hex)
-    except Exception as e:
-        logger.warning(
-            "Vector indexing failed for %s (run 'evid set index' to retry): %s",
-            unique_id.hex,
-            e,
-        )
+            evidence_set = SetManager(directory).load_set(dataset)
+            DocIngester(vec_service=VecService()).index_existing(
+                unique_dir, evidence_set
+            )
+            logger.info("Indexed %s into vector store", unique_id.hex)
+        except Exception as e:
+            logger.warning(
+                "Vector indexing failed for %s: %s",
+                unique_id.hex,
+                e,
+            )
 
     if label:
         logger.info(f"Opening label file for {file_name}...")

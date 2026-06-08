@@ -47,6 +47,25 @@ def _rejoin_split_urls(text: str) -> str:
     return text
 
 
+_DEHYPHEN_RE = re.compile(r"([a-zæøåäöü])-\s*\n\s*([a-zæøåäöü])")
+
+
+def _dehyphenate(text: str) -> str:
+    """Rejoin words split by an end-of-line soft hyphen from PDF/HTML wrapping.
+
+    ``"mar-\\nkant"`` → ``"markant"``. Conservative: only joins when both sides of
+    the ``-\\n`` are lowercase letters, so a hyphen followed by a capital or a digit
+    (often a real compound or range) is left alone.
+
+    Known trade-off: a genuine hard-hyphen compound that happens to wrap *at the
+    hyphen* (e.g. ``"eks-\\npartner"``) is merged wrongly (``"ekspartner"``). This is
+    rare; verbatim spans produced from de-hyphenated text should be eyeballed when
+    they look odd. A hard-hyphen compound that does not wrap (``"eks-partner"`` on one
+    line) is untouched.
+    """
+    return _DEHYPHEN_RE.sub(r"\1\2", text)
+
+
 def clean_text_for_typst(text: str) -> str:
     """Clean text for Typst by expanding ligatures and commenting lines with '@'."""
     logger.info(f"clean_text_for_typst called with text length: {len(text)}")

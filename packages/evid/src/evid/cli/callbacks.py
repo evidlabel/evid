@@ -7,7 +7,6 @@ from pathlib import Path
 
 import yaml
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.table import Table
 
 from evid.cli.dataset import (
@@ -29,11 +28,15 @@ from evid.cli.tags import assign_tag, list_tags, remove_tag, show_tag
 from evid.core.bibtex import generate_bibtex
 from evid.core.gather import gather_dataset
 from evid.core.models import ConfigModel
+from evid.core.quote_extract import (
+    candidates_from_search,
+    extract_quotes,
+    load_quotes_json,
+)
 from evid.core.rebut_doc import rebut_doc
 from evid.models import Document
 
-# Set up logging with Rich handler
-logging.basicConfig(handlers=[RichHandler()], level=logging.DEBUG, rich_tracebacks=True)
+# Logging is configured centrally in evid.logging_config (called from main()).
 logger = logging.getLogger(__name__)
 
 DIRECTORY = None
@@ -202,10 +205,11 @@ def add_callback(
     label: bool = False,
     autolabel: bool = False,
     dataset: str = None,
+    no_index: bool = False,
 ):
     """Add a document to a dataset."""
     dataset = _resolve_dataset(dataset, "Select dataset for adding document")
-    add_evidence(DIRECTORY, dataset, source, label, autolabel)
+    add_evidence(DIRECTORY, dataset, source, label, autolabel, no_index=no_index)
 
 
 def bibtex_callback(db: str = None, dataset: str = None, uuid: str = None):
@@ -219,6 +223,100 @@ def bibtex_callback(db: str = None, dataset: str = None, uuid: str = None):
     if not typ_file.exists():
         sys.exit(f"label.typ not found in {dataset}/{uuid}")
     generate_bibtex([typ_file])
+
+
+def _search_candidates(dataset: str, uuid: str, query: str, n: int):
+    """Seed quote candidates from a vector search restricted to one document."""
+    from evid.services.set_manager import SetManager
+    from evid.services.vec_service import VecService
+
+    try:
+        evidence_set = SetManager(DIRECTORY).load_set(dataset)
+    except FileNotFoundError:
+        sys.exit(f"Dataset '{dataset}' not found.")
+    try:
+        # Over-fetch, then filter to the target document and cap at n.
+        results = VecService().query(evidence_set, query, n_results=max(n * 3, n))
+    except Exception as exc:
+        sys.exit(f"Vector search failed: {exc}")
+    return candidates_from_search(results, uuid, n)
+
+
+def quote_callback(
+    db: str = None,
+    dataset: str = None,
+    uuid: str = None,
+    from_path: str = None,
+    from_search: str = None,
+    n: int = 5,
+    min_ratio: float = 0.78,
+    refresh: bool = False,
+):
+    """Machine-extract verbatim quotes from a document into machine.hayagriva.
+
+    Candidates come either from a JSON file (``--from``, deliberately not Hayagriva
+    so the paraphrased input is never citable) or from a vector search over the set
+    (``--from-search``, which seeds candidates from the top-``n`` matching chunks).
+    Only the verbatim, rapidfuzz-verified output is written as Hayagriva. Prints
+    citation keys only — never quote text.
+    """
+    dataset = _resolve_dataset(dataset, "Select dataset to quote", allow_create=False)
+    if bool(from_path) == bool(from_search):
+        sys.exit(
+            "Provide exactly one of --from (quotes.json) or --from-search <query>."
+        )
+    if not uuid:
+        uuid = select_evidence(DIRECTORY, dataset, "Select document to quote")
+    doc_dir = docs_dir(DIRECTORY, dataset) / uuid
+    if not doc_dir.exists():
+        sys.exit(f"Document directory {doc_dir} does not exist.")
+
+    if from_search:
+        candidates = _search_candidates(dataset, uuid, from_search, n)
+        if not candidates:
+            sys.exit(
+                f"Vector search for '{from_search}' returned no chunks for {uuid}. "
+                "Is the document indexed? (added without --no-index)"
+            )
+        print(
+            f'Seeding candidates from vector search: "{from_search}" (top {len(candidates)})'
+        )
+    else:
+        try:
+            quotes_file = load_quotes_json(Path(from_path).expanduser())
+        except (ValueError, OSError) as exc:
+            sys.exit(f"Could not load quotes JSON: {exc}")
+        candidates = quotes_file.quotes
+        if not candidates:
+            sys.exit(f"No candidates found in {from_path}.")
+
+    try:
+        results = extract_quotes(
+            doc_dir, candidates, min_ratio=min_ratio, refresh=refresh
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        sys.exit(f"Quote extraction failed: {exc}")
+
+    console = Console()
+    table = Table(title=f"quote: {dataset}/{uuid}", show_header=True)
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Score", justify="right")
+    table.add_column("Result")
+    table.add_column("Key")
+    for i, r in enumerate(results, 1):
+        if r.matched:
+            table.add_row(str(i), f"{r.score:.2f}", "matched", r.key)
+        else:
+            table.add_row(str(i), f"{r.score:.2f}", "skipped (low confidence)", "—")
+    console.print(table)
+
+    n_matched = sum(1 for r in results if r.matched)
+    print(
+        f"\n{n_matched}/{len(results)} quotes added to {doc_dir / 'machine.hayagriva'}"
+    )
+    for r in results:
+        if r.matched:
+            print(f"  cite as @{r.key}")
 
 
 def label_callback(

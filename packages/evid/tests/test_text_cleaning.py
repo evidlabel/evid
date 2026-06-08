@@ -5,7 +5,27 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from evid.core.text_cleaning import clean_text_for_typst
+from evid.core.text_cleaning import _dehyphenate, clean_text_for_typst
+
+
+def test_dehyphenate_rejoins_soft_hyphen():
+    # PDF end-of-line soft hyphen → single word.
+    assert _dehyphenate("en mar-\nkant frasortering") == "en markant frasortering"
+
+
+def test_dehyphenate_handles_spaces_around_break():
+    assert _dehyphenate("foo-  \n  bar") == "foobar"
+
+
+def test_dehyphenate_leaves_inline_hyphen_alone():
+    # No line break → a real hyphen/compound is preserved.
+    assert _dehyphenate("eks-partner og ML-model") == "eks-partner og ML-model"
+
+
+def test_dehyphenate_skips_capital_and_digit_continuations():
+    # Hyphen before a capital or digit (ranges/compounds) is not a soft hyphen.
+    assert _dehyphenate("Miljø-\nOg") == "Miljø-\nOg"
+    assert _dehyphenate("side 5-\n12") == "side 5-\n12"
 
 
 def _typst_compiles(body: str, tmp_path: Path) -> tuple[bool, str]:
