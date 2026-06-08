@@ -20,7 +20,11 @@ from evid.cli.dataset import docs_dir
 from evid.core.label import create_label  # Moved to new file
 from evid.core.models import InfoModel  # Added for validation
 from evid.core.pdf_metadata import extract_html_date, extract_pdf_metadata
-from evid.core.typst_generation import _BROWSER_HEADERS, web_to_pdf
+from evid.core.typst_generation import (
+    _BROWSER_HEADERS,
+    decoded_response_text,
+    web_to_pdf,
+)
 from evid.utils.text import normalize_text
 
 # Logging is configured centrally in evid.logging_config (called from main()).
@@ -71,15 +75,18 @@ def add_evidence(
             else:
                 # HTML — mirror the GUI's IngestUrlWorker: render the page to a
                 # Typst-generated PDF, then route through the PDF code path.
+                # Decode honouring the real charset so UTF-8 pages with no charset
+                # header don't mojibake (børn -> two Latin-1 glyphs) in the PDF.
+                html_str = decoded_response_text(response)
                 _web_tmp = tempfile.TemporaryDirectory()
                 rendered_pdf, web_page_title = web_to_pdf(
                     source,
                     Path(_web_tmp.name),
-                    html=response.text,
+                    html=html_str,
                 )
                 # Parse the page's own publish date; the rendered PDF's creation
                 # date is "now", which would otherwise become a wrong citation date.
-                web_page_date = extract_html_date(response.text)
+                web_page_date = extract_html_date(html_str)
                 pdf_file = BytesIO(rendered_pdf.read_bytes())
                 file_name = rendered_pdf.name
                 is_pdf = True

@@ -34,6 +34,21 @@ _BROWSER_HEADERS = {
 }
 
 
+def decoded_response_text(response) -> str:
+    """Decode an HTTP response body to text, honouring the real charset.
+
+    ``requests`` defaults ``response.encoding`` to ISO-8859-1 for ``text/*``
+    responses that carry no ``charset`` in the Content-Type header (per the HTTP
+    spec). That mojibakes UTF-8 pages — Danish ``børn`` (UTF-8 bytes ``c3 b8``)
+    is decoded as two stray Latin-1 glyphs — and the corruption is then baked into
+    the rendered PDF. When the server omits a charset, detect it (charset_normalizer
+    via ``apparent_encoding``) and fall back to UTF-8.
+    """
+    if "charset=" not in response.headers.get("Content-Type", "").lower():
+        response.encoding = response.apparent_encoding or "utf-8"
+    return response.text
+
+
 def _typst_str_escape(s: str) -> str:
     """Escape *s* for inclusion in a Typst double-quoted string literal."""
     return (
@@ -61,7 +76,7 @@ def web_to_pdf(url: str, output_dir: Path, html: str = None) -> tuple:
     if html is None:
         response = requests.get(url, timeout=15, headers=_BROWSER_HEADERS)
         response.raise_for_status()
-        html = response.text
+        html = decoded_response_text(response)
 
     soup = BeautifulSoup(html, "html.parser")
     title_tag = soup.find("title")
