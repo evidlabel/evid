@@ -92,6 +92,29 @@ def test_quotes_markdown_handles_legacy_layout(tmp_path: Path) -> None:
     assert f"**UUID:** {uuid}" in md
 
 
+def test_quotes_markdown_uses_quote_text_not_note(tmp_path: Path) -> None:
+    workdir = _make_doc(
+        tmp_path,
+        "case_delta",
+        "uuid-note",
+        labels=[
+            {
+                "value": {
+                    "key": "q1",
+                    "opage": 5,
+                    "text": "The actual quote.",
+                    "note": "Editorial note.",
+                }
+            }
+        ],
+    )
+
+    md = quotes_markdown([workdir])
+
+    assert "- Page 5: The actual quote." in md
+    assert "Editorial note." not in md
+
+
 def test_quotes_markdown_empty_when_no_label_json(tmp_path: Path) -> None:
     workdir = tmp_path / "case_gamma" / "docs" / "uuid-empty"
     workdir.mkdir(parents=True)

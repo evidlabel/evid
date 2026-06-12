@@ -60,9 +60,7 @@ def _doc_chapter(workdir: Path) -> str | None:
     for label in labels:
         opage = label.get("opage", "")
         text = label.get("text", "")
-        note = label.get("note", "")
-        content = note or text
-        chapter += f"- Page {opage}: {content.replace(chr(10), chr(10) + '  ')}\n"
+        chapter += f"- Page {opage}: {text.replace(chr(10), chr(10) + '  ')}\n"
 
     return chapter
 
