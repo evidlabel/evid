@@ -655,7 +655,7 @@ class DocsTab(QWidget):
         lv.addLayout(toolbar)
 
         self._filter = QLineEdit()
-        self._filter.setPlaceholderText("Filter by label…")
+        self._filter.setPlaceholderText("Filter by title or UUID…")
         self._filter.textChanged.connect(self._apply_filter)
         lv.addWidget(self._filter)
 
@@ -1842,7 +1842,7 @@ class DocsTab(QWidget):
         text = self._filter.text().lower()
         result = []
         for doc in self._docs:
-            if text and text not in doc.label.lower():
+            if text and text not in doc.label.lower() and text not in doc.uuid.lower():
                 continue
             if self._active_tag_filter and not self._active_tag_filter.issubset(
                 set(doc.tags)
