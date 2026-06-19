@@ -5,15 +5,13 @@ description: Use when user installs, sets up, or works with the `evid` evidence-
 
 # evid
 
-(Caveman speak below = token-saving. Terse, telegraphic. Commands/flags/keys exact.)
+`evid` is a CLI and GUI for ingesting PDFs and URLs into searchable evidence sets, labelling citable spans in Typst (`#lab`), and exporting BibTeX, Hayagriva, Markdown, JSON, or YAML.
 
-evid = CLI + GUI. Ingest PDF/URL → searchable sets. Label citable spans in Typst (`#lab`). Export BibTeX/Hayagriva/Markdown/JSON/YAML.
-
-**Pipeline no stop at `gather`.** User want argument/memo/brief/report from set → deliverable = citable Typst doc built with `labquote` (via **notat** skill). Quotes pulled from `refs.yml` by key, rendered verbatim. Never hand-write Markdown essay. Read **Authoring** below before writing prose.
+**The pipeline does not end at `gather`.** When the user wants an argument, memo, brief, or report from a set, the deliverable is a citable Typst document built with `labquote` (via the **notat** skill). Quotes are pulled from `refs.yml` by key and rendered verbatim. Do not hand-write a Markdown essay. Read **Authoring** below before writing prose.
 
 ## Citing discipline
 
-`#lab(...)` spans = authoritative. `set gather` exports them unchanged. Gathered YAML may carry `# generated-by: evid v…` watermark — keep watermarks, no hand-edit entries.
+`#lab(...)` spans are authoritative. `set gather` exports them unchanged. Gathered YAML may carry a `# generated-by: evid v…` watermark — keep watermarks; do not hand-edit entries.
 
 ## Get code
 
@@ -23,7 +21,7 @@ Source: https://github.com/evidlabel/evid (Python ≥ 3.11).
 uv tool install "evid @ git+https://github.com/evidlabel/evid.git"
 ```
 
-Dev: clone, `uv run evid …`. **Need:** `typst` on `$PATH` (label/gather); PySide6 (GUI).
+For development: clone the repo and run `uv run evid …`. **Requirements:** `typst` on `$PATH` (for label/gather); PySide6 (for the GUI).
 
 ## First setup
 
@@ -32,9 +30,9 @@ evid config update   # writes ~/.evidrc (editor + CLI prefs)
 evid config show
 ```
 
-**Data dir** (holds sets + `tags.yml`): default `~/.local/share/evid`. Old `~/.local/share/evidmgr` auto-detected. Override with `-d`/`--db`, or set `data_dir` in `~/.local/share/evid/evid.yml` (GUI). Legacy *evidmgr* = old paths only.
+**Data directory** (holds sets and `tags.yml`): default `~/.local/share/evid`. The legacy path `~/.local/share/evidmgr` is auto-detected. Override with `-d`/`--db`, or set `data_dir` in `~/.local/share/evid/evid.yml` (GUI). *evidmgr* refers to old paths only.
 
-**Self-contained job → project-local db.** Authoring brief/notat, smoke test, anything portable/versioned: point EVERY command at db inside project with `-d ./evid`. Db + `refs.yml` + `main.typ` travel together:
+**Self-contained jobs use a project-local database.** For authoring a brief/notat, smoke tests, or anything portable and versioned, point every command at a database inside the project with `-d ./evid`. The database, `refs.yml`, and `main.typ` travel together:
 
 ```
 my-brief/
@@ -42,7 +40,7 @@ my-brief/
   brief/main.typ  refs.yml  main.pdf
 ```
 
-Global default = standing personal collection only. Deliverable → no dump docs in global. Make local first (`evid -d ./evid set create -s <slug>`), pass `-d ./evid` on add/quote/gather/search. Authored doc but no `./evid` beside it = wrong db.
+Use the global default only for a standing personal collection. For deliverables, do not dump documents into the global database. Create a local database first (`evid -d ./evid set create -s <slug>`), then pass `-d ./evid` on add, quote, gather, and search. If you authored a document but there is no `./evid` folder beside it, you used the wrong database.
 
 ## Storage layout
 
@@ -60,12 +58,12 @@ sets/<slug>/docs/<uuid>/
 tags.yml            # cross-set tag registry (TagService)
 ```
 
-**Tag** writes both `info.yml` + `tags.yml` (CLI `tag assign` / GUI). Keep in sync, no edit one store only.
+Tagging writes both `info.yml` and `tags.yml` (CLI `tag assign` or GUI). Keep them in sync — do not edit one store only.
 
 ## Core
 
-- **Set** = collection per case/matter. `evid set list` — refer by name or number.
-- **GUI** (`evid`, no args): sidebar = sets; **Docs** + **Search** tabs load selected set on start + on selection change.
+- **Set** — a collection per case or matter. List with `evid set list`; refer by name or number.
+- **GUI** (`evid`, no args): sidebar lists sets; **Docs** and **Search** tabs load the selected set on start and when selection changes.
 
 ## Set management
 
@@ -82,23 +80,23 @@ evid doc add /path/to/judgment.pdf --dataset my-case
 evid doc add https://example.com/report.pdf -s my-case -l -a
 ```
 
-`-l` = open labeler after add. `-a` = pre-wrap paragraphs `#lab("labN", text, "")`. List: `evid doc list -s my-case --format md` or `evid -j doc list -s my-case`.
+`-l` opens the labeler after add. `-a` pre-wraps paragraphs as `#lab("labN", text, "")`. List documents with `evid doc list -s my-case --format md` or `evid -j doc list -s my-case`.
 
 ## Labelling
 
-1. `evid doc label -s my-case --uuid <uuid>` (or `--filename …`) → makes `label.typ`, opens editor.
+1. `evid doc label -s my-case --uuid <uuid>` (or `--filename …`) — creates `label.typ` and opens the editor.
 2. Wrap passages: `#lab("stable_key", "exact verbatim text", "optional note")`.
-3. Save + close → `typst query` writes `label.json` + `label.bib` (GUI watcher same after edit).
-4. Keys stable + unique within set.
+3. Save and close — `typst query` writes `label.json` and `label.bib` (the GUI watcher does the same after edit).
+4. Keys must be stable and unique within the set.
 
-Editor (CLI): `evid config update`, set `editor` in `~/.evidrc` (default `code` = VS Code). GUI uses `editor` in `{data_dir}/evid.yml`.
+Editor (CLI): run `evid config update` and set `editor` in `~/.evidrc` (default `code` = VS Code). The GUI uses `editor` in `{data_dir}/evid.yml`.
 
 ### Editor setup (VS Code + Typst)
 
-Full copy-paste steps in **[`README.md` — Labelling](README.md#labelling)**. User wants editor labelling → walk through:
+Full copy-paste steps are in **[`README.md` — Labelling](README.md#labelling)**. When the user wants editor labelling, walk through:
 
-1. Install **Typst** support in VS Code (ext id `mgt19937.typst-syntax` or current Typst ext) so `editorLangId == 'typst'` matches.
-2. Add shortcut wrapping selection in `#lab(...)` — select text in `label.typ`, press binding, fill key + note tab stops:
+1. Install **Typst** support in VS Code (extension id `mgt19937.typst-syntax` or the current Typst extension) so `editorLangId == 'typst'` matches.
+2. Add a shortcut that wraps the selection in `#lab(...)` — select text in `label.typ`, press the binding, and fill key and note tab stops:
 
 ```json
 {
@@ -111,9 +109,9 @@ Full copy-paste steps in **[`README.md` — Labelling](README.md#labelling)**. U
 }
 ```
 
-Put in **Keyboard Shortcuts (JSON)** (`Preferences: Open Keyboard Shortcuts (JSON)`). Change `"key"` if `ctrl+l` conflicts (e.g. `"ctrl+shift+l"`).
+Add this in **Keyboard Shortcuts (JSON)** (`Preferences: Open Keyboard Shortcuts (JSON)`). Change `"key"` if `ctrl+l` conflicts (e.g. `"ctrl+shift+l"`).
 
-3. Optional: same snippet under **User Snippets → typst.json**:
+3. Optional: the same snippet under **User Snippets → typst.json**:
 
 ```json
 {
@@ -125,22 +123,22 @@ Put in **Keyboard Shortcuts (JSON)** (`Preferences: Open Keyboard Shortcuts (JSO
 }
 ```
 
-4. Open label file: `evid doc label -s my-case --uuid <uuid>` or GUI **Label** / **Open in editor** on `label.typ`.
+4. Open a label file with `evid doc label -s my-case --uuid <uuid>` or via the GUI **Label** / **Open in editor** on `label.typ`.
 
-**Other editors:** set `editor` to executable (`nvim`, `emacsclient`, …), wrap manually `#lab("key", "verbatim text", "note")` or own snippet/macro. Syntax + post-save bib gen editor-agnostic; only the binding is VS Code-specific.
+**Other editors:** set `editor` to your executable (`nvim`, `emacsclient`, …), then wrap manually with `#lab("key", "verbatim text", "note")` or your own snippet/macro. Syntax and post-save bib generation are editor-agnostic; only the binding above is VS Code-specific.
 
 ## Precise / machine quoting
 
-Agent need **verbatim** quote from doc already in set (paraphrase unacceptable — legal/academic) → never retype. `rapidfuzz` matcher locates.
+When an agent needs a **verbatim** quote from a document already in the set (paraphrase is unacceptable for legal or academic work), never retype the text. The `rapidfuzz` matcher locates it.
 
-**Find what to quote.** Pick one:
+**Find what to quote.** Pick one approach:
 
-- **One shot (uses vector index):**
+- **One shot (uses the vector index):**
   ```bash
   evid doc quote -s my-case -u <uuid> --from-search "share of male vs female victims" -n 4
   ```
-  Vector search over set, top-`n` chunks of that doc = candidates, fuzzy-locate clean verbatim sentence each. Needs doc indexed (added *without* `--no-index`).
-- **Explicit candidates:** discover first — `evid -j search vec "<topic>" -s my-case` or `grep` doc `text.txt` (written by `doc quote`) — then paraphrase into throwaway **`quotes.json`** (JSON, *deliberately not* Hayagriva/YAML, so paraphrase never loadable/citable):
+  Vector search over the set returns the top-`n` chunks of that document as candidates; each is fuzzy-located to a clean verbatim sentence. The document must be indexed (added *without* `--no-index`).
+- **Explicit candidates:** discover first — `evid -j search vec "<topic>" -s my-case` or `grep` the document's `text.txt` (written by `doc quote`) — then paraphrase into a throwaway **`quotes.json`** (JSON, *deliberately not* Hayagriva/YAML, so paraphrased input is never loadable or citable):
   ```json
   { "quotes": [
       { "candidate": "approximate quote you want made verbatim" },
@@ -151,13 +149,13 @@ Agent need **verbatim** quote from doc already in set (paraphrase unacceptable �
   evid doc quote -s my-case -u <uuid> --from quotes.json
   ```
 
-Either way: extracts doc plain text (cached `text.txt`), fuzzy-matches each, appends **verbatim** span to `machine.hayagriva` keyed `{uuid[:4]}:qN` (labquote-native: quote in `title:`, with `page-range` + `serial-number`, plus one `{uuid[:4]}:main`). Prints **keys only** — never quote text. Cite `@{uuid[:4]}:qN`; `evid set gather` merges `machine.hayagriva` (full `serial-number` in `.yaml`; `.bib`/`.md`/`.json` lossy).
+Either way: extracts the document's plain text (cached as `text.txt`), fuzzy-matches each candidate, and appends the **verbatim** span to `machine.hayagriva` keyed `{uuid[:4]}:qN` (labquote-native: quote in `title:`, with `page-range` and `serial-number`, plus one `{uuid[:4]}:main`). Prints **keys only** — never the quote text. Cite `@{uuid[:4]}:qN`; `evid set gather` merges `machine.hayagriva` (full `serial-number` in `.yaml`; `.bib`/`.md`/`.json` are lossy).
 
-**Re-quote.** `machine.hayagriva` append-only, `qN` by order. Change quote set: keep one `quotes.json` per doc, `rm <doc>/machine.hayagriva`, re-run `doc quote` — keys stay stable + reproducible.
+**Re-quoting.** `machine.hayagriva` is append-only; `qN` follows order. To change the quote set: keep one `quotes.json` per document, `rm <doc>/machine.hayagriva`, and re-run `doc quote` — keys stay stable and reproducible.
 
-**Discipline.** Paraphrase input = JSON *because not citable*. Only verbatim rapidfuzz `machine.hayagriva` = Hayagriva + citable. Never paraphrase source. Never paste quote text in answer — emit keys only. Machine entries carry `# verbatim, rapidfuzz-verified`. Below `--min-ratio` (default 0.78) = skipped, not invented.
+**Discipline.** Paraphrased input goes in JSON *because it is not citable*. Only verbatim rapidfuzz output in `machine.hayagriva` is Hayagriva and citable. Never paraphrase the source. Never paste quote text in the answer — emit keys only. Machine entries carry `# verbatim, rapidfuzz-verified`. Matches below `--min-ratio` (default 0.78) are skipped, not invented.
 
-> **Hyphen caveat.** Text de-hyphenated (`mar-\nkant` → `markant`). Real hard-hyphen compound wrapping at hyphen (`eks-partner`) may merge wrong — eyeball odd spans.
+> **Hyphen caveat.** Text is de-hyphenated (`mar-\nkant` → `markant`). A real hard-hyphen compound wrapping at the hyphen (`eks-partner`) may merge incorrectly — eyeball odd spans.
 
 ## Gathering
 
@@ -168,25 +166,25 @@ evid set gather my-case -o exports/refs.md --include-keys
 evid set gather my-case -o exports/refs.json
 ```
 
-`--no-regen` skips typst query when labels current. Machine quotes merged auto.
+`--no-regen` skips `typst query` when labels are current. Machine quotes are merged automatically.
 
-Outputs = **interchange/citation db, NOT finished document.** `refs.yml` = authoring input; `.bib`/`.json` feed other tools; `.md` (`--include-keys`) = key-check dump, NOT shippable argument. No stop at `gather` + hand-write prose around it.
+Outputs are an **interchange/citation database, not a finished document.** `refs.yml` is authoring input; `.bib` and `.json` feed other tools; `.md` (with `--include-keys`) is a key-check dump, not a shippable argument. Do not stop at `gather` and hand-write prose around it.
 
 ## Authoring a document from a set (the deliverable)
 
-Task = **make argument / memo / brief / report / notat** from set → output = **compiled Typst doc**, every quote verbatim from `refs.yml` via `labquote` (`#blockq` / `#cite-ref`), never retyped/paraphrased to Markdown. This is point of labelling+gathering. No hand-write `.md` essay + call done (defeats verbatim-citation guarantee).
+When the task is to **make an argument, memo, brief, report, or notat** from a set, the output is a **compiled Typst document** where every quote is verbatim from `refs.yml` via `labquote` (`#blockq` / `#cite-ref`), never retyped or paraphrased into Markdown. This is the point of labelling and gathering. Do not hand-write a `.md` essay and call it done — that defeats the verbatim-citation guarantee.
 
-**REQUIRED SKILL: notat** = authoring layer over `labquote` (read **labquote** first: `setup`/`q`/`blockq`/`cite-ref`/`bibliography-custom` + namespaced-key contract). notat owns writing discipline, subset-`refs.yml` rule, preamble template, compile/verify loop.
+**Required skill: notat** — the authoring layer over `labquote` (read **labquote** first: `setup`/`q`/`blockq`/`cite-ref`/`bibliography-custom` and the namespaced-key contract). notat owns writing discipline, the subset-`refs.yml` rule, the preamble template, and the compile/verify loop.
 
-Chain. **Every `evid` command uses `-d ./evid`** (project-local db, see *Data dir*):
+Workflow. **Every `evid` command uses `-d ./evid`** (project-local database; see *Data dir*):
 
-0. **Make local db** — `evid -d ./evid set create -s <slug>`. Db in project, beside doc. No touch global.
-1. **Ingest** each source — `evid -d ./evid doc add <src> -s <slug>` (URL, local PDF, or copy `<uuid>` dir from another set into `./evid/sets/<slug>/docs/` to keep its manual labels).
-2. **Make citable** — manual `#lab` (`evid -d ./evid doc label`) and/or machine quotes (`evid -d ./evid doc quote`, see *Precise / machine quoting*).
-3. **Gather** → `evid -d ./evid set gather <slug> -o brief/refs.yml` (labquote-native Hayagriva; source of truth for quote text).
-4. **Author** `main.typ` with `labquote` via **notat** — prose = keys only; quotes pull from `refs.yml`. Build **subset** `refs.yml` (cited keys + each cited doc `:main`) so `bibliography-custom()` stays focused.
-5. **Compile + verify** — `typst compile main.typ` → PDF. Bad slice anchor or missing key = compile error. Eyeball rendered quotes + grouped back-page.
-6. **Version** — `git init` project root, db + brief = one reproducible unit. Commit brief source + db evidence (original PDFs, `label.typ`/`label.json`, `machine.hayagriva`). `.gitignore` regenerable bits:
+0. **Create a local database** — `evid -d ./evid set create -s <slug>`. The database lives in the project, beside the document. Do not use the global database.
+1. **Ingest** each source — `evid -d ./evid doc add <src> -s <slug>` (URL, local PDF, or copy a `<uuid>` directory from another set into `./evid/sets/<slug>/docs/` to keep its manual labels).
+2. **Make sources citable** — manual `#lab` (`evid -d ./evid doc label`) and/or machine quotes (`evid -d ./evid doc quote`; see *Precise / machine quoting*).
+3. **Gather** — `evid -d ./evid set gather <slug> -o brief/refs.yml` (labquote-native Hayagriva; source of truth for quote text).
+4. **Author** `main.typ` with `labquote` via **notat** — prose uses keys only; quotes pull from `refs.yml`. Build a **subset** `refs.yml` (cited keys plus each cited document's `:main`) so `bibliography-custom()` stays focused.
+5. **Compile and verify** — `typst compile main.typ` → PDF. A bad slice anchor or missing key causes a compile error. Eyeball rendered quotes and the grouped back-page.
+6. **Version** — `git init` at the project root; the database and brief form one reproducible unit. Commit brief source and database evidence (original PDFs, `label.typ`/`label.json`, `machine.hayagriva`). `.gitignore` regenerable artifacts:
 
    ```gitignore
    **/vecdb/        # chroma index — rebuilt from label.typ
@@ -194,9 +192,9 @@ Chain. **Every `evid` command uses `-d ./evid`** (project-local db, see *Data di
    brief/page-*.png
    ```
 
-   (`evid set track` = evid-native shortcut, git-init set/db dir only.)
+   (`evid set track` is an evid-native shortcut that git-inits the set/database directory only.)
 
-Quote not yet in `refs.yml`? No type it. Label (`evid`) or machine-quote (`evid doc quote`), re-gather, cite key.
+If a quote is not yet in `refs.yml`, do not type it. Label it (`evid`) or machine-quote it (`evid doc quote`), re-gather, then cite the key.
 
 ## Tag & search
 
@@ -208,7 +206,7 @@ evid search vec "query" -s my-case --n 15
 evid search meta "pattern" -s my-case --format json
 ```
 
-Qualified tag default `{set_slug}.{name}` when name has no dot.
+Qualified tags default to `{set_slug}.{name}` when the name has no dot.
 
 ## GUI (Docs / Search)
 
@@ -221,11 +219,11 @@ Qualified tag default `{set_slug}.{name}` when name has no dot.
 | Tag from Search results | Context menu — writes both stores |
 | Main tabs | Ctrl+PageUp / Ctrl+PageDown |
 
-Anonymize UI under Docs → **Anonymize** (no top-level tab). Log pane bottom = DEBUG+.
+Anonymize UI is under Docs → **Anonymize** (no top-level tab). The log pane at the bottom shows DEBUG and above.
 
 ## Other commands
 
-`doc bibtex`, `doc rebut`. Built on **treeparse** — rich `--help`. Top-level `evid -j <subcommand> …` = clean JSON (`jq`). Global: `-d`/`--db`, `-j`, `--help`.
+`doc bibtex`, `doc rebut`. Built on **treeparse** — rich `--help`. Top-level `evid -j <subcommand> …` returns clean JSON (`jq`). Global flags: `-d`/`--db`, `-j`, `--help`.
 
 ## Common options
 
@@ -239,23 +237,23 @@ Anonymize UI under Docs → **Anonymize** (no top-level tab). Log pane bottom = 
 
 ## Common mistakes
 
-- **Dump deliverable docs in global db, not project-local `-d ./evid`.** Authoring/smoke/portable job = own local db beside `main.typ`. No `./evid` folder left = wrong db. Pass `-d ./evid` every command.
-- **Self-contained job left un-versioned.** `git init` project root (db + brief) = reproducible + portable. `.gitignore` only regenerable (`**/vecdb/`, compiled `*.pdf`/`page-*.png`). No commit vecdb, no skip git.
-- **Hand-write argument as Markdown memo, not citable Typst doc** (`labquote` via **notat**). Gathered `.md` = key-check export, not deliverable. Stop at `gather` + hand-write = discards verbatim-citation guarantee.
-- No `typst` installed.
-- Hand-edit `label.bib`/`label.json` instead of `label.typ`.
-- Hand-edit `machine.hayagriva` or paste verbatim quote in answer — run `evid doc quote`, cite key.
-- Candidate quotes in YAML/Hayagriva not `quotes.json` (input = JSON precisely so not citable).
-- Change label keys after citing them in a document.
-- Tag only `info.yml` or only `tags.yml` outside normal CLI/GUI paths.
-- `gather` huge sets without `--no-regen` every time.
-- HTML landing pages instead of PDF judgments.
-- Skip `set track` when set itself needs versioning.
-- Expect plain left-drag on doc row to copy to sidebar (use **Alt+drag**).
+- **Dumping deliverable documents in the global database instead of a project-local `-d ./evid`.** Authoring, smoke tests, and portable jobs need their own local database beside `main.typ`. No `./evid` folder left behind means the wrong database was used. Pass `-d ./evid` on every command.
+- **Leaving a self-contained job un-versioned.** `git init` at the project root (database + brief) makes the work reproducible and portable. `.gitignore` only regenerable artifacts (`**/vecdb/`, compiled `*.pdf`/`page-*.png`). Do not commit vecdb; do not skip git.
+- **Hand-writing an argument as a Markdown memo instead of a citable Typst document** (`labquote` via **notat**). Gathered `.md` is a key-check export, not a deliverable. Stopping at `gather` and hand-writing prose discards the verbatim-citation guarantee.
+- `typst` not installed.
+- Hand-editing `label.bib`/`label.json` instead of `label.typ`.
+- Hand-editing `machine.hayagriva` or pasting verbatim quote text in the answer — run `evid doc quote` and cite the key.
+- Putting candidate quotes in YAML/Hayagriva instead of `quotes.json` (input is JSON precisely so it is not citable).
+- Changing label keys after citing them in a document.
+- Tagging only `info.yml` or only `tags.yml` outside normal CLI/GUI paths.
+- Running `gather` on huge sets without `--no-regen` every time.
+- Ingesting HTML landing pages instead of PDF judgments.
+- Skipping `set track` when the set itself needs versioning.
+- Expecting plain left-drag on a doc row to copy to the sidebar (use **Alt+drag**).
 
 ## Quick start
 
-Standing personal collection (global db):
+Standing personal collection (global database):
 
 ```bash
 evid set create echr-2024-001
@@ -264,7 +262,7 @@ evid set gather echr-2024-001 -o exports/refs.yml
 evid -j search vec "separation" -s echr-2024-001
 ```
 
-Self-contained deliverable (project-local db — preferred for authoring/smoke):
+Self-contained deliverable (project-local database — preferred for authoring and smoke tests):
 
 ```bash
 evid -d ./evid set create -s mybrief
