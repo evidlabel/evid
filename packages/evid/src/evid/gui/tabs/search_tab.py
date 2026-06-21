@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -38,7 +39,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_RESULT_COLS = ["Score", "Label", "Preview", "UUID"]
+_RESULT_COLS = ["Similarity", "Label", "Preview", "UUID"]
+_SIMILARITY_TOOLTIP = "Cosine similarity, −1…1. Higher = more relevant."
+_CONTEXT_CHARS = 600  # preview window each side of a matched chunk
 
 
 class SearchTab(QWidget):
@@ -55,6 +58,7 @@ class SearchTab(QWidget):
         self._evidence_set: EvidenceSet | None = None
         self._results: list[VecResult] = []
         self._meta_docs: list[Document] = []
+        self._text_hits: list = []  # list[TextHit]
         self._workers: list = []
         self._search_busy = False
         self._prev_current_uuid: str | None = None
@@ -67,10 +71,11 @@ class SearchTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
 
-        # Sub-tabs: Meta / Vector
+        # Sub-tabs: Meta / Vector / Full-text
         self._sub_tabs = QTabBar()
         self._sub_tabs.addTab("Meta search")
         self._sub_tabs.addTab("Vector search")
+        self._sub_tabs.addTab("Full-text search")
         self._sub_tabs.currentChanged.connect(self._on_sub_tab_changed)
         layout.addWidget(self._sub_tabs, 0)
 
@@ -109,12 +114,40 @@ class SearchTab(QWidget):
         vv.addLayout(qrow)
         layout.addWidget(self._vec_widget, 0)
 
+        # Full-text search area (over document bodies: fuzzy or regex)
+        self._text_widget = QWidget()
+        tv = QVBoxLayout(self._text_widget)
+        tv.setContentsMargins(0, 0, 0, 0)
+        trow = QHBoxLayout()
+        self._text_query = QLineEdit()
+        self._text_query.setPlaceholderText("Full-text query (fuzzy, or regex)…")
+        self._text_query.returnPressed.connect(self._run_text_search)
+        self._text_regex_cb = QCheckBox("Regex")
+        self._text_regex_cb.setToolTip(
+            "Treat the query as a regular expression (else fuzzy rapidfuzz match)"
+        )
+        self._text_n_spin = QSpinBox()
+        self._text_n_spin.setRange(1, 100)
+        self._text_n_spin.setValue(10)
+        self._text_n_spin.setPrefix("n=")
+        self._text_search_btn = QPushButton("Search")
+        self._text_search_btn.clicked.connect(self._run_text_search)
+        trow.addWidget(self._text_query)
+        trow.addWidget(self._text_regex_cb)
+        trow.addWidget(self._text_n_spin)
+        trow.addWidget(self._text_search_btn)
+        tv.addLayout(trow)
+        layout.addWidget(self._text_widget, 0)
+
         # Start on Vector search tab
         self._sub_tabs.setCurrentIndex(1)
 
         # Results table (multi-select, right-click menu)
         self._table = QTableWidget(0, len(_RESULT_COLS))
         self._table.setHorizontalHeaderLabels(_RESULT_COLS)
+        sim_header = self._table.horizontalHeaderItem(_RESULT_COLS.index("Similarity"))
+        if sim_header is not None:
+            sim_header.setToolTip(_SIMILARITY_TOOLTIP)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
@@ -174,8 +207,11 @@ class SearchTab(QWidget):
         self._prev_label = QLabel("—")
         self._prev_label.setWordWrap(True)
         row1.addWidget(self._prev_label, 1)
-        row1.addWidget(QLabel("Score:"))
+        sim_label = QLabel("Similarity:")
+        sim_label.setToolTip(_SIMILARITY_TOOLTIP)
+        row1.addWidget(sim_label)
         self._prev_score = QLabel("")
+        self._prev_score.setToolTip(_SIMILARITY_TOOLTIP)
         self._prev_score.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
@@ -228,14 +264,18 @@ class SearchTab(QWidget):
         self._focus_query()
 
     def _focus_query(self) -> None:
-        if self._sub_tabs.currentIndex() == 0:
+        idx = self._sub_tabs.currentIndex()
+        if idx == 0:
             self._meta_filter.setFocus()
+        elif idx == 2:
+            self._text_query.setFocus()
         else:
             self._query_edit.setFocus()
 
     def _on_sub_tab_changed(self, idx: int) -> None:
         self._meta_widget.setVisible(idx == 0)
         self._vec_widget.setVisible(idx == 1)
+        self._text_widget.setVisible(idx == 2)
         self._focus_query()
 
     def _run_meta_search(self) -> None:
@@ -287,6 +327,35 @@ class SearchTab(QWidget):
         finally:
             self._set_search_busy(False)
 
+    def _run_text_search(self) -> None:
+        if not self._evidence_set:
+            QMessageBox.warning(self, "No set", "Select an evidence set first.")
+            return
+        if self._search_busy:
+            return
+        query = self._text_query.text().strip()
+        if not query:
+            return
+        from evid.gui.workers import FullTextSearchWorker
+
+        self._set_search_busy(True)
+        worker = FullTextSearchWorker(
+            self._evidence_set,
+            query,
+            self._text_regex_cb.isChecked(),
+            self._text_n_spin.value(),
+        )
+        worker.finished.connect(self._on_text_search_done)
+        worker.error.connect(self._on_search_error)
+        self._workers.append(worker)
+        worker.start()
+
+    def _on_text_search_done(self, hits: list) -> None:
+        try:
+            self._fill_table_from_text_hits(hits)
+        finally:
+            self._set_search_busy(False)
+
     def _on_search_error(self, msg: str) -> None:
         self._set_search_busy(False)
         logger.error("Search failed: %s", msg)
@@ -299,9 +368,14 @@ class SearchTab(QWidget):
         self._vec_search_btn.setEnabled(not busy)
         self._query_edit.setEnabled(not busy)
         self._n_spin.setEnabled(not busy)
+        self._text_search_btn.setEnabled(not busy)
+        self._text_query.setEnabled(not busy)
+        self._text_n_spin.setEnabled(not busy)
+        self._text_regex_cb.setEnabled(not busy)
 
     def _fill_table_from_docs(self, docs: list[Document]) -> None:
         self._results = []
+        self._text_hits = []
         self._meta_docs = list(docs)
         self._table.setRowCount(0)
         if not docs:
@@ -322,6 +396,7 @@ class SearchTab(QWidget):
 
     def _fill_table_from_vec_results(self, results: list[VecResult]) -> None:
         self._meta_docs = []
+        self._text_hits = []
         self._table.setRowCount(0)
         if not results:
             self._table.insertRow(0)
@@ -338,6 +413,29 @@ class SearchTab(QWidget):
             preview = res.chunk_text[:120].replace("\n", " ")
             self._table.setItem(row, 2, QTableWidgetItem(preview))
             self._table.setItem(row, 3, QTableWidgetItem(res.doc.uuid))
+        self._clear_preview()
+
+    def _fill_table_from_text_hits(self, hits: list) -> None:
+        self._results = []
+        self._meta_docs = []
+        self._text_hits = list(hits)
+        self._table.setRowCount(0)
+        if not hits:
+            self._table.insertRow(0)
+            empty = QTableWidgetItem("(No matches)")
+            empty.setFlags(Qt.ItemFlag.NoItemFlags)
+            self._table.setItem(0, 1, empty)
+            self._clear_preview()
+            return
+        for h in hits:
+            row = self._table.rowCount()
+            self._table.insertRow(row)
+            score = f"{h.score:.3f}" if h.score is not None else "—"
+            self._table.setItem(row, 0, QTableWidgetItem(score))
+            self._table.setItem(row, 1, QTableWidgetItem(h.label))
+            preview = h.snippet[:120].replace("\n", " ")
+            self._table.setItem(row, 2, QTableWidgetItem(preview))
+            self._table.setItem(row, 3, QTableWidgetItem(h.uuid))
         self._clear_preview()
 
     def _update_action_bar(self) -> None:
@@ -362,9 +460,13 @@ class SearchTab(QWidget):
             self._prev_uuid.setText(short_uuid)
             self._prev_uuid.setToolTip(doc.uuid)
             self._prev_current_uuid = doc.uuid
-            self._prev_text.setPlainText(
-                res.chunk_text or self._citations_preview(doc.uuid)
-            )
+            html = self._vec_preview_html(res)
+            if html is not None:
+                self._prev_text.setHtml(html)
+            else:
+                self._prev_text.setPlainText(
+                    res.chunk_text or self._citations_preview(doc.uuid)
+                )
             self._prev_footer.setText(
                 f"Source: {doc.label[:60]}    \u2003Chunk {res.chunk_idx}"
             )
@@ -386,8 +488,58 @@ class SearchTab(QWidget):
             self._prev_text.setPlainText(self._citations_preview(doc.uuid))
             self._prev_footer.setText("")
             self._prev_show_in_docs_btn.setEnabled(True)
+        elif row >= 0 and row < len(self._text_hits):
+            hit = self._text_hits[row]
+            self._prev_tags.setText("—")
+            self._prev_label.setText(hit.label)
+            self._prev_label.setToolTip(hit.label)
+            self._prev_score.setText(
+                f"{hit.score:.3f}" if hit.score is not None else ""
+            )
+            short_uuid = (
+                hit.uuid[:8] + "…" + hit.uuid[-8:] if len(hit.uuid) > 16 else hit.uuid
+            )
+            self._prev_uuid.setText(short_uuid)
+            self._prev_uuid.setToolTip(hit.uuid)
+            self._prev_current_uuid = hit.uuid
+            self._prev_text.setPlainText(hit.snippet)
+            self._prev_footer.setText(f"Page {hit.page}")
+            self._prev_show_in_docs_btn.setEnabled(True)
         else:
             self._clear_preview()
+
+    def _vec_preview_html(self, res: VecResult) -> str | None:
+        """Context window (±_CONTEXT_CHARS) around the matched chunk in the doc's
+        label.typ, with the matched span highlighted. Returns None if the file is
+        missing/unreadable so the caller can fall back to the plain chunk."""
+        if not self._evidence_set:
+            return None
+        typ_path = self._evidence_set.path / "docs" / res.doc.uuid / "label.typ"
+        try:
+            text = typ_path.read_text(encoding="utf-8")
+        except Exception:
+            logger.debug("Preview: could not read %s", typ_path, exc_info=True)
+            return None
+        if not text:
+            return None
+
+        import html as _html
+
+        start = max(0, min(res.char_start, len(text)))
+        end = min(len(text), start + len(res.chunk_text))
+        win_start = max(0, start - _CONTEXT_CHARS)
+        win_end = min(len(text), end + _CONTEXT_CHARS)
+        before = _html.escape(text[win_start:start])
+        match = _html.escape(text[start:end])
+        after = _html.escape(text[end:win_end])
+        lead = "…" if win_start > 0 else ""
+        trail = "…" if win_end < len(text) else ""
+        body = (
+            f"{lead}{before}"
+            f"<mark style='background:#ffe08a;font-weight:bold'>{match}</mark>"
+            f"{after}{trail}"
+        )
+        return f"<div style='white-space:pre-wrap'>{body}</div>"
 
     def _citations_preview(self, uuid: str) -> str:
         """Render a doc's labelled citations as markdown for the preview pane."""
@@ -416,18 +568,25 @@ class SearchTab(QWidget):
 
     def _on_preview_view(self) -> None:
         row = self._table.currentRow()
+        from evid.services.doc_tags import resolve_doc_pdf
+
         doc = None
         if row >= 0 and row < len(self._results):
             doc = self._results[row].doc
         elif row >= 0 and row < len(self._meta_docs):
             doc = self._meta_docs[row]
+        elif row >= 0 and row < len(self._text_hits) and self._evidence_set:
+            # Text hits carry no Document; resolve the PDF from the uuid.
+            doc_dir = self._evidence_set.path / "docs" / self._text_hits[row].uuid
+            pdf = resolve_doc_pdf(doc_dir)
+            if pdf:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(pdf)))
+            return
         if doc is None:
             return
         if doc.source_url:
             QDesktopServices.openUrl(QUrl(doc.source_url))
             return
-        from evid.services.doc_tags import resolve_doc_pdf
-
         pdf = resolve_doc_pdf(doc.path)
         if pdf:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(pdf)))

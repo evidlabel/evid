@@ -14,6 +14,10 @@ class EvidConfig(BaseModel):
     )
     editor: str = "code"
     default_language: str = "da"
+    # Sentence-transformers model for vector search. Default is multilingual
+    # (strong on Danish) and 384-dim like the old all-MiniLM-L6-v2. Override
+    # here or with the EVID_EMBEDDING_MODEL env var, then `evid set reindex`.
+    embedding_model: str = "intfloat/multilingual-e5-small"
 
     @classmethod
     def load(cls, path: Path | None = None) -> EvidConfig:
@@ -44,6 +48,7 @@ class EvidConfig(BaseModel):
                     "data_dir": str(self.data_dir),
                     "editor": self.editor,
                     "default_language": self.default_language,
+                    "embedding_model": self.embedding_model,
                 },
                 f,
                 allow_unicode=True,

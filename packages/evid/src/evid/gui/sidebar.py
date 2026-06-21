@@ -1,4 +1,4 @@
-"""Sidebar: evidence set list with visual anon state."""
+"""Sidebar: evidence set list."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import logging
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
@@ -26,17 +25,6 @@ if TYPE_CHECKING:
     from evid.gui.signals import AppSignals
     from evid.models import EvidenceSet
     from evid.services.set_manager import SetManager
-
-_MODE_COLOR = {
-    "real": "#c97a00",
-    "placeholder": "#b86800",
-    "fake": "#c00000",
-}
-_MODE_SUFFIX = {
-    "real": "",
-    "placeholder": " [PH]",
-    "fake": " [FAKE]",
-}
 
 
 class Sidebar(QWidget):
@@ -71,8 +59,6 @@ class Sidebar(QWidget):
         import_btn = QPushButton("Import evid dir…")
         import_btn.clicked.connect(self._on_import_evid_dir)
         layout.addWidget(import_btn)
-
-        signals.anon_mode_changed.connect(self._on_anon_mode_changed)
 
         self.refresh()
 
@@ -118,21 +104,7 @@ class Sidebar(QWidget):
     # ── private ──────────────────────────────────────────────────────────────
 
     def _make_item(self, s: EvidenceSet) -> QListWidgetItem:
-        from evid.models import SetType
-
-        if s.set_type == SetType.ANON:
-            mode_val = s.anon_mode.value
-            suffix = _MODE_SUFFIX.get(mode_val, "")
-            color = _MODE_COLOR.get(mode_val, "#c97a00")
-            label = f"[A]{suffix} {s.name}"
-            item = QListWidgetItem(label)
-            item.setForeground(QBrush(QColor(color)))
-            f = item.font()
-            f.setBold(True)
-            item.setFont(f)
-        else:
-            item = QListWidgetItem(s.name)
-
+        item = QListWidgetItem(s.name)
         item.setData(Qt.ItemDataRole.UserRole, s.slug)
         return item
 
@@ -151,31 +123,10 @@ class Sidebar(QWidget):
         self._active_set = self._set_manager.load_set(slug)
         self._signals.set_selected.emit(slug)
 
-    def _on_anon_mode_changed(self, _mode_str: str) -> None:
-        """Refresh list items so the active set's mode label stays current."""
-        if self._active_set is None:
-            return
-        try:
-            self._active_set = self._set_manager.load_set(self._active_set.slug)
-        except Exception:
-            logger.exception("Failed to reload set after anon mode change")
-            return
-        for i in range(self._list.count()):
-            item = self._list.item(i)
-            if item and item.data(Qt.ItemDataRole.UserRole) == self._active_set.slug:
-                new_item = self._make_item(self._active_set)
-                # Swap text/visual in-place (QListWidget items can't be replaced, so
-                # we update the existing item's display properties directly)
-                item.setText(new_item.text())
-                item.setForeground(new_item.foreground())
-                item.setFont(new_item.font())
-                break
-
     def _on_import_evid_dir(self) -> None:
         from pathlib import Path
 
         from PySide6.QtWidgets import (
-            QComboBox,
             QDialog,
             QDialogButtonBox,
             QFileDialog,
@@ -198,10 +149,7 @@ class Sidebar(QWidget):
         dlg.setWindowTitle("Import evid directory")
         form = QFormLayout(dlg)
         name_edit = QLineEdit(chosen_path.name)
-        type_combo = QComboBox()
-        type_combo.addItems(["normal", "anon"])
         form.addRow("Set name:", name_edit)
-        form.addRow("Set type:", type_combo)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -212,13 +160,12 @@ class Sidebar(QWidget):
             return
 
         set_name = name_edit.text().strip() or chosen_path.name
-        set_type = type_combo.currentText()
 
         try:
-            import_evid_dir_single(chosen_path, set_name, self._set_manager, set_type)
+            import_evid_dir_single(chosen_path, set_name, self._set_manager)
             count = 1
         except ValueError:
-            sets = import_evid_dir(chosen_path, self._set_manager, set_type)
+            sets = import_evid_dir(chosen_path, self._set_manager)
             count = len(sets)
 
         self.refresh()
@@ -228,7 +175,6 @@ class Sidebar(QWidget):
 
     def _on_new_set(self) -> None:
         from PySide6.QtWidgets import (
-            QComboBox,
             QDialog,
             QDialogButtonBox,
             QFormLayout,
@@ -239,10 +185,7 @@ class Sidebar(QWidget):
         dlg.setWindowTitle("New Evidence Set")
         form = QFormLayout(dlg)
         name_edit = QLineEdit()
-        type_combo = QComboBox()
-        type_combo.addItems(["normal", "anon"])
         form.addRow("Name:", name_edit)
-        form.addRow("Type:", type_combo)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -250,10 +193,7 @@ class Sidebar(QWidget):
         buttons.rejected.connect(dlg.reject)
         form.addRow(buttons)
         if dlg.exec() == QDialog.DialogCode.Accepted and name_edit.text().strip():
-            self._set_manager.create_set(
-                name_edit.text().strip(),
-                set_type=type_combo.currentText(),
-            )
+            self._set_manager.create_set(name_edit.text().strip())
             self.refresh()
 
     # ── drag-and-drop: accept docs dragged from the docs table ───────────────

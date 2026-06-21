@@ -145,7 +145,6 @@ class DocIngester:
         meta = {
             "notes": "",
             "indexed": False,
-            "anon_pending": False,
         }
         from evid.core.evid_meta import write_meta
 
@@ -204,12 +203,8 @@ class DocIngester:
         else:
             logger.debug("No VecService configured — skipping vector index")
 
-        # ── 7. Update evidmgr_meta.yml; mark anon_pending for anon sets ───────
+        # ── 7. Update evidmgr_meta.yml ────────────────────────────────────────
         p(7, n, "Finalising metadata")
-        from evid.models import SetType
-
-        if evidence_set.set_type == SetType.ANON:
-            meta["anon_pending"] = True
         from evid.core.evid_meta import write_meta
 
         write_meta(doc_dir, meta)
@@ -323,7 +318,6 @@ class DocIngester:
             tags=tags,
             added=datetime.now(tz=UTC),
             indexed=meta.get("indexed", False),
-            anon_pending=meta.get("anon_pending", False),
             notes=meta.get("notes", ""),
             source_url=info.get("url", ""),
         )

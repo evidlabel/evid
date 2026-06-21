@@ -1,4 +1,4 @@
-"""Docs tab — document list, metadata detail, and (for ANON sets) anonymisation controls."""
+"""Docs tab — document list and metadata detail."""
 
 from __future__ import annotations
 
@@ -22,7 +22,6 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QDrag, QFont
 from PySide6.QtWidgets import (
-    QButtonGroup,
     QCheckBox,
     QComboBox,
     QCompleter,
@@ -44,7 +43,6 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QProgressDialog,
     QPushButton,
-    QRadioButton,
     QScrollArea,
     QSizePolicy,
     QSplitter,
@@ -66,7 +64,6 @@ logger = logging.getLogger(__name__)
 
 _COLS = ["F", "J", "Label", "Added", "UUID"]
 _DOC_MIME_TYPE = "application/x-evid-doc"
-_ENTITY_COLS = ["Type", "Original", "Placeholder", "Fake", "Variants"]
 
 
 # ── pre-ingest metadata dialog ────────────────────────────────────────────────
@@ -588,35 +585,6 @@ class DocsTab(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # ── anon mode header (shown only for ANON sets) ───────────────────
-        self._anon_header = QFrame()
-        self._anon_header.setFrameShape(QFrame.Shape.StyledPanel)
-        from evid.gui.theme import anon_header_label_stylesheet, anon_header_stylesheet
-
-        self._anon_header.setStyleSheet(anon_header_stylesheet())
-        ah = QHBoxLayout(self._anon_header)
-        ah.setContentsMargins(8, 4, 8, 4)
-        lbl = QLabel("Anonymization mode:")
-        lbl.setStyleSheet(anon_header_label_stylesheet())
-        ah.addWidget(lbl)
-
-        self._rb_real = QRadioButton("Real")
-        self._rb_placeholder = QRadioButton("Placeholder")
-        self._rb_fake = QRadioButton("Fake")
-        self._rb_real.setChecked(True)
-        for rb in (self._rb_real, self._rb_placeholder, self._rb_fake):
-            rb.setStyleSheet(anon_header_label_stylesheet())
-            ah.addWidget(rb)
-
-        self._anon_btn_group = QButtonGroup(self)
-        self._anon_btn_group.addButton(self._rb_real, 0)
-        self._anon_btn_group.addButton(self._rb_placeholder, 1)
-        self._anon_btn_group.addButton(self._rb_fake, 2)
-        self._anon_btn_group.idClicked.connect(self._on_anon_mode_radio)
-        ah.addStretch()
-        self._anon_header.hide()
-        outer.addWidget(self._anon_header)
-
         # ── horizontal splitter: doc list | right tabs ────────────────────
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -777,11 +745,6 @@ class DocsTab(QWidget):
 
         self._right_tabs.addTab(detail_splitter, "Detail")
 
-        # Tab 1: Anonymize (hidden for NORMAL sets)
-        self._anon_tab_widget = self._build_anon_tab()
-        self._right_tabs.addTab(self._anon_tab_widget, "Anonymize")
-        self._right_tabs.tabBar().setTabVisible(1, False)
-
         splitter.addWidget(self._right_tabs)
         splitter.setSizes([700, 400])
 
@@ -797,83 +760,6 @@ class DocsTab(QWidget):
         self._table.viewport().installEventFilter(self)
 
         signals.set_selected.connect(self._on_set_selected)
-        signals.anon_mode_changed.connect(self._on_anon_mode_signal)
-
-    # ── anon tab builder ──────────────────────────────────────────────────
-
-    def _build_anon_tab(self) -> QWidget:
-        widget = QWidget()
-        v = QVBoxLayout(widget)
-        v.setContentsMargins(0, 0, 0, 0)
-
-        anon_splitter = QSplitter(Qt.Orientation.Horizontal)
-
-        # left: YAML history
-        left = QWidget()
-        lv = QVBoxLayout(left)
-        lv.setContentsMargins(0, 0, 0, 0)
-        lv.addWidget(QLabel("Entity YAML history:"))
-        self._history_list = QListWidget()
-        self._history_list.itemClicked.connect(self._on_yaml_selected)
-        lv.addWidget(self._history_list)
-
-        hist_btns = QHBoxLayout()
-        self._set_current_btn = QPushButton("★ Set current")
-        self._set_current_btn.clicked.connect(self._on_set_current_yaml)
-        self._gen_yaml_btn = QPushButton("Generate YAML…")
-        self._gen_yaml_btn.clicked.connect(self._on_generate_yaml)
-        hist_btns.addWidget(self._set_current_btn)
-        hist_btns.addWidget(self._gen_yaml_btn)
-        lv.addLayout(hist_btns)
-        anon_splitter.addWidget(left)
-
-        # right: entity editor + anon preview
-        right = QWidget()
-        rv = QVBoxLayout(right)
-        rv.setContentsMargins(4, 0, 0, 0)
-
-        right_splitter = QSplitter(Qt.Orientation.Vertical)
-
-        # entity editor
-        entity_widget = QWidget()
-        ev = QVBoxLayout(entity_widget)
-        ev.setContentsMargins(0, 0, 0, 0)
-        ev.addWidget(QLabel("Entity editor:"))
-        self._entity_table = QTableWidget(0, len(_ENTITY_COLS))
-        self._entity_table.setHorizontalHeaderLabels(_ENTITY_COLS)
-        self._entity_table.horizontalHeader().setStretchLastSection(True)
-        ev.addWidget(self._entity_table)
-
-        entity_btns = QHBoxLayout()
-        self._save_entities_btn = QPushButton("Save entities")
-        self._save_entities_btn.clicked.connect(self._on_save_entities)
-        self._gen_fakes_btn = QPushButton("Generate fakes")
-        self._gen_fakes_btn.clicked.connect(self._on_generate_fakes)
-        entity_btns.addWidget(self._save_entities_btn)
-        entity_btns.addWidget(self._gen_fakes_btn)
-        ev.addLayout(entity_btns)
-        right_splitter.addWidget(entity_widget)
-
-        # anon preview
-        preview_widget = QWidget()
-        pv = QVBoxLayout(preview_widget)
-        pv.setContentsMargins(0, 4, 0, 0)
-        pv.addWidget(QLabel("Doc anon preview:"))
-        self._anon_preview_text = QPlainTextEdit()
-        self._anon_preview_text.setReadOnly(True)
-        self._anon_preview_text.setPlaceholderText(
-            "Select a document to preview anonymised text…"
-        )
-        pv.addWidget(self._anon_preview_text)
-        right_splitter.addWidget(preview_widget)
-        right_splitter.setSizes([300, 200])
-
-        rv.addWidget(right_splitter)
-        anon_splitter.addWidget(right)
-        anon_splitter.setSizes([260, 540])
-
-        v.addWidget(anon_splitter)
-        return widget
 
     # ── public ───────────────────────────────────────────────────────────
 
@@ -883,8 +769,6 @@ class DocsTab(QWidget):
             self._reload_preserving_selection()
 
     def reload(self, evidence_set: EvidenceSet) -> None:
-        from evid.models import AnonMode, SetType
-
         self._evidence_set = evidence_set
         self._active_tag_filter = set()
         self._docs = self._load_documents()
@@ -898,19 +782,6 @@ class DocsTab(QWidget):
 
         all_tags = sorted({tag for doc in self._docs for tag in doc.tags})
         self._tags_completer.setModel(QStringListModel(all_tags))
-
-        is_anon = evidence_set.set_type == SetType.ANON
-        self._anon_header.setVisible(is_anon)
-        self._right_tabs.tabBar().setTabVisible(1, is_anon)
-
-        if is_anon:
-            mode_idx = [AnonMode.REAL, AnonMode.PLACEHOLDER, AnonMode.FAKE].index(
-                evidence_set.anon_mode
-            )
-            self._anon_btn_group.button(mode_idx).setChecked(True)
-            self._refresh_yaml_history()
-
-        self._anon_preview_text.setPlainText("")
 
     # ── private ───────────────────────────────────────────────────────────
 
@@ -979,7 +850,6 @@ class DocsTab(QWidget):
                         tags=tags,
                         added=added,
                         indexed=meta.get("indexed", False),
-                        anon_pending=meta.get("anon_pending", False),
                         notes=meta.get("notes", ""),
                         source_url=info.get("url", ""),
                     )
@@ -1245,7 +1115,6 @@ class DocsTab(QWidget):
         self._detail_label.setText(info.get("label", ""))
         self._detail_url.setText(info.get("url", ""))
         self._detail_notes.setPlainText(meta.get("notes", ""))
-        self._update_anon_preview()
         carried = {t.strip() for t in info.get("tags", "").split(",") if t.strip()}
         self._pill_pool.set_carried_tags(carried)
         self._load_label_keys(doc)
@@ -1290,283 +1159,6 @@ class DocsTab(QWidget):
         self._pill_pool.set_active_tags(self._active_tag_filter)
         carried = {t.strip() for t in self._detail_tags.text().split(",") if t.strip()}
         self._pill_pool.set_carried_tags(carried)
-
-    # ── anon mode ─────────────────────────────────────────────────────────
-
-    def _on_anon_mode_radio(self, btn_id: int) -> None:
-        from evid.models import AnonMode
-
-        modes = [AnonMode.REAL, AnonMode.PLACEHOLDER, AnonMode.FAKE]
-        mode = modes[btn_id]
-        # Persist in set.yml
-        if self._evidence_set:
-            parent = self.window()
-            if hasattr(parent, "_set_manager"):
-                try:
-                    parent._set_manager.update_set_meta(
-                        self._evidence_set.slug, anon_mode=mode.value
-                    )
-                    self._evidence_set = parent._set_manager.load_set(
-                        self._evidence_set.slug
-                    )
-                except Exception:
-                    logger.exception(
-                        "Failed to save anon mode for %s", self._evidence_set.slug
-                    )
-        self._signals.anon_mode_changed.emit(mode.value)
-        self._update_anon_header_style(mode.value)
-        self._update_anon_preview()
-
-    def _on_anon_mode_signal(self, mode_str: str) -> None:
-        """React when sidebar (or another source) changes the mode."""
-        idx = {"real": 0, "placeholder": 1, "fake": 2}.get(mode_str, 0)
-        btn = self._anon_btn_group.button(idx)
-        if btn and not btn.isChecked():
-            btn.setChecked(True)
-        self._update_anon_header_style(mode_str)
-        self._update_anon_preview()
-
-    def _update_anon_header_style(self, mode_str: str) -> None:
-        if mode_str == "real":
-            bg, border, color = "#fff3cd", "#c97a00", "#7a4800"
-        elif mode_str == "placeholder":
-            bg, border, color = "#ffe0a0", "#b86800", "#6b3c00"
-        else:  # fake
-            bg, border, color = "#ffd0d0", "#c00000", "#7a0000"
-        self._anon_header.setStyleSheet(
-            f"QFrame {{ background:{bg}; border:2px solid {border}; border-radius:4px; padding:2px; }}"
-        )
-        label_style = f"font-weight:bold; color:{color}; border:none;"
-        rb_style = f"color:{color}; font-weight:bold; border:none;"
-        for child in self._anon_header.findChildren(QLabel):
-            child.setStyleSheet(label_style)
-        for rb in (self._rb_real, self._rb_placeholder, self._rb_fake):
-            rb.setStyleSheet(rb_style)
-
-    # ── anon tab helpers ──────────────────────────────────────────────────
-
-    def _refresh_yaml_history(self) -> None:
-        self._history_list.clear()
-        if not self._evidence_set:
-            return
-        parent = self.window()
-        if not hasattr(parent, "_anon_service"):
-            return
-        yamls = parent._anon_service.list_yamls(self._evidence_set)
-        for y in yamls:
-            label = y.path.name
-            if y.is_current:
-                label = f"★ {label}"
-            item = QListWidgetItem(label)
-            item.setData(Qt.ItemDataRole.UserRole, str(y.path))
-            self._history_list.addItem(item)
-
-    def _on_yaml_selected(self, item: QListWidgetItem) -> None:
-        self._current_yaml_path = Path(item.data(Qt.ItemDataRole.UserRole))
-        self._load_entities_to_table(self._current_yaml_path)
-
-    def _load_entities_to_table(self, yaml_path: Path) -> None:
-        with yaml_path.open("r", encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-        entities = data.get("entities", [])
-        self._entity_table.setRowCount(0)
-        for entity in entities:
-            row = self._entity_table.rowCount()
-            self._entity_table.insertRow(row)
-            self._entity_table.setItem(
-                row, 0, QTableWidgetItem(entity.get("entity_type", ""))
-            )
-            self._entity_table.setItem(
-                row, 1, QTableWidgetItem(entity.get("original", ""))
-            )
-            self._entity_table.setItem(
-                row, 2, QTableWidgetItem(entity.get("placeholder", ""))
-            )
-            self._entity_table.setItem(row, 3, QTableWidgetItem(entity.get("fake", "")))
-            self._entity_table.setItem(
-                row, 4, QTableWidgetItem(", ".join(entity.get("variants", [])))
-            )
-
-    def _on_set_current_yaml(self) -> None:
-        if not self._current_yaml_path or not self._evidence_set:
-            return
-        parent = self.window()
-        if hasattr(parent, "_anon_service"):
-            parent._anon_service.set_current(
-                self._evidence_set, self._current_yaml_path
-            )
-        self._refresh_yaml_history()
-
-    def _on_save_entities(self) -> None:
-        if not self._current_yaml_path:
-            return
-        entities = []
-        for row in range(self._entity_table.rowCount()):
-
-            def cell(c, r=row):
-                item = self._entity_table.item(r, c)
-                return item.text() if item else ""
-
-            variants = [v.strip() for v in cell(4).split(",") if v.strip()]
-            entities.append(
-                {
-                    "entity_type": cell(0),
-                    "original": cell(1),
-                    "placeholder": cell(2),
-                    "fake": cell(3),
-                    "variants": variants,
-                }
-            )
-        parent = self.window()
-        if hasattr(parent, "_anon_service"):
-            parent._anon_service.save_entity_yaml(
-                self._evidence_set, self._current_yaml_path, entities
-            )
-        logger.info("Saved entity YAML: %s", self._current_yaml_path.name)
-
-    def _on_generate_fakes(self) -> None:
-        if not self._current_yaml_path or not self._evidence_set:
-            return
-        parent = self.window()
-        if not hasattr(parent, "_anon_service"):
-            return
-        from evid.gui.workers import GenerateFakesWorker
-
-        progress_dlg = QProgressDialog("Generating fake values…", None, 0, 0, self)
-        progress_dlg.setWindowTitle("Anonymize")
-        progress_dlg.setWindowModality(Qt.WindowModality.WindowModal)
-        progress_dlg.show()
-
-        worker = GenerateFakesWorker(
-            parent._anon_service,
-            self._current_yaml_path,
-            self._evidence_set.anon_language,
-        )
-        worker.finished.connect(
-            lambda: self._load_entities_to_table(self._current_yaml_path)
-        )
-        worker.finished.connect(progress_dlg.close)
-        worker.error.connect(progress_dlg.close)
-        worker.error.connect(
-            lambda msg: QMessageBox.critical(self, "Generate fakes failed", msg)
-        )
-        self._workers.append(worker)
-        worker.start()
-
-    def _on_generate_yaml(self) -> None:
-        if not self._evidence_set:
-            QMessageBox.warning(self, "No set", "Select an evidence set first.")
-            return
-        from evid.gui.workers import AnonExtractWorker
-
-        dlg = QDialog(self)
-        dlg.setWindowTitle("Select documents for entity extraction")
-        dlg.resize(420, 320)
-        lv = QVBoxLayout(dlg)
-        lv.addWidget(QLabel("Select documents to extract entities from:"))
-        doc_list = QListWidget()
-        doc_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
-        docs_dir = self._evidence_set.path / "docs"
-        if docs_dir.exists():
-            for d in docs_dir.iterdir():
-                if d.is_dir():
-                    info_p = d / "info.yml"
-                    label = d.name
-                    if info_p.exists():
-                        try:
-                            with info_p.open("r", encoding="utf-8") as f:
-                                info = yaml.safe_load(f) or {}
-                            label = info.get("label", d.name)
-                        except Exception:
-                            pass
-                    item = QListWidgetItem(label)
-                    item.setData(Qt.ItemDataRole.UserRole, d.name)
-                    doc_list.addItem(item)
-        lv.addWidget(doc_list)
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(dlg.accept)
-        buttons.rejected.connect(dlg.reject)
-        lv.addWidget(buttons)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            return
-
-        selected = [
-            item.data(Qt.ItemDataRole.UserRole) for item in doc_list.selectedItems()
-        ]
-        if not selected:
-            return
-
-        parent = self.window()
-        if not hasattr(parent, "_anon_service"):
-            return
-        progress_dlg = QProgressDialog(
-            "Extracting entities from selected documents…", None, 0, 0, self
-        )
-        progress_dlg.setWindowTitle("Anonymize")
-        progress_dlg.setWindowModality(Qt.WindowModality.WindowModal)
-        progress_dlg.show()
-
-        worker = AnonExtractWorker(parent._anon_service, self._evidence_set, selected)
-        worker.finished.connect(self._on_anon_extract_done)
-        worker.error.connect(self._on_anon_extract_error)
-        worker.finished.connect(progress_dlg.close)
-        worker.error.connect(progress_dlg.close)
-        self._workers.append(worker)
-        worker.start()
-
-    def _on_anon_extract_done(self, yaml_path: str) -> None:
-        try:
-            self._refresh_yaml_history()
-            if self._evidence_set:
-                self._signals.anon_yaml_created.emit(self._evidence_set.slug)
-        except Exception:
-            logger.exception("Error after anon extraction completed")
-
-    def _on_anon_extract_error(self, msg: str) -> None:
-        try:
-            QMessageBox.critical(self, "Extraction failed", msg)
-        except Exception:
-            logger.exception("Error handling anon extraction failure: %s", msg)
-
-    def _update_anon_preview(self) -> None:
-        from evid.models import AnonMode, SetType
-
-        if not self._evidence_set or self._evidence_set.set_type != SetType.ANON:
-            return
-        doc = self._selected_doc()
-        if not doc:
-            self._anon_preview_text.setPlainText("")
-            return
-
-        typ_path = doc.path / "label.typ"
-        if not typ_path.exists():
-            candidates = list(doc.path.glob("*.typ"))
-            typ_path = candidates[0] if candidates else None
-        if not typ_path:
-            self._anon_preview_text.setPlainText("(no .typ file)")
-            return
-
-        try:
-            text = typ_path.read_text(encoding="utf-8")
-        except Exception:
-            self._anon_preview_text.setPlainText("(could not read .typ file)")
-            return
-
-        idx = self._anon_btn_group.checkedId()
-        mode = [AnonMode.REAL, AnonMode.PLACEHOLDER, AnonMode.FAKE][max(0, idx)]
-        parent = self.window()
-        if hasattr(parent, "_anon_service"):
-            try:
-                result = parent._anon_service.pseudonymize(
-                    text[:4000], self._evidence_set, mode
-                )
-                self._anon_preview_text.setPlainText(result)
-            except Exception as exc:
-                self._anon_preview_text.setPlainText(f"(preview error: {exc})")
-        else:
-            self._anon_preview_text.setPlainText(text[:4000])
 
     # ── ingest ────────────────────────────────────────────────────────────
 

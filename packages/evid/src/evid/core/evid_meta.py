@@ -1,4 +1,4 @@
-"""Per-document metadata sidecar (indexed, anon_pending, notes)."""
+"""Per-document metadata sidecar (indexed, notes)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,6 @@ META_CURRENT = "evid_meta.yml"
 _DEFAULT: dict[str, Any] = {
     "notes": "",
     "indexed": False,
-    "anon_pending": False,
 }
 
 

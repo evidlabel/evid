@@ -48,16 +48,24 @@ class VecService:
         self, doc: Document, typ_text: str, evidence_set: EvidenceSet
     ) -> None:
         """Chunk *typ_text* and upsert into the set's ChromaDB collection."""
-        from evid.vec.embeddings import generate_embeddings
+        from evid.vec.chunking import chunk_text
+        from evid.vec.embeddings import embed_documents, model_name
 
-        chunks = self._chunk(typ_text)
-        if not chunks:
+        pairs = chunk_text(typ_text)
+        if not pairs:
             logger.warning("No chunks for document %s", doc.uuid)
             return
+        chunks = [c for c, _ in pairs]
+        char_starts = [s for _, s in pairs]
 
         collection = self._collection(evidence_set)
+        # Record which model embedded this collection so queries can detect a
+        # stale index after the configured model changes.
+        try:
+            collection.modify(metadata={"embedding_model": model_name()})
+        except Exception:
+            logger.debug("Could not record embedding_model on collection")
         ids = [f"{doc.uuid}:{i}" for i in range(len(chunks))]
-        char_starts = self._char_starts(typ_text, chunks)
         metadatas = [
             {
                 "doc_uuid": doc.uuid,
@@ -75,7 +83,7 @@ class VecService:
         except Exception:
             pass  # collection may be empty
 
-        embeddings = generate_embeddings(chunks)
+        embeddings = embed_documents(chunks)
 
         # ChromaDB has a max batch size (~5461); add in batches to be safe.
         _BATCH = 2000
@@ -147,7 +155,7 @@ class VecService:
         filter_tags: list[str] | None = None,
     ) -> list[VecResult]:
         from evid.models import VecResult
-        from evid.vec.embeddings import generate_embeddings
+        from evid.vec.embeddings import embed_query, model_name
 
         collection = self._collection(evidence_set)
 
@@ -162,6 +170,19 @@ class VecService:
                 evidence_set.slug,
             )
             return []
+
+        # Warn if the index was built with a different embedding model.
+        indexed_model = (collection.metadata or {}).get("embedding_model")
+        current_model = model_name()
+        if indexed_model and indexed_model != current_model:
+            logger.warning(
+                "Set '%s' was indexed with '%s' but the active model is '%s'. "
+                "Results will be unreliable — run `evid set reindex -s %s`.",
+                evidence_set.slug,
+                indexed_model,
+                current_model,
+                evidence_set.slug,
+            )
         n_results = min(n_results, count)
         logger.debug(
             "Vector query on '%s': %d chunks available, n_results=%d",
@@ -171,7 +192,7 @@ class VecService:
         )
 
         where: dict | None = None
-        embedding = generate_embeddings([query_text])[0]
+        embedding = embed_query(query_text)
         results = collection.query(
             query_embeddings=[embedding],
             n_results=n_results,
@@ -212,20 +233,6 @@ class VecService:
     # ── internal ──────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _chunk(text: str) -> list[str]:
-        return [p.strip() for p in text.split("\n\n") if p.strip()]
-
-    @staticmethod
-    def _char_starts(text: str, chunks: list[str]) -> list[int]:
-        starts = []
-        pos = 0
-        for chunk in chunks:
-            idx = text.find(chunk, pos)
-            starts.append(max(idx, 0))
-            pos = idx + len(chunk) if idx >= 0 else pos
-        return starts
-
-    @staticmethod
     def _load_document(doc_dir: Path, doc_uuid: str) -> Document:
         from datetime import datetime
 
@@ -259,7 +266,6 @@ class VecService:
             tags=tags,
             added=datetime.now(tz=UTC),
             indexed=meta.get("indexed", False),
-            anon_pending=meta.get("anon_pending", False),
             notes=meta.get("notes", ""),
             source_url=info.get("url", ""),
         )

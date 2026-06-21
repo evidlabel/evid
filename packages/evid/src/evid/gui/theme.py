@@ -101,23 +101,6 @@ def tag_pill_styles() -> dict[str, str]:
     }
 
 
-def anon_header_stylesheet() -> str:
-    if is_dark_mode():
-        return (
-            "QFrame { background:#3d3520; border:2px solid #c97a00; "
-            "border-radius:4px; padding:2px; }"
-        )
-    return (
-        "QFrame { background:#fff3cd; border:2px solid #c97a00; "
-        "border-radius:4px; padding:2px; }"
-    )
-
-
-def anon_header_label_stylesheet() -> str:
-    color = "#e8c070" if is_dark_mode() else "#7a4800"
-    return f"font-weight:bold; color:{color}; border:none;"
-
-
 def muted_label_stylesheet() -> str:
     return (
         "color: #888; font-size: 11px;"

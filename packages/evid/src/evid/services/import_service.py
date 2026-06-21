@@ -9,7 +9,7 @@ An evid directory has the layout:
         label.bib       # optional: BibTeX
 
 evidmgr adds:
-    evidmgr_meta.yml    # notes, indexed, anon_pending
+    evidmgr_meta.yml    # notes, indexed
     set.yml             # top-level set metadata (created once per dataset)
 """
 
@@ -35,7 +35,6 @@ ProgressCallback = Callable[[int, int, str], None]
 _DEFAULT_META = {
     "notes": "",
     "indexed": False,
-    "anon_pending": False,
 }
 
 
@@ -168,14 +167,14 @@ def _import_dataset(
     for doc_idx, src_uuid_dir in enumerate(uuid_dirs, 1):
         progress(doc_idx, total_docs, f"Importing {src_uuid_dir.name}")
         try:
-            _import_doc(src_uuid_dir, docs_dir, evidence_set.set_type.value)
+            _import_doc(src_uuid_dir, docs_dir)
         except Exception:
             logger.exception("Failed to import doc %s", src_uuid_dir.name)
 
     return evidence_set
 
 
-def _import_doc(src_dir: Path, dest_docs_dir: Path, set_type: str) -> None:
+def _import_doc(src_dir: Path, dest_docs_dir: Path) -> None:
     """Copy one evid UUID directory into dest_docs_dir and add evidmgr_meta.yml."""
     dest_dir = dest_docs_dir / src_dir.name
 
@@ -190,9 +189,6 @@ def _import_doc(src_dir: Path, dest_docs_dir: Path, set_type: str) -> None:
     from evid.core.evid_meta import write_meta
 
     if not get_meta_path(dest_dir).exists():
-        meta = dict(_DEFAULT_META)
-        if set_type == "anon":
-            meta["anon_pending"] = True
-        write_meta(dest_dir, meta)
+        write_meta(dest_dir, dict(_DEFAULT_META))
 
     logger.debug("Imported doc %s", src_dir.name)

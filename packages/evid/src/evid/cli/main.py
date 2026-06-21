@@ -15,9 +15,12 @@ from evid.cli.callbacks import (
     label_callback,
     list_datasets_callback,
     list_docs_callback,
+    mcp_callback,
     quote_callback,
     rebut_callback,
+    reindex_callback,
     search_meta_callback,
+    search_text_callback,
     search_vec_callback,
     show_callback,
     tag_assign_callback,
@@ -64,10 +67,9 @@ def main():
     )
     sys.argv = [sys.argv[0], *unknown]
 
-    if len(sys.argv) == 1:
-        gui_callback()
-    else:
-        app.run()
+    # With no subcommand, treeparse prints root help (it finds no `func`).
+    # The GUI stays reachable via the explicit `evid gui` subcommand.
+    app.run()
 
 
 # ── root ───────────────────────────────────────────────────────────────────────
@@ -93,6 +95,17 @@ app = cli(
 
 app.commands.append(command(name="gui", help="Launch the GUI", callback=gui_callback))
 
+# ── mcp ────────────────────────────────────────────────────────────────────────
+
+app.commands.append(
+    command(
+        name="mcp",
+        help="Run the MCP server (stdio) for one set — a warm query session for agents",
+        callback=mcp_callback,
+        arguments=[argument(name="dataset", arg_type=str)],
+    )
+)
+
 # ── set ────────────────────────────────────────────────────────────────────────
 
 set_group = group(name="set", help="Evidence set management")
@@ -116,6 +129,15 @@ set_group.commands.append(
         name="track",
         help="Git-track an evidence set",
         callback=track_callback,
+        options=[_DATASET_OPTION],
+    )
+)
+
+set_group.commands.append(
+    command(
+        name="reindex",
+        help="Rebuild the vector index for every document in a set",
+        callback=reindex_callback,
         options=[_DATASET_OPTION],
     )
 )
@@ -350,6 +372,47 @@ search_group.commands.append(
         callback=search_meta_callback,
         arguments=[argument(name="pattern", arg_type=str)],
         options=[_DATASET_OPTION, _FORMAT_OPTION],
+    )
+)
+
+search_group.commands.append(
+    command(
+        name="text",
+        help="Full-text search over document bodies (fuzzy by default, or --regex)",
+        callback=search_text_callback,
+        arguments=[argument(name="query", arg_type=str)],
+        options=[
+            _DATASET_OPTION,
+            option(
+                flags=["-r", "--regex"],
+                flag=True,
+                help="Treat QUERY as a regex; return every match (else fuzzy)",
+            ),
+            option(
+                flags=["-n", "--n"],
+                arg_type=int,
+                default=10,
+                help="Max results",
+            ),
+            option(
+                flags=["--min-ratio"],
+                arg_type=float,
+                default=0.7,
+                help="Fuzzy match threshold 0-1 (fuzzy mode only)",
+            ),
+            option(
+                flags=["--context"],
+                arg_type=int,
+                default=160,
+                help="Context chars around each regex match",
+            ),
+            option(
+                flags=["--refresh"],
+                flag=True,
+                help="Re-extract cached text.txt before searching",
+            ),
+            _FORMAT_OPTION,
+        ],
     )
 )
 

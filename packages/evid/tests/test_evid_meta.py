@@ -7,7 +7,7 @@ from evid.core.evid_meta import META_CURRENT, META_LEGACY, read_meta, write_meta
 def test_write_creates_evid_meta(tmp_path):
     doc_dir = tmp_path / "uuid"
     doc_dir.mkdir()
-    write_meta(doc_dir, {"notes": "test", "indexed": True, "anon_pending": False})
+    write_meta(doc_dir, {"notes": "test", "indexed": True})
     assert (doc_dir / META_CURRENT).exists()
     assert not (doc_dir / META_LEGACY).exists()
     meta = read_meta(doc_dir)
@@ -23,7 +23,7 @@ def test_read_legacy_and_migrate_on_write(tmp_path):
         encoding="utf-8",
     )
     assert read_meta(doc_dir)["notes"] == "legacy"
-    write_meta(doc_dir, {"notes": "migrated", "indexed": True, "anon_pending": False})
+    write_meta(doc_dir, {"notes": "migrated", "indexed": True})
     assert (doc_dir / META_CURRENT).exists()
     assert not (doc_dir / META_LEGACY).exists()
     assert read_meta(doc_dir)["notes"] == "migrated"

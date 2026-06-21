@@ -23,12 +23,6 @@ def test_create_set_dirs(sm, tmp_path):
     set_dir = tmp_path / "sets" / "test-set"
     assert (set_dir / "docs").is_dir()
     assert (set_dir / "vecdb").is_dir()
-    assert not (set_dir / "anon").exists()  # normal set has no anon dir
-
-
-def test_create_anon_set_has_anon_dir(sm, tmp_path):
-    sm.create_set("Anon Set", set_type=SetType.ANON)
-    assert (tmp_path / "sets" / "anon-set" / "anon").is_dir()
 
 
 def test_list_sets(sm):

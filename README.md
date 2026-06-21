@@ -6,16 +6,19 @@
 
 Agent-oriented usage: see **[`SKILL.md`](SKILL.md)** in this directory.
 
+![evid GUI (light theme)](docs/assets/gui-light.png)
+
 ## Features
 
 - Ingest PDFs or URLs; extract text and metadata automatically
 - Label text snippets in a Typst editor with `#lab(key, text, note)` syntax
 - Export labelled snippets to BibTeX for citation in LaTeX/Typst
-- Semantic vector search across all ingested documents
+- Semantic vector search across all ingested documents (multilingual embeddings; configurable model)
+- Full-text body search — fuzzy (`rapidfuzz`) or regex — alongside metadata (regex) search
+- MCP server (`evid mcp <set>`) — a warm, single-dataset query session for agents (avoids per-call model reload; no cross-set discovery)
 - Regex metadata search over document fields
 - Tag documents (synced across `info.yml` and a global `tags.yml` registry)
 - Generate rebuttal documents from collected evidence
-- Anonymise documents (placeholder / fake entity substitution)
 
 ## Requirements
 
@@ -44,20 +47,21 @@ Evidence sets and the tag registry live under a single **data directory**:
 
 **Override:** `evid -d /path/to/store …` or set `data_dir` in `~/.local/share/evid/evid.yml` (used by the GUI).
 
-Per-document sidecar metadata is `evid_meta.yml` (`indexed`, `anon_pending`, `notes`). Legacy `evidmgr_meta.yml` files are read and migrated on the next write.
+**Embedding model:** vector search uses `embedding_model` from `evid.yml` (or the `EVID_EMBEDDING_MODEL` env var), default `intfloat/multilingual-e5-small`. After changing it, run `evid set reindex -s <set>` to rebuild each affected index.
+
+Per-document sidecar metadata is `evid_meta.yml` (`indexed`, `notes`). Legacy `evidmgr_meta.yml` files are read and migrated on the next write.
 
 ## GUI
 
-Launch with no subcommand (opens the **Evidence Manager** window):
+Running `evid` with no subcommand prints the CLI help. Launch the **Evidence
+Manager** window explicitly:
 
 ```bash
-evid
-# or explicitly:
 evid gui
 ```
 
 - **Sidebar** — evidence sets; select one to load it in the tabs.
-- **Docs** — ingest, list, detail edit, labelling, tags, anonymization sub-tab.
+- **Docs** — ingest, list, detail edit, labelling, tags.
 - **Search** — meta (regex over `info.yml`) and vector (semantic) search.
 
 **Docs table shortcuts**

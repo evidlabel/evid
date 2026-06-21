@@ -315,11 +315,7 @@ class CopyDocWorker(QThread):
             _log.debug("Copied %s → %s", self._src_doc_dir, dest_doc_dir)
 
             self.progress.emit(2, 3, "Updating metadata…")
-            from evid.models import SetType
-
-            meta = {"notes": "", "indexed": False, "anon_pending": False}
-            if self._dest_set.set_type == SetType.ANON:
-                meta["anon_pending"] = True
+            meta = {"notes": "", "indexed": False}
             from evid.core.evid_meta import write_meta
 
             write_meta(dest_doc_dir, meta)
@@ -387,29 +383,6 @@ class CopyDocWorker(QThread):
             self.error.emit(str(exc))
 
 
-class AnonExtractWorker(QThread):
-    """Runs AnonService.run_extract() in a background thread."""
-
-    finished = Signal(str)  # yaml_path as str
-    error = Signal(str)
-
-    def __init__(self, anon_service, evidence_set, doc_uuids, language=None):
-        super().__init__()
-        self._svc = anon_service
-        self._evidence_set = evidence_set
-        self._doc_uuids = doc_uuids
-        self._language = language
-
-    def run(self) -> None:
-        try:
-            path = self._svc.run_extract(
-                self._evidence_set, self._doc_uuids, self._language
-            )
-            self.finished.emit(str(path))
-        except Exception as exc:
-            self.error.emit(str(exc))
-
-
 class MetaSearchWorker(QThread):
     """Run meta (regex) search over info.yml in a background thread."""
 
@@ -456,21 +429,35 @@ class VectorSearchWorker(QThread):
             self.error.emit(str(exc))
 
 
-class GenerateFakesWorker(QThread):
-    """Generate fake entity values in a background thread."""
+class FullTextSearchWorker(QThread):
+    """Run full-text (fuzzy/regex) body search in a background thread."""
 
-    finished = Signal()
+    finished = Signal(list)  # list[TextHit]
     error = Signal(str)
 
-    def __init__(self, anon_service, yaml_path: Path, language: str) -> None:
+    def __init__(
+        self,
+        evidence_set: EvidenceSet,
+        query: str,
+        regex: bool,
+        n_results: int,
+    ):
         super().__init__()
-        self._svc = anon_service
-        self._yaml_path = yaml_path
-        self._language = language
+        self._evidence_set = evidence_set
+        self._query = query
+        self._regex = regex
+        self._n_results = n_results
 
     def run(self) -> None:
         try:
-            self._svc.generate_fakes(self._yaml_path, self._language)
-            self.finished.emit()
+            from evid.core.fulltext import search_fulltext
+
+            hits = search_fulltext(
+                self._evidence_set.path,
+                self._query,
+                regex=self._regex,
+                n=self._n_results,
+            )
+            self.finished.emit(hits)
         except Exception as exc:
             self.error.emit(str(exc))

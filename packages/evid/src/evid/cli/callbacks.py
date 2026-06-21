@@ -153,6 +153,57 @@ def _print_meta_results(
         console.print(table)
 
 
+def _print_text_results(
+    hits: list,
+    fmt: str,
+    query: str,
+    dataset: str,
+    regex: bool,
+) -> None:
+    mode = "regex" if regex else "fuzzy"
+    if not hits:
+        print(f"No full-text ({mode}) results for '{query}'.")
+        return
+    if fmt == "json":
+        data = [
+            {
+                "uuid": h.uuid,
+                "label": h.label,
+                "page": h.page,
+                "char_start": h.char_start,
+                "score": h.score,
+                "snippet": h.snippet,
+            }
+            for h in hits
+        ]
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+    elif fmt == "md":
+        print(f'## Full-text {mode} search: "{query}" — {dataset}\n')
+        for i, h in enumerate(hits, 1):
+            short = h.uuid[:8] + "…"
+            score = f" `score: {h.score:.3f}`" if h.score is not None else ""
+            print(f"{i}. **{h.label}** `p.{h.page}`{score} `{short}`")
+            print(f"   > {h.snippet}\n")
+    else:
+        console = Console()
+        title = f'Full-text {mode} search: "{query}" — {dataset}'
+        table = Table(title=title)
+        table.add_column("#", justify="right", style="dim", width=3)
+        if not regex:
+            table.add_column("Score", justify="right", width=7)
+        table.add_column("Page", justify="right", width=5)
+        table.add_column("Label", ratio=3)
+        table.add_column("Snippet", ratio=5)
+        for i, h in enumerate(hits, 1):
+            snippet = h.snippet[:160]
+            row = [str(i)]
+            if not regex:
+                row.append(f"{h.score:.3f}" if h.score is not None else "—")
+            row.extend([str(h.page), h.label, snippet])
+            table.add_row(*row)
+        console.print(table)
+
+
 # ── set callbacks ──────────────────────────────────────────────────────────────
 
 
@@ -515,6 +566,89 @@ def search_meta_callback(
     set_path = set_dir(DIRECTORY, dataset)
     results = search_meta_documents(set_path, pattern)
     _print_meta_results(results, fmt=format, pattern=pattern, dataset=dataset)
+
+
+def search_text_callback(
+    db: str = None,
+    query: str = None,
+    dataset: str = None,
+    regex: bool = False,
+    n: int = 10,
+    min_ratio: float = 0.7,
+    context: int = 160,
+    refresh: bool = False,
+    format: str = "table",
+):
+    """Full-text search over document bodies (fuzzy by default, or --regex)."""
+    if not query:
+        sys.exit("QUERY argument is required.")
+    dataset = _resolve_dataset(dataset, "Select dataset to search", allow_create=False)
+
+    from evid.core.fulltext import search_fulltext
+
+    set_path = set_dir(DIRECTORY, dataset)
+    try:
+        hits = search_fulltext(
+            set_path,
+            query,
+            regex=regex,
+            n=n,
+            min_ratio=min_ratio,
+            context=context,
+            refresh=refresh,
+        )
+    except ValueError as exc:
+        sys.exit(str(exc))
+    _print_text_results(hits, fmt=format, query=query, dataset=dataset, regex=regex)
+
+
+def reindex_callback(db: str = None, dataset: str = None):
+    """Rebuild the vector index for every document in a set.
+
+    Re-chunks each doc's label.typ and replaces its existing vecdb entries.
+    Needed after a chunking change so old chunks are refreshed.
+    """
+    dataset = _resolve_dataset(dataset, "Select dataset to reindex", allow_create=False)
+
+    from evid.services.doc_ingester import DocIngester
+    from evid.services.set_manager import SetManager
+    from evid.services.vec_service import VecService
+
+    try:
+        evidence_set = SetManager(DIRECTORY).load_set(dataset)
+    except FileNotFoundError:
+        sys.exit(f"Dataset '{dataset}' not found.")
+
+    ingester = DocIngester(vec_service=VecService())
+    docs_dir = evidence_set.path / "docs"
+    doc_dirs = sorted(d for d in docs_dir.iterdir() if d.is_dir())
+    ok = 0
+    for doc_dir in doc_dirs:
+        if ingester.index_existing(doc_dir, evidence_set):
+            ok += 1
+    print(f"Reindexed {ok}/{len(doc_dirs)} document(s) in '{dataset}'.")
+
+
+def mcp_callback(db: str = None, dataset: str = None):
+    """Run the evid MCP server (stdio) — a warm query session for agents.
+
+    Loads the embedding model once and keeps Chroma clients warm, so a sequence
+    of search calls avoids the per-process cold start. The server is scoped to a
+    single dataset (-s); it exposes no other set, so an attached agent cannot
+    wander into other (private) sets in the same database.
+    """
+    if not dataset:
+        sys.exit(
+            "`evid mcp <dataset>` requires a dataset — the server is scoped to one "
+            "set so an attached agent cannot reach other sets."
+        )
+    dataset = _resolve_dataset(dataset, allow_create=False)
+    from evid.mcpserver import serve
+
+    try:
+        serve(DIRECTORY, dataset)
+    except ValueError as exc:
+        sys.exit(str(exc))
 
 
 # ── other callbacks ────────────────────────────────────────────────────────────

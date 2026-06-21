@@ -21,7 +21,6 @@ from evid.config import EvidConfig
 from evid.gui.sidebar import Sidebar
 from evid.gui.signals import AppSignals
 from evid.gui.theme import apply_theme
-from evid.services.anon_service import AnonService
 from evid.services.doc_ingester import DocIngester
 from evid.services.set_manager import SetManager
 from evid.services.tag_service import TagService
@@ -94,7 +93,6 @@ class EvidWindow(QMainWindow):
         # ── services ──────────────────────────────────────────────────────
         self._set_manager = SetManager(data_dir)
         self._vec_service = VecService()
-        self._anon_service = AnonService()
         self._tag_service = TagService(data_dir)
         self._ingester = DocIngester(vec_service=self._vec_service)
         self._signals = AppSignals()
@@ -190,7 +188,6 @@ class EvidWindow(QMainWindow):
         self._signals.doc_ingested.connect(self._on_doc_ingested)
         self._signals.labels_updated.connect(self._on_labels_updated)
         self._signals.ingestion_error.connect(self._on_ingestion_error)
-        self._signals.anon_yaml_created.connect(self._on_anon_yaml_created)
 
     def _on_copy_doc_to_set(self, src_slug: str, doc_uuid: str, dest_slug: str) -> None:
         try:
@@ -221,10 +218,6 @@ class EvidWindow(QMainWindow):
     def _on_ingestion_error(self, msg: str) -> None:
         logger.error("Ingestion error: %s", msg)
         self.statusBar().showMessage(f"Ingest failed: {msg[:120]}", 8000)
-
-    def _on_anon_yaml_created(self, set_slug: str) -> None:
-        if self._sidebar.active_set() and self._sidebar.active_set().slug == set_slug:
-            self._docs_tab.reload_current_set()
 
     def closeEvent(self, event) -> None:
         try:

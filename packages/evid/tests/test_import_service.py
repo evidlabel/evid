@@ -159,18 +159,6 @@ def test_import_evid_dir_empty_db_returns_empty(tmp_path):
     assert result == []
 
 
-def test_import_anon_set_marks_anon_pending(tmp_path):
-    db = _make_evid_db(tmp_path)
-    sm = SetManager(tmp_path / "evidmgr")
-    import_evid_dir(db, sm, set_type="anon")
-    docs = sm.list_documents("dataset1")
-    for doc_dir in docs:
-        from evid.core.evid_meta import read_meta
-
-        meta = read_meta(doc_dir)
-        assert meta["anon_pending"] is True
-
-
 def test_import_progress_callback_called(tmp_path):
     db = _make_evid_db(tmp_path)
     sm = SetManager(tmp_path / "evidmgr")

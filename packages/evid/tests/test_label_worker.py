@@ -70,7 +70,7 @@ def _make_doc_dir(es_path: Path, doc_uuid: str, with_typ: bool = True) -> Path:
     with (doc_dir / "info.yml").open("w") as f:
         yaml.safe_dump(info, f)
     with (doc_dir / "evidmgr_meta.yml").open("w") as f:
-        yaml.safe_dump({"notes": "", "indexed": False, "anon_pending": False}, f)
+        yaml.safe_dump({"notes": "", "indexed": False}, f)
     if with_typ:
         (doc_dir / "label.typ").write_text("#show: doc => doc\n")
     return doc_dir

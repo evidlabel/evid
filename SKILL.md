@@ -9,6 +9,17 @@ description: Use when user installs, sets up, or works with the `evid` evidence-
 
 **The pipeline does not end at `gather`.** When the user wants an argument, memo, brief, or report from a set, the deliverable is a citable Typst document built with `labquote` (via the **notat** skill). Quotes are pulled from `refs.yml` by key and rendered verbatim. Do not hand-write a Markdown essay. Read **Authoring** below before writing prose.
 
+## Workflow at a glance — search first, then quote
+
+Ingest → **search** → make citable → gather → author. Discovery is **search-first**, and quoting is **verbatim** — these two steps are the heart of evid:
+
+1. **Ingest** sources — `evid doc add` (keep the vector index; do not pass `--no-index`).
+2. **Find passages with vector search** — `evid search vec "<topic>" -s <set>` (agents: `evid -j search vec …`) is the **primary way to locate citable text**. It is *semantic*: query by meaning, not exact wording, and run a few targeted queries rather than dumping `text.txt` or reading whole PDFs. Cost is honest — the first query in a fresh process pays a ~0.5–2 s model load (each CLI invocation is its own process); later queries in the same run are fast. `gather`/flat-Markdown export is for **assembling** evidence you already found, *not* for discovery.
+3. **Make passages citable — verbatim.** Machine-quote with **`evid doc quote`** (the verbatim `rapidfuzz` path — see *Precise / machine quoting*) and/or manual `#lab` labelling. Never retype a legal/academic quote.
+4. **Gather** (`evid set gather`) → **author** a citable Typst document with `labquote`/notat.
+
+Steps 2–3 (vector search → machine quote) are the default loop for "find me a quote about X" and for sourcing every claim in a deliverable.
+
 ## Citing discipline
 
 `#lab(...)` spans are authoritative. `set gather` exports them unchanged. Gathered YAML may carry a `# generated-by: evid v…` watermark — keep watermarks; do not hand-edit entries.
@@ -50,7 +61,7 @@ Under `{data_dir}/`:
 sets/<slug>/set.yml
 sets/<slug>/docs/<uuid>/
   info.yml          # title, authors, tags (comma-separated), url, …
-  evid_meta.yml     # notes, indexed, anon_pending (reads legacy evidmgr_meta.yml)
+  evid_meta.yml     # notes, indexed (reads legacy evidmgr_meta.yml)
   original.pdf      # or original filename from CLI ingest
   label.typ → label.json, label.bib   # manual #lab labelling pipeline
   text.txt          # cached flat plain text (machine quoting; stable char offsets)
@@ -63,7 +74,7 @@ Tagging writes both `info.yml` and `tags.yml` (CLI `tag assign` or GUI). Keep th
 ## Core
 
 - **Set** — a collection per case or matter. List with `evid set list`; refer by name or number.
-- **GUI** (`evid`, no args): sidebar lists sets; **Docs** and **Search** tabs load the selected set on start and when selection changes.
+- **GUI** (`evid gui`): sidebar lists sets; **Docs** and **Search** tabs load the selected set on start and when selection changes.
 
 ## Set management
 
@@ -71,7 +82,12 @@ Tagging writes both `info.yml` and `tags.yml` (CLI `tag assign` or GUI). Keep th
 evid set list
 evid set create my-case
 evid set track my-case          # git-init the set directory
+evid set reindex -s my-case     # rebuild the vector index for every doc in the set
 ```
+
+Use `set reindex` to refresh an existing set's vector index after upgrading evid (e.g. a chunking or embedding-model change) — it re-chunks each `label.typ` and replaces the old vecdb entries.
+
+**Embedding model.** Vector search uses a sentence-transformers model, configurable via `embedding_model` in `{data_dir}/evid.yml` or the `EVID_EMBEDDING_MODEL` env var (env wins). Default: **`intfloat/multilingual-e5-small`** — multilingual (strong on Danish legal text), 384-dim, MIT. Changing the model invalidates existing indexes (embeddings from two models aren't comparable), so **run `evid set reindex` on each set after changing it** — a query against a stale index logs a warning. e5 models apply `query:`/`passage:` prefixes automatically; other models use none.
 
 ## Add files
 
@@ -129,9 +145,9 @@ Add this in **Keyboard Shortcuts (JSON)** (`Preferences: Open Keyboard Shortcuts
 
 ## Precise / machine quoting
 
-When an agent needs a **verbatim** quote from a document already in the set (paraphrase is unacceptable for legal or academic work), never retype the text. The `rapidfuzz` matcher locates it.
+This is the **verbatim quoting workflow** — the core of evid for sourcing claims. When an agent needs a **verbatim** quote from a document already in the set (paraphrase is unacceptable for legal or academic work), never retype the text. The `rapidfuzz` matcher locates it.
 
-**Find what to quote.** Pick one approach:
+**Find what to quote — search first.** Vector search is the primary discovery tool; pick one approach:
 
 - **One shot (uses the vector index):**
   ```bash
@@ -202,24 +218,53 @@ If a quote is not yet in `refs.yml`, do not type it. Label it (`evid`) or machin
 evid tag assign <uuid> "priority-review" -s my-case   # updates info.yml + tags.yml
 evid tag list
 evid tag show priority-review -s my-case
-evid search vec "query" -s my-case --n 15
-evid search meta "pattern" -s my-case --format json
+evid search vec "query" -s my-case --n 15            # semantic (vector)
+evid search meta "pattern" -s my-case --format json  # regex over info.yml metadata
+evid search text "phrase" -s my-case                 # full-text body, fuzzy (rapidfuzz)
+evid search text "Section \d+" -s my-case --regex    # full-text body, regex
 ```
 
+Three search axes: **`vec`** (semantic meaning), **`meta`** (regex over `info.yml`
+fields), and **`text`** (the document *body*). `search text` extracts each doc's
+plain text (PDF/txt → cached `text.txt`) and matches it: fuzzy `rapidfuzz`
+ranking by default (tolerant of typos/paraphrase, one hit per doc), or every
+`--regex` match. Each hit reports the page and a snippet. Useful when you know a
+phrase is *in* a document but it isn't labelled or semantically distinctive.
+Options: `--n`, `--min-ratio` (fuzzy threshold), `--context` (regex snippet
+width), `--refresh` (re-extract text.txt).
+
 Qualified tags default to `{set_slug}.{name}` when the name has no dot.
+
+## MCP server — warm query session for agents (research loops)
+
+Each `evid search vec` CLI call is a fresh process that re-imports torch and reloads the embedding model (**~10 s cold start**), so running a *sequence* of queries from the CLI is slow. For agent-driven research over a set, run the **MCP server** instead — it loads the model **once** and keeps Chroma warm, so every call after startup is sub-second:
+
+```bash
+evid -d ./evid mcp my-case     # stdio MCP server, scoped to ONE set (dataset is positional)
+```
+
+**The server is scoped to a single dataset** (the `<dataset>` argument is required). Every tool operates only on that set — there is no `list_sets` and no `dataset` argument — so an attached agent cannot discover or reach other (private) sets in the same database. Register that command as a stdio MCP server in your agent/client. Tools:
+
+- `search_vec(query, n=10, tag="")` — **primary discovery**; top-n chunks as JSON (score, label, uuid, chunk_idx, char_start, preview). Warm across calls.
+- `search_text(query, regex=False, n=10)` — full-text body search (fuzzy or regex); JSON with uuid, label, page, char_start, score, snippet.
+- `search_meta(pattern)` — regex over `info.yml`.
+- `list_docs()` — uuid/label/tags for this set.
+- `doc_quotes(uuid)` — a doc's labelled citations as Markdown.
+
+Use the server for the *discovery* loop (many `search_vec`/`search_text` calls); fall back to one-off `evid search …` on the CLI for a single query. Machine-quoting and gathering still go through the CLI (`evid doc quote`, `evid set gather`).
 
 ## GUI (Docs / Search)
 
 | Action | How |
 |--------|-----|
-| Open GUI | `evid` or `evid gui` |
+| Open GUI | `evid gui` (bare `evid` prints CLI help) |
 | Select set | Sidebar list (keyboard selection works) |
 | Multi-select docs | Drag across rows in Docs table; Ctrl+click toggle; Shift+click extend |
 | Copy doc to another set | **Alt+drag** a row onto a sidebar set |
 | Tag from Search results | Context menu — writes both stores |
 | Main tabs | Ctrl+PageUp / Ctrl+PageDown |
 
-Anonymize UI is under Docs → **Anonymize** (no top-level tab). The log pane at the bottom shows DEBUG and above.
+The log pane at the bottom shows DEBUG and above.
 
 ## Other commands
 
@@ -271,4 +316,4 @@ evid -d ./evid set gather mybrief -o brief/refs.yml
 # → author brief/main.typ with labquote (notat skill), then `typst compile`
 ```
 
-Run `evid <subcommand> --help` or `evid -j … --help` for current flags. `evid` alone opens the GUI.
+Run `evid <subcommand> --help` or `evid -j … --help` for current flags. Bare `evid` prints CLI help; `evid gui` opens the GUI.

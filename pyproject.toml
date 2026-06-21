@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "evid"
 version = "0.3.1"
-description = "Evidence management: PDF labeling, anonymization, vector search, and prompts."
+description = "Evidence management: PDF labeling, vector search, and prompts."
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2",
@@ -15,8 +15,6 @@ dependencies = [
     "PySide6",
     "arrow",
     "rich",
-    "gender-guesser",
-    "faker",
     "requests",
     "beautifulsoup4",
     "pypdf",
@@ -27,16 +25,11 @@ dependencies = [
     "pandas",
     "GitPython",
     "frontend",
-    "flashtext~=2.7",
-    "spacy>=3.8.2,<4",
     "rapidfuzz>=3.10.0,<4",
-    "presidio-analyzer>=2.2.0",
-    "presidio-anonymizer>=2.2.0",
-    "en-core-web-md",
-    "da-core-news-lg",
     "numpy",
     "chromadb",
     "sentence-transformers",
+    "mcp>=1.2",
 ]
 
 [project.scripts]
@@ -47,13 +40,6 @@ packages = ["packages/evid/src/evid"]
 
 [tool.hatch.build.targets.editable]
 packages = ["packages/evid/src/evid"]
-
-[tool.uv.workspace]
-members = ["packages/did"]
-
-[tool.uv.sources]
-en-core-web-md = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl" }
-da-core-news-lg = { url = "https://github.com/explosion/spacy-models/releases/download/da_core_news_lg-3.8.0/da_core_news_lg-3.8.0-py3-none-any.whl" }
 
 [dependency-groups]
 dev = [
@@ -67,9 +53,6 @@ dev = [
 addopts = "--import-mode=importlib"
 python_files = "test_*.py"
 python_functions = "test_*"
-# Only collect the evid package's tests. did/ and vecdb/ are workspace
-# members with their own (separately runnable) suites and aren't installed
-# into the root venv, so pytest cannot import them from here.
 testpaths = ["packages/evid/tests"]
 markers = [
     "slow: marks tests as slow",
@@ -85,7 +68,10 @@ select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "
 ignore = ["S101", "S104", "COM812", "ISC001", "E501"]
 
 [tool.ruff.lint.per-file-ignores]
-"scripts/*" = ["T201", "T203", "TRY003", "EM101", "EM102", "INP001", "EXE001"]
+"scripts/*" = [
+  "T201", "T203", "TRY003", "EM101", "EM102", "INP001", "EXE001",
+  "PLC0415", "SIM105", "S110", "BLE001",
+]
 # conftest.py is a pytest hook file, not part of an importable package
 "**/conftest.py" = ["INP001"]
 "packages/*/tests/*" = [
@@ -168,6 +154,12 @@ ignore = ["S101", "S104", "COM812", "ISC001", "E501"]
 "packages/evid/src/evid/config.py" = [
   "BLE001", "G004", "PTH123", "PTH118", "TRY003", "EM101",
   "RUF013", "FBT001", "FBT002",
+]
+# MCP server: lazy imports (don't pull torch until a query) + warm singletons;
+# tool signatures take boolean named params (regex=...) by design
+"packages/evid/src/evid/mcpserver.py" = [
+  "PLC0415", "PLW0603", "BLE001", "G004", "TRY003", "EM101", "EM102",
+  "FBT001", "FBT002",
 ]
 "packages/evid/src/evid/models.py" = [
   "RUF013", "FBT001", "FBT002", "TC001", "TC003", "S311", "S324",

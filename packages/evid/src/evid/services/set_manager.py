@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 from slugify import slugify
 
-from evid.models import AnonMode, EvidenceSet, SetType
+from evid.models import EvidenceSet, SetType
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,6 @@ class SetManager:
         name: str,
         set_type: SetType | str = SetType.NORMAL,
         description: str = "",
-        anon_language: str = "da",
     ) -> EvidenceSet:
         slug = slugify(name)
         set_dir = self.sets_dir / slug
@@ -56,8 +55,6 @@ class SetManager:
         set_dir.mkdir(parents=True)
         (set_dir / "docs").mkdir()
         (set_dir / "vecdb").mkdir()
-        if SetType(set_type) == SetType.ANON:
-            (set_dir / "anon").mkdir()
 
         created = datetime.now(tz=UTC)
         data = {
@@ -66,8 +63,6 @@ class SetManager:
             "type": str(SetType(set_type).value),
             "created": created.isoformat(),
             "description": description,
-            "anon_language": anon_language,
-            "anon_mode": "real",
         }
         with (set_dir / "set.yml").open("w", encoding="utf-8") as f:
             yaml.safe_dump(data, f, allow_unicode=True)
@@ -80,7 +75,6 @@ class SetManager:
             set_type=SetType(set_type),
             created=created,
             description=description,
-            anon_language=anon_language,
         )
 
     def delete_set(self, slug: str) -> None:
@@ -94,12 +88,12 @@ class SetManager:
         logger.info("Deleted set '%s'", slug)
 
     def update_set_meta(self, slug: str, **kwargs: object) -> EvidenceSet:
-        """Update name, description, or anon_language in set.yml."""
+        """Update name, description, or set_type in set.yml."""
         set_dir = self.sets_dir / slug
         yml_path = set_dir / "set.yml"
         with yml_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
-        allowed = {"name", "description", "anon_language", "anon_mode", "set_type"}
+        allowed = {"name", "description", "set_type"}
         for k, v in kwargs.items():
             if k in allowed:
                 # set_type is stored under "type" key to match create_set / _load_set_yml
@@ -132,6 +126,4 @@ class SetManager:
             set_type=SetType(data.get("type", "normal")),
             created=created,
             description=data.get("description", ""),
-            anon_language=data.get("anon_language", "da"),
-            anon_mode=AnonMode(data.get("anon_mode", "real")),
         )
