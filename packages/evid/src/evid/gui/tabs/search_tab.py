@@ -61,6 +61,10 @@ class SearchTab(QWidget):
         self._text_hits: list = []  # list[TextHit]
         self._workers: list = []
         self._search_busy = False
+        # When a search is submitted while another is in flight, remember the
+        # latest request and run it when the current one finishes (supersede)
+        # rather than silently dropping it.
+        self._pending_search = None  # callable | None
         self._prev_current_uuid: str | None = None
         from evid.gui.label_controller import LabelController
 
@@ -279,7 +283,10 @@ class SearchTab(QWidget):
         self._focus_query()
 
     def _run_meta_search(self) -> None:
-        if not self._evidence_set or self._search_busy:
+        if not self._evidence_set:
+            return
+        if self._search_busy:
+            self._pending_search = self._run_meta_search
             return
         from evid.gui.workers import MetaSearchWorker
 
@@ -296,16 +303,18 @@ class SearchTab(QWidget):
             self._fill_table_from_docs(docs)
         finally:
             self._set_search_busy(False)
+            self._run_pending_search()
 
     def _run_vector_search(self) -> None:
         if not self._evidence_set:
             QMessageBox.warning(self, "No set", "Select an evidence set first.")
             return
+        if not self._query_edit.text().strip():
+            return
         if self._search_busy:
+            self._pending_search = self._run_vector_search
             return
         query = self._query_edit.text().strip()
-        if not query:
-            return
         from evid.gui.workers import VectorSearchWorker
 
         self._set_search_busy(True)
@@ -326,16 +335,18 @@ class SearchTab(QWidget):
             self._fill_table_from_vec_results(self._results)
         finally:
             self._set_search_busy(False)
+            self._run_pending_search()
 
     def _run_text_search(self) -> None:
         if not self._evidence_set:
             QMessageBox.warning(self, "No set", "Select an evidence set first.")
             return
+        if not self._text_query.text().strip():
+            return
         if self._search_busy:
+            self._pending_search = self._run_text_search
             return
         query = self._text_query.text().strip()
-        if not query:
-            return
         from evid.gui.workers import FullTextSearchWorker
 
         self._set_search_busy(True)
@@ -355,23 +366,29 @@ class SearchTab(QWidget):
             self._fill_table_from_text_hits(hits)
         finally:
             self._set_search_busy(False)
+            self._run_pending_search()
 
     def _on_search_error(self, msg: str) -> None:
         self._set_search_busy(False)
         logger.error("Search failed: %s", msg)
         QMessageBox.critical(self, "Search failed", msg)
+        self._run_pending_search()
+
+    def _run_pending_search(self) -> None:
+        """Run the most recent search submitted while one was in flight."""
+        pending = self._pending_search
+        self._pending_search = None
+        if pending is not None:
+            pending()
 
     def _set_search_busy(self, busy: bool) -> None:
+        # Inputs stay enabled during a search so the user can type/submit their
+        # next query (a submit while busy supersedes via _pending_search). Only
+        # the Search buttons reflect the busy state.
         self._search_busy = busy
         self._meta_search_btn.setEnabled(not busy)
-        self._meta_filter.setEnabled(not busy)
         self._vec_search_btn.setEnabled(not busy)
-        self._query_edit.setEnabled(not busy)
-        self._n_spin.setEnabled(not busy)
         self._text_search_btn.setEnabled(not busy)
-        self._text_query.setEnabled(not busy)
-        self._text_n_spin.setEnabled(not busy)
-        self._text_regex_cb.setEnabled(not busy)
 
     def _fill_table_from_docs(self, docs: list[Document]) -> None:
         self._results = []
@@ -536,7 +553,7 @@ class SearchTab(QWidget):
         trail = "…" if win_end < len(text) else ""
         body = (
             f"{lead}{before}"
-            f"<mark style='background:#ffe08a;font-weight:bold'>{match}</mark>"
+            f"<mark style='background:#ffe08a;color:#1a1a1a;font-weight:bold'>{match}</mark>"
             f"{after}{trail}"
         )
         return f"<div style='white-space:pre-wrap'>{body}</div>"

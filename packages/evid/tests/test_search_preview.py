@@ -131,3 +131,47 @@ def test_text_hits_fill_table_and_preview(qapp):
     assert tab._prev_footer.text() == "Page 3"
     assert "found phrase here" in tab._prev_text.toPlainText()
     assert tab._prev_current_uuid == "u1"
+
+
+def _dummy_set(tmp_path):
+    from evid.models import EvidenceSet, SetType
+
+    return EvidenceSet(
+        name="S",
+        slug="s",
+        path=tmp_path,
+        set_type=SetType.NORMAL,
+        created=datetime.now(tz=UTC),
+    )
+
+
+def test_input_stays_enabled_during_search(qapp, tmp_path):
+    # Inputs must NOT be disabled while a search runs, or the next query's
+    # keystrokes get swallowed and the old query re-runs.
+    tab = _tab(qapp)
+    tab._evidence_set = _dummy_set(tmp_path)
+    tab._set_search_busy(True)
+    assert tab._query_edit.isEnabled()
+    assert tab._text_query.isEnabled()
+    assert tab._meta_filter.isEnabled()
+    assert not tab._vec_search_btn.isEnabled()  # button reflects busy
+
+
+def test_submit_while_busy_supersedes_not_drops(qapp, tmp_path):
+    # A query submitted while one is in flight is remembered (not silently
+    # dropped) and run when the current finishes.
+    tab = _tab(qapp)
+    tab._evidence_set = _dummy_set(tmp_path)
+    tab._search_busy = True
+    n_workers = len(tab._workers)
+    tab._query_edit.setText("a new query")
+    tab._run_vector_search()
+    assert tab._pending_search is not None  # remembered
+    assert len(tab._workers) == n_workers  # no worker started while busy
+
+    # _run_pending_search runs and clears the remembered request
+    ran = []
+    tab._pending_search = lambda: ran.append(True)
+    tab._run_pending_search()
+    assert ran == [True]
+    assert tab._pending_search is None
