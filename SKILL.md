@@ -180,9 +180,15 @@ evid set gather my-case -o exports/refs.yml
 evid set gather my-case -o exports/refs.bib
 evid set gather my-case -o exports/refs.md --include-keys
 evid set gather my-case -o exports/refs.json
+evid set gather my-case -o exports/today.md   --since today        # docs added today
+evid set gather my-case -o exports/recent.yml --since yesterday    # yesterday + today
+evid set gather my-case -o exports/week.json  --since 7d           # last 7 days
+evid set gather my-case -o exports/range.md   --since 2026-06-01 --until 2026-06-10
 ```
 
 `--no-regen` skips `typst query` when labels are current. Machine quotes are merged automatically.
+
+`--since` / `--until` filter to documents by **addition date** (`time_added` in `info.yml`), so you can gather only snippets from recently-added docs. Each accepts a `YYYY-MM-DD` date or a relative spec: `today`, `yesterday`, or `Nd` (N days ago). `--until` defaults to today; a range matching no documents exits with a message.
 
 Outputs are an **interchange/citation database, not a finished document.** `refs.yml` is authoring input; `.bib` and `.json` feed other tools; `.md` (with `--include-keys`) is a key-check dump, not a shippable argument. Do not stop at `gather` and hand-write prose around it.
 
@@ -279,6 +285,7 @@ The log pane at the bottom shows DEBUG and above.
 | `--format table\|md\|json` | List/show/search/gather |
 | `-j` | Top-level JSON (prefer for agents) |
 | `set gather --no-regen` | Skip typst query |
+| `set gather --since/--until` | Filter by addition date (`YYYY-MM-DD`, `today`, `yesterday`, `Nd`) |
 
 ## Common mistakes
 

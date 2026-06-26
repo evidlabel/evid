@@ -233,6 +233,8 @@ def gather_callback(
     output: str = None,
     no_regen: bool = False,
     include_keys: bool = False,
+    since: str = None,
+    until: str = None,
 ):
     """Gather all BibTeX from a dataset into a single output file."""
     dataset = _resolve_dataset(dataset, "Select dataset to gather", allow_create=False)
@@ -244,6 +246,8 @@ def gather_callback(
         Path(output).expanduser(),
         regen=not no_regen,
         include_keys=include_keys,
+        since=since,
+        until=until,
     )
 
 

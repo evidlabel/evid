@@ -164,6 +164,16 @@ set_group.commands.append(
                 flag=True,
                 help="Include label key names as sub-headings in .md output",
             ),
+            option(
+                flags=["--since"],
+                arg_type=str,
+                help="Only docs added on/after this date (YYYY-MM-DD, today, yesterday, or Nd)",
+            ),
+            option(
+                flags=["--until"],
+                arg_type=str,
+                help="Only docs added on/before this date (defaults to today)",
+            ),
         ],
     )
 )

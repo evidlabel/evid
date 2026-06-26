@@ -1,5 +1,6 @@
 """Gather all BibTeX from a dataset into a single output file."""
 
+import datetime
 import logging
 import re
 import subprocess
@@ -26,12 +27,64 @@ _TYPST_BIBLIO_TEMPLATE = """\
 """
 
 
+def _parse_date_spec(spec: str) -> datetime.date:
+    """Parse a --since/--until value into a date.
+
+    Accepts 'YYYY-MM-DD', 'today', 'yesterday', or 'Nd' / 'N' (N days ago).
+    """
+    s = spec.strip().lower()
+    today = datetime.date.today()
+    if s == "today":
+        return today
+    if s == "yesterday":
+        return today - datetime.timedelta(days=1)
+    m = re.fullmatch(r"(\d+)d?", s)  # "7d" or "7"
+    if m:
+        return today - datetime.timedelta(days=int(m.group(1)))
+    try:
+        return datetime.date.fromisoformat(s)
+    except ValueError:
+        sys.exit(
+            f"Invalid date spec '{spec}'. Use YYYY-MM-DD, today, yesterday, or Nd."
+        )
+
+
+def _names_in_range(
+    dataset_dir: Path,
+    since: datetime.date | None,
+    until: datetime.date | None,
+) -> set[str]:
+    """UUID dir names whose info.yml time_added is within [since, until]."""
+    keep: set[str] = set()
+    for uuid_dir in dataset_dir.iterdir():
+        if not uuid_dir.is_dir():
+            continue
+        info_file = uuid_dir / "info.yml"
+        if not info_file.exists():
+            continue
+        try:
+            raw = yaml.safe_load(info_file.read_text(encoding="utf-8"))
+            added_raw = InfoModel(**raw).time_added
+            added = datetime.date.fromisoformat(str(added_raw)[:10])
+        except Exception:
+            logger.debug("Skipping %s: missing/invalid time_added", uuid_dir.name)
+            continue  # no valid date -> excluded when a date filter is active
+        if since and added < since:
+            continue
+        if until and added > until:
+            continue
+        keep.add(uuid_dir.name)
+    return keep
+
+
 def gather_dataset(
     directory: Path,
     dataset: str,
     output: Path,
     regen: bool = True,
     include_keys: bool = False,
+    since: str | None = None,
+    until: str | None = None,
 ) -> None:
     """Gather all BibTeX from a dataset into a single output file.
 
@@ -54,10 +107,20 @@ def gather_dataset(
     if not dataset_dir.is_dir():
         sys.exit(f"Dataset docs directory '{dataset_dir}' does not exist.")
 
+    # Optional addition-date filter: restrict to docs whose info.yml time_added
+    # falls within [since, until] (until defaults to today, inclusive).
+    keep: set[str] | None = None
+    if since or until:
+        since_d = _parse_date_spec(since) if since else None
+        until_d = _parse_date_spec(until) if until else datetime.date.today()
+        keep = _names_in_range(dataset_dir, since_d, until_d)
+        if not keep:
+            sys.exit("No documents added in the given date range.")
+
     if regen:
-        bib_texts, errors = _collect_bibs_regen(dataset_dir)
+        bib_texts, errors = _collect_bibs_regen(dataset_dir, keep)
     else:
-        bib_texts, errors = _collect_bibs_existing(dataset_dir)
+        bib_texts, errors = _collect_bibs_existing(dataset_dir, keep)
 
     if errors:
         for err in errors:
@@ -65,7 +128,7 @@ def gather_dataset(
 
     # Machine quotes (machine.hayagriva, written by `evid doc quote`) are merged
     # in alongside the manual #lab snippets — and may be the only content present.
-    machine_entries = _collect_machine_hayagriva(dataset_dir)
+    machine_entries = _collect_machine_hayagriva(dataset_dir, keep)
 
     if not bib_texts and not machine_entries:
         sys.exit(f"No BibTeX content collected from dataset '{dataset}'.")
@@ -92,12 +155,14 @@ def gather_dataset(
                 bib_file,
             )
     elif suffix == ".md":
-        md = _dataset_to_markdown(dataset_dir, dataset, include_keys=include_keys)
+        md = _dataset_to_markdown(
+            dataset_dir, dataset, include_keys=include_keys, keep=keep
+        )
         output.write_text(md, encoding="utf-8")
     elif suffix == ".json":
         import json
 
-        data = _dataset_to_json(dataset_dir)
+        data = _dataset_to_json(dataset_dir, keep=keep)
         output.write_text(
             json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
         )
@@ -113,12 +178,18 @@ def gather_dataset(
             "Use .bib, .typ, .md, .json, .yaml, or .yml."
         )
 
-    _print_gather_stats(dataset_dir, dataset, output, errors)
+    _print_gather_stats(dataset_dir, dataset, output, errors, keep)
 
 
-def _collect_bibs_regen(dataset_dir: Path) -> tuple[list[str], list[str]]:
+def _collect_bibs_regen(
+    dataset_dir: Path, keep: set[str] | None = None
+) -> tuple[list[str], list[str]]:
     """Re-run typst query on every label.typ in parallel, then collect bibs."""
-    uuid_dirs = [d for d in sorted(dataset_dir.iterdir()) if d.is_dir()]
+    uuid_dirs = [
+        d
+        for d in sorted(dataset_dir.iterdir())
+        if d.is_dir() and (keep is None or d.name in keep)
+    ]
     typ_files = [d / "label.typ" for d in uuid_dirs if (d / "label.typ").exists()]
 
     if not typ_files:
@@ -162,13 +233,17 @@ def _collect_bibs_regen(dataset_dir: Path) -> tuple[list[str], list[str]]:
     return bib_texts, errors
 
 
-def _collect_bibs_existing(dataset_dir: Path) -> tuple[list[str], list[str]]:
+def _collect_bibs_existing(
+    dataset_dir: Path, keep: set[str] | None = None
+) -> tuple[list[str], list[str]]:
     """Collect existing label.bib files without re-running typst."""
     bib_texts: list[str] = []
     errors: list[str] = []
 
     for uuid_dir in sorted(dataset_dir.iterdir()):
         if not uuid_dir.is_dir():
+            continue
+        if keep is not None and uuid_dir.name not in keep:
             continue
         bib_file = uuid_dir / "label.bib"
         if not bib_file.exists():
@@ -196,7 +271,9 @@ def _load_machine_entries(uuid_dir: Path) -> dict[str, dict]:
     return data
 
 
-def _collect_machine_hayagriva(dataset_dir: Path) -> dict[str, dict]:
+def _collect_machine_hayagriva(
+    dataset_dir: Path, keep: set[str] | None = None
+) -> dict[str, dict]:
     """Merge every doc's machine.hayagriva entries into one {key: item} dict.
 
     Keys are namespaced by uuid prefix, so entries from different docs do not
@@ -204,6 +281,8 @@ def _collect_machine_hayagriva(dataset_dir: Path) -> dict[str, dict]:
     """
     merged: dict[str, dict] = {}
     for uuid_dir in sorted(d for d in dataset_dir.iterdir() if d.is_dir()):
+        if keep is not None and uuid_dir.name not in keep:
+            continue
         for key, item in _load_machine_entries(uuid_dir).items():
             merged.setdefault(key, item)
     return merged
@@ -222,8 +301,6 @@ def _machine_hayagriva_block(manual_yaml: str, entries: dict[str, dict]) -> str:
         manual_keys = set(yaml.safe_load(manual_yaml) or {})
     except Exception:
         manual_keys = set()
-
-    import datetime
 
     from evid import __version__ as _evid_version
 
@@ -397,9 +474,14 @@ def _print_gather_stats(
     dataset: str,
     output: Path,
     errors: list[str],
+    keep: set[str] | None = None,
 ) -> None:
     """Print a Rich summary table after gather completes."""
-    uuid_dirs = [d for d in sorted(dataset_dir.iterdir()) if d.is_dir()]
+    uuid_dirs = [
+        d
+        for d in sorted(dataset_dir.iterdir())
+        if d.is_dir() and (keep is None or d.name in keep)
+    ]
     n_docs = sum(1 for d in uuid_dirs if (d / "info.yml").exists())
     n_with_bib = sum(1 for d in uuid_dirs if (d / "label.bib").exists())
     n_snippets = 0
@@ -435,7 +517,10 @@ def _print_gather_stats(
 
 
 def _dataset_to_markdown(
-    dataset_dir: Path, dataset: str, include_keys: bool = False
+    dataset_dir: Path,
+    dataset: str,
+    include_keys: bool = False,
+    keep: set[str] | None = None,
 ) -> str:
     """Build a Markdown report by reading info.yml and label.bib from each UUID dir.
 
@@ -443,12 +528,12 @@ def _dataset_to_markdown(
     of whether a label.bib exists.  Snippet bullets are only emitted when a
     label.bib is present.
     """
-    import datetime
-
     uuid_dirs = sorted(d for d in dataset_dir.iterdir() if d.is_dir())
 
     docs: list[tuple[InfoModel, list[tuple[str, str, str]]]] = []
     for uuid_dir in uuid_dirs:
+        if keep is not None and uuid_dir.name not in keep:
+            continue
         info_file = uuid_dir / "info.yml"
         if not info_file.exists():
             logger.debug("Skipping %s: no info.yml", uuid_dir.name)
@@ -521,7 +606,7 @@ def _dataset_to_markdown(
     return "\n".join(lines)
 
 
-def _dataset_to_json(dataset_dir: Path) -> dict:
+def _dataset_to_json(dataset_dir: Path, keep: set[str] | None = None) -> dict:
     """Build a JSON-serialisable dict keyed by UUID.
 
     Structure::
@@ -541,6 +626,8 @@ def _dataset_to_json(dataset_dir: Path) -> dict:
     """
     result: dict = {}
     for uuid_dir in sorted(d for d in dataset_dir.iterdir() if d.is_dir()):
+        if keep is not None and uuid_dir.name not in keep:
+            continue
         info_file = uuid_dir / "info.yml"
         if not info_file.exists():
             logger.debug("Skipping %s: no info.yml", uuid_dir.name)
@@ -637,8 +724,6 @@ def _bib_to_hayagriva(bib_text: str) -> str:
     # Stamp each entry with a provenance watermark comment so a reader can see
     # which tool produced it and from where. The comment is inert YAML (ignored
     # on load); an entry with no watermark was not emitted by a tool.
-    import datetime
-
     from evid import __version__ as _evid_version
 
     gen_date = datetime.date.today().isoformat()
@@ -668,7 +753,6 @@ def _bib_to_markdown(
     Document-level metadata (author, date, url) is emitted once per document.
     Each snippet becomes a ``###`` sub-heading with a ``- p. X: …`` bullet.
     """
-    import datetime
     from collections import OrderedDict
 
     db = btp.loads(bib_text)
