@@ -961,9 +961,12 @@ class DocsTab(QWidget):
         menu.addSeparator()
         if single:
             act_copy_uuid = menu.addAction("Copy UUID")
+            act_copy_uuids = None
             menu.addSeparator()
         else:
             act_copy_uuid = None
+            act_copy_uuids = menu.addAction(f"Copy UUIDs ({len(docs)})")
+            menu.addSeparator()
         act_copy_quotes = menu.addAction(
             "Copy quotes to clipboard"
             if single
@@ -1017,6 +1020,13 @@ class DocsTab(QWidget):
             from PySide6.QtWidgets import QApplication
 
             QApplication.clipboard().setText(doc.uuid)
+        elif action is act_copy_uuids:
+            from PySide6.QtWidgets import QApplication
+
+            QApplication.clipboard().setText(",".join(d.uuid for d in docs))
+            self.window().statusBar().showMessage(
+                f"Copied {len(docs)} UUIDs to clipboard", 3000
+            )
         elif action is act_copy_quotes:
             from PySide6.QtWidgets import QApplication
 
