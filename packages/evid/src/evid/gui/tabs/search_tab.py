@@ -124,11 +124,11 @@ class SearchTab(QWidget):
         tv.setContentsMargins(0, 0, 0, 0)
         trow = QHBoxLayout()
         self._text_query = QLineEdit()
-        self._text_query.setPlaceholderText("Full-text query (fuzzy, or regex)…")
+        self._text_query.setPlaceholderText("Full-text query (substring, or regex)…")
         self._text_query.returnPressed.connect(self._run_text_search)
         self._text_regex_cb = QCheckBox("Regex")
         self._text_regex_cb.setToolTip(
-            "Treat the query as a regular expression (else fuzzy rapidfuzz match)"
+            "Treat the query as a regular expression (else literal substring match)"
         )
         self._text_n_spin = QSpinBox()
         self._text_n_spin.setRange(1, 100)

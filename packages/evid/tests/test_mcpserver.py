@@ -23,8 +23,10 @@ def _seed(tmp_path):
     doc_dir.mkdir(parents=True)
     with (doc_dir / "info.yml").open("w", encoding="utf-8") as f:
         yaml.safe_dump({"uuid": "u1", "title": "Judgment 2024", "tags": "priority"}, f)
-    (doc_dir / "body.txt").write_text(
-        "The defendant was responsible for the safety inspections.", encoding="utf-8"
+    (doc_dir / "label.typ").write_text(
+        "= Judgment 2024\n\n#mset(values: (opage: 1))\n== Page 1\n"
+        "The defendant was responsible for the safety inspections.\n",
+        encoding="utf-8",
     )
     return sm
 

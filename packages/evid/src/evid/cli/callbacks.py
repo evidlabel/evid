@@ -160,7 +160,7 @@ def _print_text_results(
     dataset: str,
     regex: bool,
 ) -> None:
-    mode = "regex" if regex else "fuzzy"
+    mode = "regex" if regex else "substring"
     if not hits:
         print(f"No full-text ({mode}) results for '{query}'.")
         return
@@ -171,7 +171,6 @@ def _print_text_results(
                 "label": h.label,
                 "page": h.page,
                 "char_start": h.char_start,
-                "score": h.score,
                 "snippet": h.snippet,
             }
             for h in hits
@@ -181,26 +180,18 @@ def _print_text_results(
         print(f'## Full-text {mode} search: "{query}" — {dataset}\n')
         for i, h in enumerate(hits, 1):
             short = h.uuid[:8] + "…"
-            score = f" `score: {h.score:.3f}`" if h.score is not None else ""
-            print(f"{i}. **{h.label}** `p.{h.page}`{score} `{short}`")
+            print(f"{i}. **{h.label}** `p.{h.page}` `{short}`")
             print(f"   > {h.snippet}\n")
     else:
         console = Console()
         title = f'Full-text {mode} search: "{query}" — {dataset}'
         table = Table(title=title)
         table.add_column("#", justify="right", style="dim", width=3)
-        if not regex:
-            table.add_column("Score", justify="right", width=7)
         table.add_column("Page", justify="right", width=5)
         table.add_column("Label", ratio=3)
         table.add_column("Snippet", ratio=5)
         for i, h in enumerate(hits, 1):
-            snippet = h.snippet[:160]
-            row = [str(i)]
-            if not regex:
-                row.append(f"{h.score:.3f}" if h.score is not None else "—")
-            row.extend([str(h.page), h.label, snippet])
-            table.add_row(*row)
+            table.add_row(str(i), str(h.page), h.label, h.snippet[:160])
         console.print(table)
 
 
@@ -578,12 +569,10 @@ def search_text_callback(
     dataset: str = None,
     regex: bool = False,
     n: int = 10,
-    min_ratio: float = 0.7,
     context: int = 160,
-    refresh: bool = False,
     format: str = "table",
 ):
-    """Full-text search over document bodies (fuzzy by default, or --regex)."""
+    """Full-text search over document bodies (substring by default, or --regex)."""
     if not query:
         sys.exit("QUERY argument is required.")
     dataset = _resolve_dataset(dataset, "Select dataset to search", allow_create=False)
@@ -597,9 +586,7 @@ def search_text_callback(
             query,
             regex=regex,
             n=n,
-            min_ratio=min_ratio,
             context=context,
-            refresh=refresh,
         )
     except ValueError as exc:
         sys.exit(str(exc))

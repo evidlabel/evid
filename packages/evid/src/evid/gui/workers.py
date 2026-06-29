@@ -430,7 +430,7 @@ class VectorSearchWorker(QThread):
 
 
 class FullTextSearchWorker(QThread):
-    """Run full-text (fuzzy/regex) body search in a background thread."""
+    """Run full-text (substring/regex) body search in a background thread."""
 
     finished = Signal(list)  # list[TextHit]
     error = Signal(str)

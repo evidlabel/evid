@@ -388,7 +388,7 @@ search_group.commands.append(
 search_group.commands.append(
     command(
         name="text",
-        help="Full-text search over document bodies (fuzzy by default, or --regex)",
+        help="Full-text search over document bodies (substring by default, or --regex)",
         callback=search_text_callback,
         arguments=[argument(name="query", arg_type=str)],
         options=[
@@ -396,7 +396,7 @@ search_group.commands.append(
             option(
                 flags=["-r", "--regex"],
                 flag=True,
-                help="Treat QUERY as a regex; return every match (else fuzzy)",
+                help="Treat QUERY as a regex; return every match (else substring)",
             ),
             option(
                 flags=["-n", "--n"],
@@ -405,21 +405,10 @@ search_group.commands.append(
                 help="Max results",
             ),
             option(
-                flags=["--min-ratio"],
-                arg_type=float,
-                default=0.7,
-                help="Fuzzy match threshold 0-1 (fuzzy mode only)",
-            ),
-            option(
                 flags=["--context"],
                 arg_type=int,
                 default=160,
-                help="Context chars around each regex match",
-            ),
-            option(
-                flags=["--refresh"],
-                flag=True,
-                help="Re-extract cached text.txt before searching",
+                help="Context chars around each match",
             ),
             _FORMAT_OPTION,
         ],
