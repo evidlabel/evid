@@ -1,10 +1,18 @@
-![CI](https://github.com/evidlabel/evid/actions/workflows/ci.yml/badge.svg)![Version](https://img.shields.io/github/v/release/evidlabel/evid)
+![CI](https://github.com/evidlabel/evid/actions/workflows/ci.yml/badge.svg)![Version](https://img.shields.io/github/v/release/evidlabel/evid)![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 # evid
 
-Evidence manager: ingest PDFs/URLs, label `#lab` spans, search, gather BibTeX / Hayagriva.
+**Aim.** Human and agent collaboration on document sets for legal work: find, quote, and cite from the same store, without either side inventing wording.
 
-CLI: `evid -h`. Agent usage: [`SKILL.md`](SKILL.md).
+**Use.** Ingest PDFs and URLs into an evidence set. Search (semantic, metadata, full text). Make spans citable — by hand in Typst (`#lab`) or by machine (`evid doc quote`). Gather BibTeX / Hayagriva / Markdown / JSON. Author the brief elsewhere (Typst / notat), keys only.
+
+**Features.**
+- CLI + GUI over one on-disk layout (`sets/<slug>/docs/<uuid>/`)
+- Manual labelling in `label.typ`; machine quoting into `machine.hayagriva` (verbatim match, never paraphrase)
+- Vector, metadata, and body search; tags; gather for interchange
+- MCP server (`evid mcp <set>`) for a warm agent query session
+
+License: [MIT](LICENSE). CLI: `evid -h`. Agents: [`SKILL.md`](SKILL.md).
 
 ## Install
 
