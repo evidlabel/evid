@@ -29,12 +29,15 @@ recipes/
 !.github/workflows/ci.yml
 !.pre-commit-config.yaml
 
-# local / aux — stay on disk, not in git
+# local dev (this clone; not published)
+# Makefile: make docs / test / sync / fmt
+# docs/: Fumadocs site
+# scripts/: docs helpers (make docs-cli, screenshots)
 /Makefile
-clean.sh
-/CLAUDE.md
-.vscode/
 docs/
 scripts/
+/CLAUDE.md
+.vscode/
+clean.sh
 .github/workflows/docs.yml
 .github/workflows/screenshots.yml
