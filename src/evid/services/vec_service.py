@@ -1,0 +1,231 @@
+"""VecService — per-set ChromaDB client wrapping vecdb."""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from evid.models import Document, EvidenceSet, VecResult
+
+logger = logging.getLogger(__name__)
+
+_COLLECTION_NAME = "docs"
+
+
+class VecService:
+    """One ChromaDB PersistentClient per EvidenceSet, opened lazily."""
+
+    def __init__(self) -> None:
+        self._clients: dict[str, object] = {}  # slug → chromadb.PersistentClient
+
+    def _client(self, evidence_set: EvidenceSet) -> object:
+        slug = evidence_set.slug
+        if slug not in self._clients:
+            from evid.vec.db import get_client
+
+            vecdb_dir = evidence_set.path / "vecdb"
+            vecdb_dir.mkdir(exist_ok=True)
+            self._clients[slug] = get_client(str(vecdb_dir))
+        return self._clients[slug]
+
+    def _collection(self, evidence_set: EvidenceSet) -> object:
+        client = self._client(evidence_set)
+        try:
+            return client.get_collection(_COLLECTION_NAME)
+        except Exception:
+            return client.create_collection(_COLLECTION_NAME)
+
+    def close(self, slug: str) -> None:
+        """Release the ChromaDB client for a set (frees file lock)."""
+        self._clients.pop(slug, None)
+
+    # ── indexing ──────────────────────────────────────────────────────────────
+
+    def index_document(
+        self, doc: Document, typ_text: str, evidence_set: EvidenceSet
+    ) -> None:
+        """Chunk *typ_text* and upsert into the set's ChromaDB collection."""
+        from evid.vec.chunking import chunk_text
+        from evid.vec.embeddings import embed_documents, model_name
+
+        pairs = chunk_text(typ_text)
+        if not pairs:
+            logger.warning("No chunks for document %s", doc.uuid)
+            return
+        chunks = [c for c, _ in pairs]
+        char_starts = [s for _, s in pairs]
+
+        collection = self._collection(evidence_set)
+        # Record which model embedded this collection so queries can detect a
+        # stale index after the configured model changes.
+        try:
+            collection.modify(metadata={"embedding_model": model_name()})
+        except Exception:
+            logger.debug("Could not record embedding_model on collection")
+        ids = [f"{doc.uuid}:{i}" for i in range(len(chunks))]
+        metadatas = [
+            {
+                "doc_uuid": doc.uuid,
+                "label": doc.label,
+                "tags": ",".join(doc.tags),
+                "chunk_idx": i,
+                "char_start": char_starts[i],
+            }
+            for i in range(len(chunks))
+        ]
+
+        # Delete any existing chunks for this doc before re-indexing
+        try:
+            collection.delete(where={"doc_uuid": doc.uuid})
+        except Exception:
+            pass  # collection may be empty
+
+        embeddings = embed_documents(chunks)
+
+        # ChromaDB has a max batch size (~5461); add in batches to be safe.
+        _BATCH = 2000
+        for start in range(0, len(chunks), _BATCH):
+            end = start + _BATCH
+            collection.add(
+                documents=chunks[start:end],
+                embeddings=embeddings[start:end],
+                ids=ids[start:end],
+                metadatas=metadatas[start:end],
+            )
+        logger.info(
+            "Indexed %d chunks for %s in set '%s'",
+            len(chunks),
+            doc.uuid,
+            evidence_set.slug,
+        )
+
+    def index_document_isolated(
+        self,
+        doc: Document,
+        typ_text: str,
+        evidence_set: EvidenceSet,
+        timeout: float = 600.0,
+    ) -> tuple[bool, str]:
+        """Index *doc* in a spawned subprocess.
+
+        ChromaDB / sentence-transformers / onnxruntime occasionally crash
+        natively (SIGSEGV) on some Linux setups. Running indexing in a child
+        process means such a crash kills the child, not the GUI. Returns
+        ``(ok, message)``.
+        """
+        from evid.vec.safe_index import index_in_subprocess
+
+        vecdb_dir = evidence_set.path / "vecdb"
+        ok, msg = index_in_subprocess(
+            vecdb_dir,
+            doc.uuid,
+            doc.label,
+            list(doc.tags),
+            typ_text,
+            timeout=timeout,
+        )
+        if ok:
+            logger.info("Indexed %s in '%s' (isolated)", doc.uuid, evidence_set.slug)
+        else:
+            logger.warning(
+                "Isolated indexing for %s in '%s' failed: %s",
+                doc.uuid,
+                evidence_set.slug,
+                msg,
+            )
+        return ok, msg
+
+    def remove_document(self, doc_uuid: str, evidence_set: EvidenceSet) -> None:
+        collection = self._collection(evidence_set)
+        try:
+            collection.delete(where={"doc_uuid": doc_uuid})
+        except Exception:
+            logger.exception("Failed to remove %s from vecdb", doc_uuid)
+
+    # ── querying ──────────────────────────────────────────────────────────────
+
+    def query(
+        self,
+        evidence_set: EvidenceSet,
+        query_text: str,
+        n_results: int = 10,
+        filter_tags: list[str] | None = None,
+    ) -> list[VecResult]:
+        from evid.models import VecResult
+        from evid.vec.embeddings import embed_query, model_name
+
+        collection = self._collection(evidence_set)
+
+        # ChromaDB raises if n_results > collection count; cap it.
+        try:
+            count = collection.count()
+        except Exception:
+            count = 0
+        if count == 0:
+            logger.info(
+                "Vector collection for '%s' is empty — index docs first",
+                evidence_set.slug,
+            )
+            return []
+
+        # Warn if the index was built with a different embedding model.
+        indexed_model = (collection.metadata or {}).get("embedding_model")
+        current_model = model_name()
+        if indexed_model and indexed_model != current_model:
+            logger.warning(
+                "Set '%s' was indexed with '%s' but the active model is '%s'. "
+                "Results will be unreliable — run `evid set reindex -s %s`.",
+                evidence_set.slug,
+                indexed_model,
+                current_model,
+                evidence_set.slug,
+            )
+        n_results = min(n_results, count)
+        logger.debug(
+            "Vector query on '%s': %d chunks available, n_results=%d",
+            evidence_set.slug,
+            count,
+            n_results,
+        )
+
+        where: dict | None = None
+        embedding = embed_query(query_text)
+        results = collection.query(
+            query_embeddings=[embedding],
+            n_results=n_results,
+            where=where,
+        )
+
+        vec_results = []
+        docs_cache: dict[str, Document] = {}
+        for i, _doc_id in enumerate(results["ids"][0]):
+            meta = results["metadatas"][0][i]
+            distance = results["distances"][0][i]
+            chunk_text = results["documents"][0][i]
+            doc_uuid = meta["doc_uuid"]
+
+            # Tag filter is applied client-side (ChromaDB doesn't support array contains)
+            if filter_tags:
+                doc_tags = {
+                    t.strip() for t in meta.get("tags", "").split(",") if t.strip()
+                }
+                if not doc_tags.issuperset(filter_tags):
+                    continue
+
+            if doc_uuid not in docs_cache:
+                from evid.core.doc_loader import load_document
+
+                doc_dir = evidence_set.path / "docs" / doc_uuid
+                docs_cache[doc_uuid] = load_document(doc_dir, doc_uuid)
+
+            vec_results.append(
+                VecResult(
+                    doc=docs_cache[doc_uuid],
+                    chunk_text=chunk_text,
+                    score=1.0 - distance,  # cosine distance → similarity
+                    chunk_idx=meta.get("chunk_idx", 0),
+                    char_start=meta.get("char_start", 0),
+                )
+            )
+        return vec_results

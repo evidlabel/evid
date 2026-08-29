@@ -1,0 +1,121 @@
+"""Text cleaning functions for evid."""
+
+import logging
+import re
+
+logger = logging.getLogger(__name__)
+
+LIGATURES = {
+    "\ufb00": "ff",  # ﬀ
+    "\ufb01": "fi",  # ﬁ
+    "\ufb02": "fl",  # ﬂ
+    "\ufb03": "ffi",  # ﬃ
+    "\ufb04": "ffl",  # ﬄ
+    "\ufb05": "ft",  # ﬅ
+    "\ufb06": "st",  # ﬆ
+}
+
+
+_URL_CONT_END = "/?#&=-+_"
+_URL_CONT_START = "/?#&="
+_URL_SPLIT_RE = re.compile(r"(https?://\S+)\n(\S+)")
+
+
+def _rejoin_split_urls(text: str) -> str:
+    """Rejoin URLs broken across lines by HTML/PDF text extraction.
+
+    BeautifulSoup's get_text(separator='\\n') and PDF text extraction can
+    split URLs at element boundaries (e.g. <wbr>) or visual line wraps,
+    leaving fragments like:
+        https://example.com/
+        very/long/path?x=1
+    Merge such pairs only when there is a strong continuation signal
+    (URL-internal punctuation at the join), to avoid gluing a URL onto a
+    following sentence.
+    """
+
+    def _maybe_join(m: re.Match) -> str:
+        head, tail = m.group(1), m.group(2)
+        if head[-1] in _URL_CONT_END or tail[0] in _URL_CONT_START:
+            return head + tail
+        return m.group(0)
+
+    prev = None
+    while text != prev:
+        prev = text
+        text = _URL_SPLIT_RE.sub(_maybe_join, text)
+    return text
+
+
+_DEHYPHEN_RE = re.compile(r"([a-zæøåäöü])-\s*\n\s*([a-zæøåäöü])")
+
+
+def _dehyphenate(text: str) -> str:
+    """Rejoin words split by an end-of-line soft hyphen from PDF/HTML wrapping.
+
+    ``"mar-\\nkant"`` → ``"markant"``. Conservative: only joins when both sides of
+    the ``-\\n`` are lowercase letters, so a hyphen followed by a capital or a digit
+    (often a real compound or range) is left alone.
+
+    Known trade-off: a genuine hard-hyphen compound that happens to wrap *at the
+    hyphen* (e.g. ``"eks-\\npartner"``) is merged wrongly (``"ekspartner"``). This is
+    rare; verbatim spans produced from de-hyphenated text should be eyeballed when
+    they look odd. A hard-hyphen compound that does not wrap (``"eks-partner"`` on one
+    line) is untouched.
+    """
+    return _DEHYPHEN_RE.sub(r"\1\2", text)
+
+
+def clean_text_for_typst(text: str) -> str:
+    """Clean text for Typst by expanding ligatures and commenting lines with '@'."""
+    logger.info(f"clean_text_for_typst called with text length: {len(text)}")
+    text = _rejoin_split_urls(text)
+    # Expand ligatures
+    for lig, repl in LIGATURES.items():
+        if lig in text:
+            logger.info(f"Found ligature {lig!r} in text")
+            text = text.replace(lig, repl)
+            logger.info(f"Replaced ligature {lig!r} with {repl!r}")
+
+    # Split into lines
+    lines = text.split("\n")
+
+    # Process lines: comment if '@' in line, and add extra newline if ends with punctuation
+    processed_lines = []
+    for line in lines:
+        if "@" in line:
+            processed_lines.append("// " + line)
+        else:
+            processed_lines.append(line)
+            stripped = line.strip()
+            if stripped and stripped[-1] in ".!?":
+                processed_lines.append("")
+
+    # Join back
+    text = "\n".join(processed_lines)
+
+    # Escape bare Typst special characters. Each can otherwise open a
+    # delimiter that scraped text never closes:
+    #   #        → code escape ('unknown variable …')
+    #   *        → strong (usually recoverable, but escaped for symmetry)
+    #   $        → math ('unclosed delimiter')
+    #   _        → emphasis ('unclosed delimiter')
+    #   ` (BT)   → raw text ('unclosed raw text')
+    #   <        → label ('unclosed label')
+    #   [ / ]    → content block ('unclosed delimiter' when unbalanced)
+    #   ~        → superscript / tilde escape
+    #   ^        → superscript
+    #   { / }    → group delimiter
+    for ch in ("#", "*", "$", "_", "`", "<", "[", "]", "~", "^", "{", "}"):
+        text = text.replace(ch, "\\" + ch)
+
+    # Escape line-leading '/' that Typst would parse as a term-list item.
+    # Typst term syntax is `/ TERM: DESCRIPTION`; a bare '/' or '/' followed by
+    # whitespace at line start triggers `error: expected colon`. Typst accepts
+    # any unicode space after the marker (scraped pages use NBSP, e.g. nature.com
+    # pricing "/ 30 days"), so match all non-newline whitespace, not just [ \t].
+    text = re.sub(r"(?m)^([ \t]*)/(?=[^\S\n]*$|[^\S\n]+\S)", r"\1\\/", text)
+
+    # Collapse multiple newlines
+    text = re.sub(r"(\n\s*\n)+", r"\n\n", text)
+    return text
