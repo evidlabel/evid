@@ -10,8 +10,11 @@ from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
+    QHBoxLayout,
     QMainWindow,
+    QMessageBox,
     QPlainTextEdit,
+    QPushButton,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -27,6 +30,20 @@ from evid.services.tag_service import TagService
 from evid.services.vec_service import VecService
 
 logger = logging.getLogger(__name__)
+
+_HELP_TEXT = """evid — humans and agents on the same legal document set.
+
+Data dir: pass -d ./evid for a project-local store. evid gui [WORKDIR] only chdirs.
+
+Tabs: Docs (ingest, label, tags) and Search (vec / meta / text).
+  Ctrl+PageUp / Ctrl+PageDown cycle tabs. Ctrl+W closes the window.
+
+Docs: Ingest PDF, Add from URL, Index, Label (#lab in label.typ), Open dir.
+  Alt+drag a row onto another set in the sidebar to copy it.
+
+Citable = verbatim #lab or a machine quote pass. Never retype wording.
+
+F1 opens this help."""
 
 
 class _QtLogHandler(QObject, logging.Handler):
@@ -141,7 +158,16 @@ class EvidWindow(QMainWindow):
         self._setup_tabs()
         self._tab_bar.currentChanged.connect(self._stack.setCurrentIndex)
 
-        right_layout.addWidget(self._tab_bar)
+        top_bar = QWidget()
+        top_layout = QHBoxLayout(top_bar)
+        top_layout.setContentsMargins(0, 0, 4, 0)
+        top_layout.setSpacing(4)
+        top_layout.addWidget(self._tab_bar, 1)
+        self._help_btn = QPushButton("Help")
+        self._help_btn.setToolTip("Shortcuts and GUI overview (F1)")
+        self._help_btn.clicked.connect(self._on_help)
+        top_layout.addWidget(self._help_btn)
+        right_layout.addWidget(top_bar)
         right_layout.addWidget(self._stack)
 
         # Vertical: content + log pane
@@ -233,6 +259,9 @@ class EvidWindow(QMainWindow):
         logger.error("Ingestion error: %s", msg)
         self.statusBar().showMessage(f"Ingest failed: {msg[:120]}", 8000)
 
+    def _on_help(self) -> None:
+        QMessageBox.information(self, "evid help", _HELP_TEXT)
+
     def closeEvent(self, event) -> None:
         try:
             self._docs_tab.shutdown()
@@ -253,6 +282,7 @@ class EvidWindow(QMainWindow):
         app.installEventFilter(self._tab_filter)
         app.installEventFilter(self._tooltip_filter)
         QShortcut(QKeySequence("Ctrl+W"), self, self.close)
+        QShortcut(QKeySequence("F1"), self, self._on_help)
 
 
 def _print_startup_banner(data_dir: Path) -> None:

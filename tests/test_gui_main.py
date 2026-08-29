@@ -30,6 +30,32 @@ def test_main_window_creates(qapp, tmp_path):
     window.close()
 
 
+def test_main_window_help_button_opens_dialog(qapp, tmp_path):
+    from unittest.mock import patch
+
+    from evid.config import EvidConfig
+    from evid.gui.main_window import EvidMgrWindow
+
+    config = EvidConfig(data_dir=tmp_path)
+    window = EvidMgrWindow(config=config)
+    btn = window._help_btn
+    assert btn.text() == "Help"
+    assert btn.parent() is not None
+
+    with patch("evid.gui.main_window.QMessageBox") as mock_box:
+        btn.click()
+    mock_box.information.assert_called_once()
+    args, kwargs = mock_box.information.call_args
+    title = args[1] if len(args) > 1 else kwargs.get("title", "")
+    body = args[2] if len(args) > 2 else kwargs.get("text", "")
+    assert title.lower() == "evid help"
+    combined = f"{title} {body}".lower()
+    assert "alt" in combined
+    assert "ctrl" in combined
+    assert "#lab" in combined or "label" in combined
+    window.close()
+
+
 def test_sidebar_shows_empty_sets(qapp, tmp_path):
     from evid.config import EvidConfig
     from evid.gui.main_window import EvidMgrWindow
