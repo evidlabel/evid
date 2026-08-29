@@ -33,27 +33,34 @@ def test_main_window_creates(qapp, tmp_path):
 def test_main_window_help_button_opens_dialog(qapp, tmp_path):
     from unittest.mock import patch
 
+    from PySide6.QtWidgets import QLabel
+
     from evid.config import EvidConfig
-    from evid.gui.main_window import EvidMgrWindow
+    from evid.gui.main_window import EvidMgrWindow, HelpDialog
 
     config = EvidConfig(data_dir=tmp_path)
     window = EvidMgrWindow(config=config)
     btn = window._help_btn
     assert btn.text() == "Help"
-    assert btn.parent() is not None
 
-    with patch("evid.gui.main_window.QMessageBox") as mock_box:
+    with patch.object(HelpDialog, "exec", return_value=0) as exec_mock:
         btn.click()
-    mock_box.information.assert_called_once()
-    args, kwargs = mock_box.information.call_args
-    title = args[1] if len(args) > 1 else kwargs.get("title", "")
-    body = args[2] if len(args) > 2 else kwargs.get("text", "")
-    assert title.lower() == "evid help"
-    combined = f"{title} {body}".lower()
-    assert "alt" in combined
-    assert "ctrl" in combined
-    assert "#lab" in combined or "label" in combined
+    exec_mock.assert_called_once()
     window.close()
+
+    dlg = HelpDialog()
+    assert dlg.windowTitle() == "Help"
+    body = dlg.findChild(QLabel, "help_body")
+    assert body is not None
+    text = body.text().lower()
+    assert "tabs" in text
+    assert "shortcuts" in text
+    assert "ctrl+pageup" in text
+    assert "alt+drag" in text
+    assert "#lab" in text
+    assert "-d" not in text
+    assert "workdir" not in text
+    dlg.close()
 
 
 def test_sidebar_shows_empty_sets(qapp, tmp_path):

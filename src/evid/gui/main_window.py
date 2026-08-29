@@ -10,9 +10,11 @@ from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
+    QDialogButtonBox,
     QHBoxLayout,
+    QLabel,
     QMainWindow,
-    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QSplitter,
@@ -31,19 +33,43 @@ from evid.services.vec_service import VecService
 
 logger = logging.getLogger(__name__)
 
-_HELP_TEXT = """evid — humans and agents on the same legal document set.
+_HELP_HTML = """
+<p>Humans and agents share one legal document set.
+Cited wording is always verbatim.</p>
+<p><b>Tabs</b><br>
+Docs — ingest, label, tags<br>
+Search — vec, meta, text</p>
+<p><b>Shortcuts</b></p>
+<table>
+<tr><td>Ctrl+PageUp / PageDown</td><td style="padding-left:16px">cycle tabs</td></tr>
+<tr><td>Ctrl+W</td><td style="padding-left:16px">close</td></tr>
+<tr><td>F1</td><td style="padding-left:16px">help</td></tr>
+<tr><td>Alt+drag a row onto a set</td><td style="padding-left:16px">copy document</td></tr>
+</table>
+<p><b>Docs</b> — Ingest PDF · Add from URL · Index · Label (#lab) · Open dir</p>
+"""
 
-Data dir: pass -d ./evid for a project-local store. evid gui [WORKDIR] only chdirs.
 
-Tabs: Docs (ingest, label, tags) and Search (vec / meta / text).
-  Ctrl+PageUp / Ctrl+PageDown cycle tabs. Ctrl+W closes the window.
-
-Docs: Ingest PDF, Add from URL, Index, Label (#lab in label.typ), Open dir.
-  Alt+drag a row onto another set in the sidebar to copy it.
-
-Citable = verbatim #lab or a machine quote pass. Never retype wording.
-
-F1 opens this help."""
+class HelpDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Help")
+        self.setModal(True)
+        apply_theme(self)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 12)
+        layout.setSpacing(8)
+        body = QLabel()
+        body.setObjectName("help_body")
+        body.setTextFormat(Qt.TextFormat.RichText)
+        body.setWordWrap(True)
+        body.setText(_HELP_HTML)
+        body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(body)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        buttons.accepted.connect(self.accept)
+        layout.addWidget(buttons)
+        self.setMinimumWidth(440)
 
 
 class _QtLogHandler(QObject, logging.Handler):
@@ -260,7 +286,7 @@ class EvidWindow(QMainWindow):
         self.statusBar().showMessage(f"Ingest failed: {msg[:120]}", 8000)
 
     def _on_help(self) -> None:
-        QMessageBox.information(self, "evid help", _HELP_TEXT)
+        HelpDialog(self).exec()
 
     def closeEvent(self, event) -> None:
         try:
