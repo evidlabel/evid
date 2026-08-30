@@ -14,6 +14,17 @@
 
 License: [MIT](LICENSE). CLI: `evid -h`. Agents: [`SKILL.md`](SKILL.md).
 
+<table>
+<tr>
+<td align="center" width="50%"><img src="assets/gui-docs.png" alt="Docs tab"/></td>
+<td align="center" width="50%"><img src="assets/gui-search.png" alt="Search tab"/></td>
+</tr>
+<tr>
+<td align="center">Docs</td>
+<td align="center">Search</td>
+</tr>
+</table>
+
 ## Install
 
 Python 3.12+, [uv](https://docs.astral.sh/uv/), [`typst`](https://typst.app) on PATH.
@@ -35,4 +46,7 @@ evid -d ./evid doc add paper.pdf -s my-case
 ```bash
 uv sync
 HEADLESS=1 uv run pytest -v
+QT_QPA_PLATFORM=offscreen HEADLESS=1 uv run python scripts/gui_readme_shots.py
 ```
+
+`pre-commit install` also installs a **pre-push** hook that regenerates `assets/gui-docs.png` and `assets/gui-search.png` and fails if they differ from git.

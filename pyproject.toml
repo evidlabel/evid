@@ -93,6 +93,10 @@ select = ["E", "F", "W", "C90", "I", "N", "UP", "YTT", "S", "BLE", "FBT", "B", "
 ignore = ["S101", "S104", "COM812", "ISC001", "E501"]
 
 [tool.ruff.lint.per-file-ignores]
+"scripts/gui_readme_shots.py" = [
+  "T201", "PLC0415", "SLF001", "ARG001", "EXE001",
+  "SIM105", "S110", "BLE001",
+]
 # conftest.py is a pytest hook file, not part of an importable package
 "**/conftest.py" = ["INP001"]
 "tests/*" = [

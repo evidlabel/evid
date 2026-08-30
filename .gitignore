@@ -32,10 +32,12 @@ recipes/
 # local dev (this clone; not published)
 # Makefile: make docs / test / sync / fmt
 # docs/: Fumadocs site
-# scripts/: docs helpers (make docs-cli, screenshots)
+# scripts/: docs helpers (make docs-cli, Fumadocs snapshots)
+# gui_readme_shots.py is tracked — README PNGs live in git
 /Makefile
 docs/
-scripts/
+scripts/*
+!scripts/gui_readme_shots.py
 /AGENTS.md
 .vscode/
 clean.sh
