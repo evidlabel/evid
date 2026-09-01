@@ -46,7 +46,7 @@ def test_root_exports_types_and_config():
         "VecResult",
         "__version__",
     ]
-    assert __version__ == "0.4.0"
+    assert __version__ == "0.5.0"
     assert Document is evid.Document
     assert EvidConfig is evid.EvidConfig
     assert ConfigModel is evid.ConfigModel
@@ -88,7 +88,7 @@ def test_cli_version_is_source_version():
     from evid import __version__
     from evid.cli.main import app
 
-    assert app.version == __version__ == "0.4.0"
+    assert app.version == __version__ == "0.5.0"
 
 
 def test_cli_db_help_default_is_canonical_path():
