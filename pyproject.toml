@@ -36,6 +36,7 @@ evid = "evid.cli.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/evid"]
+force-include = { "src/evid/gui/assets/jura.svg" = "evid/gui/assets/jura.svg", "src/evid/gui/assets/jura.png" = "evid/gui/assets/jura.png" }
 
 [tool.hatch.build.targets.editable]
 packages = ["src/evid"]

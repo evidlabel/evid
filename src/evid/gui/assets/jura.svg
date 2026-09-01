@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Generator: visioncortex VTracer 0.6.5 -->
+
+<svg
+   version="1.1"
+   width="549"
+   height="574"
+   id="svg42"
+   sodipodi:docname="out.svg"
+   inkscape:version="1.2.2 (b0a8486541, 2022-12-01)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs46" />
+  <sodipodi:namedview
+     id="namedview44"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showgrid="false"
+     inkscape:zoom="1.1637799"
+     inkscape:cx="170.99453"
+     inkscape:cy="235.86934"
+     inkscape:window-width="2560"
+     inkscape:window-height="1371"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg42" />
+  <path
+     d="m 0,0 c 181.17,0 362.34,0 549,0 0,189.42 0,378.84 0,574 -181.17,0 -362.34,0 -549,0 C 0,384.58 0,195.16 0,0 Z"
+     fill="#000000"
+     id="path4"
+     inkscape:export-filename="path4.png"
+     inkscape:export-xdpi="96"
+     inkscape:export-ydpi="96" />
+  <path
+     d="m 0,0 c 181.17,0 362.34,0 549,0 0,189.42 0,378.84 0,574 -181.17,0 -362.34,0 -549,0 C 0,384.58 0,195.16 0,0 Z m 66,66 c 0,145.86 0,291.72 0,442 137.61,0 275.22,0 417,0 0,-145.86 0,-291.72 0,-442 -137.61,0 -275.22,0 -417,0 z"
+     fill="#2f5691"
+     id="path6" />
+  <path
+     d="m 239,115 c 63.36,0 126.72,0 192,0 0,114.18 0,228.36 0,346 -103.29,0 -206.58,0 -313,0 0,-41.25 0,-82.5 0,-125 21.12,0 42.24,0 64,0 0,19.8 0,39.6 0,60 61.05,0 122.1,0 185,0 0,-71.28 0,-142.56 0,-216 -42.24,0 -84.48,0 -128,0 0,-21.45 0,-42.9 0,-65 z"
+     fill="#fefefe"
+     id="path8" />
+</svg>

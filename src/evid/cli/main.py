@@ -101,7 +101,7 @@ app = cli(
 app.commands.append(
     command(
         name="gui",
-        help="Launch the GUI. Pass -d/--db PATH to open a project-local data directory (the directory that contains sets/).",
+        help="Launch the GUI (close hides to a bottom-right corner hint; a second launch raises the running instance). Pass -d/--db PATH to open a project-local data directory (the directory that contains sets/).",
         callback=gui_callback,
         arguments=[
             argument(
