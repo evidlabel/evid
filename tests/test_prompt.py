@@ -194,3 +194,131 @@ def test_quotes_yaml_multi_doc_is_list_with_uuid_once_each(tmp_path: Path) -> No
     assert isinstance(data, list)
     assert [d["uuid"] for d in data] == ["uuid-a", "uuid-b"]
     assert data[1]["labels"] == {"k2": {"text": "Second doc quote.", "page": 7}}
+
+
+def test_labels_to_yaml_includes_title_authors_url() -> None:
+    out = labels_to_yaml(
+        [
+            (
+                {
+                    "uuid": "abc-123",
+                    "title": "The Child Act",
+                    "authors": "Parliament",
+                    "url": "https://www.retsinformation.dk/eli/lta/2019/123",
+                },
+                [("k1", {"text": "quoted passage"})],
+            )
+        ]
+    )
+    data = yaml.safe_load(out)
+    assert data["uuid"] == "abc-123"
+    assert data["title"] == "The Child Act"
+    assert data["authors"] == "Parliament"
+    assert data["url"] == "https://www.retsinformation.dk/eli/lta/2019/123"
+    assert data["labels"] == {"k1": {"text": "quoted passage"}}
+    dumped = out.split("labels:", 1)[0]
+    assert dumped.index("uuid:") < dumped.index("title:") < dumped.index("authors:")
+    assert dumped.index("authors:") < dumped.index("url:")
+
+
+def test_labels_to_yaml_omits_section_when_it_repeats_doc_title() -> None:
+    """labtyp copies #mset title onto every label; that is the doc title, not a heading."""
+    out = labels_to_yaml(
+        [
+            (
+                {
+                    "uuid": "abc-123",
+                    "title": "The Child Act",
+                    "authors": "Parliament",
+                    "url": "https://example.com/x",
+                },
+                [
+                    (
+                        "k1",
+                        {
+                            "text": "quoted passage",
+                            "opage": 5,
+                            "title": "The Child Act",
+                        },
+                    ),
+                    (
+                        "k2",
+                        {
+                            "text": "another quote",
+                            "title": "Børnesyn",
+                        },
+                    ),
+                ],
+            )
+        ]
+    )
+    data = yaml.safe_load(out)
+    assert data["title"] == "The Child Act"
+    assert data["labels"]["k1"] == {"text": "quoted passage", "page": 5}
+    assert data["labels"]["k2"] == {"text": "another quote", "section": "Børnesyn"}
+
+
+def test_quotes_yaml_includes_title_authors_url_from_info(tmp_path: Path) -> None:
+    workdir = _make_doc(tmp_path, "case_hdr", "uuid-hdr")
+
+    data = yaml.safe_load(quotes_yaml([workdir]))
+
+    assert data["uuid"] == "uuid-hdr"
+    assert data["title"] == "Sample Title"
+    assert data["authors"] == "Alice"
+    assert data["url"] == "https://example.com/doc"
+    assert data["labels"]["q1"] == {"text": "Quoted passage.", "page": 3}
+
+
+def test_quotes_yaml_omits_empty_url(tmp_path: Path) -> None:
+    workdir = _make_doc(tmp_path, "case_nourl", "uuid-nourl", url="")
+
+    data = yaml.safe_load(quotes_yaml([workdir]))
+
+    assert "url" not in data
+    assert data["title"] == "Sample Title"
+    assert data["authors"] == "Alice"
+
+
+def test_labels_to_yaml_does_not_wrap_long_quotes() -> None:
+    quote = "Børnesyn " + ("principper " * 20)
+    assert len(quote) > 80
+    out = labels_to_yaml(
+        [
+            (
+                {
+                    "uuid": "abc",
+                    "title": "Barnets Lov",
+                    "authors": "Ministeriet",
+                    "url": "https://example.com/x",
+                },
+                [
+                    ("k1", {"text": quote, "opage": 5}),
+                    ("k2", {"text": "second selected quote", "opage": 6}),
+                ],
+            )
+        ]
+    )
+    data = yaml.safe_load(out)
+    assert data["labels"]["k1"]["text"] == quote
+    assert data["labels"]["k2"]["text"] == "second selected quote"
+    assert quote in out
+
+
+def test_labels_to_yaml_multiline_quotes_are_block_scalars() -> None:
+    quote = "line1\nline2\nline3"
+    out = labels_to_yaml(
+        [
+            (
+                {"uuid": "abc", "title": "T", "authors": "A"},
+                [
+                    ("k1", {"text": quote, "opage": 1}),
+                    ("k2", {"text": "other", "opage": 2}),
+                ],
+            )
+        ]
+    )
+    data = yaml.safe_load(out)
+    assert data["labels"]["k1"]["text"] == quote
+    assert data["labels"]["k2"]["text"] == "other"
+    assert "line1\n\n" not in out

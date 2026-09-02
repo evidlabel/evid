@@ -1571,7 +1571,19 @@ class DocsTab(QWidget):
                 (it.text(), it.data(Qt.ItemDataRole.UserRole) or {}) for it in items
             ]
             QApplication.clipboard().setText(
-                labels_to_yaml([(self._detail_uuid_full, pairs)])
+                labels_to_yaml(
+                    [
+                        (
+                            {
+                                "uuid": self._detail_uuid_full,
+                                "title": self._detail_title.text().strip(),
+                                "authors": self._detail_authors.text().strip(),
+                                "url": self._detail_url.text().strip(),
+                            },
+                            pairs,
+                        )
+                    ]
+                )
             )
             self.window().statusBar().showMessage(
                 f"Copied {len(items)} label(s) as YAML", 3000

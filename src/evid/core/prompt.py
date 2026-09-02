@@ -2,7 +2,9 @@
 
 import json
 import logging
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -10,11 +12,78 @@ from evid.models import InfoModel
 
 logger = logging.getLogger(__name__)
 
+_HEADER_KEYS = ("title", "authors", "url")
+
+
+class _Literal(str):
+    """String emitted as a YAML literal block scalar (``|`` / ``|-``)."""
+
+    __slots__ = ()
+
+
+class _LabelsDumper(yaml.SafeDumper):
+    """SafeDumper with a representer for verbatim quote blocks."""
+
+
+def _represent_literal(dumper: yaml.SafeDumper, data: str):
+    return dumper.represent_scalar("tag:yaml.org,2002:str", str(data), style="|")
+
+
+_LabelsDumper.add_representer(_Literal, _represent_literal)
+
+
+def _quote_scalar(value: object) -> str | _Literal:
+    text = str(value)
+    return _Literal(text) if "\n" in text else text
+
+
+def _load_info(workdir: Path) -> dict | None:
+    """Load and validate info.yml for a doc workdir. None if unreadable."""
+    info_file = workdir / "info.yml"
+    try:
+        with info_file.open("r", encoding="utf-8") as f:
+            info = yaml.safe_load(f)
+        return InfoModel(**info).model_dump()
+    except (OSError, yaml.YAMLError, TypeError, ValueError):
+        logger.exception("Failed to load info for %s", workdir)
+        return None
+
+
+def _info_header(workdir: Path) -> dict[str, str]:
+    """title / authors / url from info.yml; omits empty fields."""
+    info = _load_info(workdir)
+    if not info:
+        return {}
+    header: dict[str, str] = {}
+    for key in _HEADER_KEYS:
+        val = info.get(key) or ""
+        if isinstance(val, list):
+            val = ", ".join(str(x) for x in val)
+        val = str(val).strip()
+        if val:
+            header[key] = val
+    return header
+
+
+def _doc_ref(ref: str | Mapping[str, Any]) -> tuple[str, dict[str, str]]:
+    """Split a labels_to_yaml doc ref into (uuid, header fields)."""
+    if isinstance(ref, str):
+        return ref, {}
+    uuid = str(ref.get("uuid") or "")
+    header: dict[str, str] = {}
+    for key in _HEADER_KEYS:
+        val = ref.get(key)
+        if key == "authors" and not val:
+            val = ref.get("author")
+        text = str(val).strip() if val else ""
+        if text:
+            header[key] = text
+    return uuid, header
+
 
 def _doc_chapter(workdir: Path) -> str | None:
     """Build the markdown chapter for one doc workdir, or None if it has no labels."""
     json_file = workdir / "label.json"
-    info_file = workdir / "info.yml"
 
     if not json_file.exists():
         logger.debug("No label.json for %s — unlabelled, skipping.", workdir)
@@ -30,13 +99,8 @@ def _doc_chapter(workdir: Path) -> str | None:
         logger.warning("Malformed label.json for %s: %s", workdir, e)
         return None
 
-    try:
-        with info_file.open("r", encoding="utf-8") as f:
-            info = yaml.safe_load(f)
-        validated_info = InfoModel(**info)
-        info = validated_info.model_dump()
-    except (OSError, yaml.YAMLError, ValueError):
-        logger.exception("Failed to load info for %s", workdir)
+    info = _load_info(workdir)
+    if info is None:
         return None
 
     title = info.get("title", "Unknown")
@@ -92,42 +156,67 @@ def label_entries(workdir: Path) -> list[tuple[str, dict]]:
     return pairs
 
 
-def labels_to_yaml(docs: list[tuple[str, list[tuple[str, dict]]]]) -> str:
+def labels_to_yaml(
+    docs: list[tuple[str | Mapping[str, Any], list[tuple[str, dict]]]],
+) -> str:
     """Serialize labelled quotes as YAML, stating each doc's UUID once.
 
-    ``docs`` is a list of ``(uuid, items)`` pairs where ``items`` is a list of
-    ``(key, value_dict)`` pairs using the label.json field names (``text``,
-    ``note``, ``opage``, ``title``). A single doc yields a mapping, several
-    docs a list of mappings. Returns "" if nothing is labelled.
+    ``docs`` is a list of ``(ref, items)`` pairs. ``ref`` is the UUID string or
+    a mapping with ``uuid`` and optional ``title``, ``authors``, ``url``.
+    ``items`` is a list of ``(key, value_dict)`` pairs using the label.json
+    field names (``text``, ``note``, ``opage``, ``title``). A single doc yields
+    a mapping, several docs a list of mappings. Returns "" if nothing is labelled.
     """
     payload = []
-    for uuid, items in docs:
+    for ref, items in docs:
+        uuid, header = _doc_ref(ref)
         labels: dict[str, dict] = {}
         for key, val in items:
             entry = {}
             if val.get("text"):
-                entry["text"] = val["text"]
+                entry["text"] = _quote_scalar(val["text"])
             if val.get("note"):
-                entry["note"] = val["note"]
+                entry["note"] = _quote_scalar(val["note"])
             if val.get("opage"):
                 entry["page"] = val["opage"]
             if val.get("title"):
-                entry["section"] = val["title"]
+                section = str(val["title"]).strip()
+                # labtyp copies #mset title (the doc title) onto every label.
+                # After the header already states it, repeating it as section
+                # is noise — keep only a title that actually differs.
+                if section and section != header.get("title"):
+                    entry["section"] = section
             labels[key] = entry
         if labels:
-            payload.append({"uuid": uuid, "labels": labels})
+            doc: dict[str, Any] = {"uuid": uuid}
+            doc.update(header)
+            doc["labels"] = labels
+            payload.append(doc)
     if not payload:
         return ""
     out = payload[0] if len(payload) == 1 else payload
-    return yaml.safe_dump(out, allow_unicode=True, sort_keys=False)
+    return yaml.dump(
+        out,
+        Dumper=_LabelsDumper,
+        allow_unicode=True,
+        sort_keys=False,
+        default_flow_style=False,
+        width=2**20,
+    )
 
 
 def quotes_yaml(workdirs) -> str:
     """YAML dump of labelled quotes for a list of doc workdirs.
 
-    Returns an empty string if no doc has labels.
+    Each doc is a mapping with uuid plus title / authors / url from info.yml
+    when those fields are set. Returns an empty string if no doc has labels.
     """
-    return labels_to_yaml([(Path(wd).name, label_entries(wd)) for wd in workdirs])
+    docs = []
+    for workdir in workdirs:
+        wd = Path(workdir)
+        ref: dict[str, str] = {"uuid": wd.name, **_info_header(wd)}
+        docs.append((ref, label_entries(wd)))
+    return labels_to_yaml(docs)
 
 
 def quotes_markdown(workdirs) -> str:
