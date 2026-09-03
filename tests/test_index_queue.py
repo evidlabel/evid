@@ -133,3 +133,78 @@ def test_queue_emits_idle_when_drained(qapp, tmp_path, monkeypatch):
     worker.wait(5000)
 
     assert idle_count, "idle should fire at least once after the queue drains"
+
+
+def _src_doc(tmp_path, uuid: str = "c" * 32):
+    src = tmp_path / "src_docs" / uuid
+    src.mkdir(parents=True)
+    (src / "info.yml").write_text(
+        "label: Memo\ntags: ''\ntitle: Memo\nauthors: ''\ndates: ''\nurl: ''\n",
+        encoding="utf-8",
+    )
+    (src / "label.typ").write_text(
+        "= Memo\n\nA base paragraph long enough to be indexed later.\n",
+        encoding="utf-8",
+    )
+    return src
+
+
+def test_copy_worker_does_not_index(qapp, tmp_path):
+    """Copy is filesystem-only; the dest stays unindexed for the background queue."""
+    from datetime import UTC, datetime
+
+    from evid.core.evid_meta import read_meta
+    from evid.gui.workers import CopyDocWorker
+    from evid.models import EvidenceSet, SetType
+
+    src = _src_doc(tmp_path)
+    dest_path = tmp_path / "dest_set"
+    (dest_path / "docs").mkdir(parents=True)
+    dest = EvidenceSet(
+        name="Dest",
+        slug="dest",
+        path=dest_path,
+        set_type=SetType.NORMAL,
+        created=datetime.now(tz=UTC),
+    )
+
+    worker = CopyDocWorker(src, dest)
+    worker.run()
+
+    dest_doc = dest_path / "docs" / src.name
+    assert dest_doc.is_dir()
+    assert (dest_doc / "label.typ").exists()
+    assert read_meta(dest_doc)["indexed"] is False
+
+
+def test_copy_enqueues_background_index(qapp, tmp_path):
+    """After a copy, indexing goes through the serialized background queue."""
+    from pathlib import Path
+
+    from evid.config import EvidConfig
+    from evid.core.evid_meta import read_meta
+    from evid.gui.main_window import EvidMgrWindow
+
+    config = EvidConfig(data_dir=tmp_path)
+    window = EvidMgrWindow(config=config)
+    dest_set = window._set_manager.create_set("Dest")
+    uuid = "d" * 32
+    src = _src_doc(tmp_path, uuid=uuid)
+
+    enqueued: list[tuple[Path, str]] = []
+
+    class _FakeQ:
+        def enqueue(self, doc_dir, es):
+            enqueued.append((Path(doc_dir), es.slug))
+
+    window._docs_tab._index_queue = _FakeQ()
+    window._docs_tab.start_copy_doc(src, dest_set)
+    for w in list(window._docs_tab._workers):
+        w.wait(5000)
+    qapp.processEvents()
+
+    dest_doc = dest_set.path / "docs" / uuid
+    assert dest_doc.is_dir()
+    assert read_meta(dest_doc)["indexed"] is False
+    assert enqueued == [(dest_doc, dest_set.slug)]
+    window.close()

@@ -1797,29 +1797,34 @@ class DocsTab(QWidget):
             logger.warning("navigate_to_doc: UUID %s not found in current set", uuid)
 
     def start_copy_doc(self, src_doc_dir: Path, dest_set: object) -> None:
-        """Copy *src_doc_dir* into *dest_set* and re-index into its vecdb."""
+        """Copy *src_doc_dir* into *dest_set*; vector index runs in the background queue."""
         from evid.gui.workers import CopyDocWorker, track_worker
-        from evid.services.vec_service import VecService
 
         progress_dlg = QProgressDialog(
-            f"Copying {src_doc_dir.name[:8]}…", None, 0, 3, self
+            f"Copying {src_doc_dir.name[:8]}…", None, 0, 2, self
         )
         progress_dlg.setWindowTitle("Copy document")
         progress_dlg.setWindowModality(Qt.WindowModality.WindowModal)
         progress_dlg.show()
 
-        worker_vec = VecService()
-        worker = CopyDocWorker(src_doc_dir, dest_set, vec_service=worker_vec)
+        worker = CopyDocWorker(src_doc_dir, dest_set)
 
         def _on_copy_progress(step: int, total: int, msg: str) -> None:
             progress_dlg.setMaximum(total)
             progress_dlg.setValue(step)
             progress_dlg.setLabelText(msg)
 
+        def _on_finished(doc_uuid: str, dest_slug: str) -> None:
+            progress_dlg.close()
+            dest_doc_dir = dest_set.path / "docs" / doc_uuid
+            if dest_doc_dir.exists():
+                self._vec_service.close(dest_set.slug)
+                self._ensure_index_queue().enqueue(dest_doc_dir, dest_set)
+            self._on_copy_done(doc_uuid, dest_slug)
+
         worker.progress.connect(_on_copy_progress)
-        worker.finished.connect(self._on_copy_done)
+        worker.finished.connect(_on_finished)
         worker.error.connect(self._on_copy_error)
-        worker.finished.connect(progress_dlg.close)
         worker.error.connect(progress_dlg.close)
         track_worker(self._workers, worker, worker.finished, worker.error)
         worker.start()

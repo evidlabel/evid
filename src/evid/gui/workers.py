@@ -90,9 +90,10 @@ class IndexQueueWorker(QThread):
     """Serialized background vecdb indexing queue.
 
     A single long-lived thread that indexes documents one at a time, so only one
-    ChromaDB-writing subprocess ever touches a given set's vecdb at a moment —
-    no file-lock contention. Submit jobs with ``enqueue(doc_dir, evidence_set)``
-    from the GUI thread; stop cleanly with ``stop()``.
+    niced ChromaDB-writing subprocess ever touches a given set's vecdb at a
+    moment — no file-lock contention, no laptop freeze. Submit jobs with
+    ``enqueue(doc_dir, evidence_set)`` from the GUI thread; stop cleanly with
+    ``stop()``.
     """
 
     item_done = Signal(str, str, bool)  # set_slug, doc_uuid, ok
@@ -261,35 +262,31 @@ class TypGenWorker(QThread):
 
 
 class CopyDocWorker(QThread):
-    """Copy a document directory to another evidence set and re-index into its vecdb."""
+    """Copy a document directory to another evidence set.
+
+    Vector indexing is the background queue's job — this worker only copies
+    files and leaves ``indexed: false`` so the GUI is not blocked.
+    """
 
     progress = Signal(int, int, str)
     finished = Signal(str, str)  # doc_uuid, dest_slug
     error = Signal(str)
 
-    def __init__(
-        self,
-        src_doc_dir: Path,
-        dest_set: EvidenceSet,
-        vec_service=None,
-    ) -> None:
+    def __init__(self, src_doc_dir: Path, dest_set: EvidenceSet) -> None:
         super().__init__()
         self._src_doc_dir = src_doc_dir
         self._dest_set = dest_set
-        self._vec_service = vec_service
 
     def run(self) -> None:
         import logging
         import shutil
-
-        import yaml
 
         _log = logging.getLogger(__name__)
         doc_uuid = self._src_doc_dir.name
         dest_doc_dir = self._dest_set.path / "docs" / doc_uuid
         try:
             self.progress.emit(
-                1, 3, f"Copying {doc_uuid[:8]}… to '{self._dest_set.name}'"
+                1, 2, f"Copying {doc_uuid[:8]}… to '{self._dest_set.name}'"
             )
             if dest_doc_dir.exists():
                 _log.info(
@@ -302,68 +299,11 @@ class CopyDocWorker(QThread):
             shutil.copytree(str(self._src_doc_dir), str(dest_doc_dir))
             _log.debug("Copied %s → %s", self._src_doc_dir, dest_doc_dir)
 
-            self.progress.emit(2, 3, "Updating metadata…")
+            self.progress.emit(2, 2, "Updating metadata…")
             meta = {"notes": "", "indexed": False}
             from evid.core.evid_meta import write_meta
 
             write_meta(dest_doc_dir, meta)
-
-            self.progress.emit(3, 3, "Indexing into vector store…")
-            if self._vec_service is not None:
-                try:
-                    from datetime import UTC, datetime
-
-                    from evid.models import Document
-
-                    info: dict = {}
-                    info_path = dest_doc_dir / "info.yml"
-                    if info_path.exists():
-                        with info_path.open(encoding="utf-8") as fh:
-                            info = yaml.safe_load(fh) or {}
-                    tags_raw = info.get("tags", "")
-                    tags = (
-                        [t.strip() for t in tags_raw.split(",") if t.strip()]
-                        if isinstance(tags_raw, str)
-                        else [str(t).strip() for t in tags_raw if str(t).strip()]
-                    )
-                    doc = Document(
-                        uuid=doc_uuid,
-                        path=dest_doc_dir,
-                        label=info.get("label", doc_uuid),
-                        tags=tags,
-                        added=datetime.now(tz=UTC),
-                        indexed=False,
-                    )
-                    typ_path = dest_doc_dir / "label.typ"
-                    typ_text = (
-                        typ_path.read_text(encoding="utf-8")
-                        if typ_path.exists()
-                        else ""
-                    )
-                    ok, msg = self._vec_service.index_document_isolated(
-                        doc, typ_text, self._dest_set
-                    )
-                    if ok:
-                        meta["indexed"] = True
-                        from evid.core.evid_meta import write_meta
-
-                        write_meta(dest_doc_dir, meta)
-                        _log.info(
-                            "Re-indexed %s into '%s'", doc_uuid, self._dest_set.slug
-                        )
-                    else:
-                        _log.warning(
-                            "Vec re-index for %s in '%s' skipped: %s",
-                            doc_uuid,
-                            self._dest_set.slug,
-                            msg,
-                        )
-                except Exception:
-                    _log.exception(
-                        "Vec re-index failed for %s in '%s'",
-                        doc_uuid,
-                        self._dest_set.slug,
-                    )
 
             self.finished.emit(doc_uuid, self._dest_set.slug)
         except Exception as exc:

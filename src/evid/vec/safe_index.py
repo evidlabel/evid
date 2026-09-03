@@ -3,17 +3,33 @@
 ChromaDB initialization and sentence-transformers / onnxruntime can crash
 natively (SIGSEGV) on some Linux setups. Running the indexing in a spawned
 child process means a native crash kills the child, not the GUI.
+
+The child is a real OS process (``subprocess``, not ``multiprocessing`` spawn)
+so it does not share a GIL or Qt state with the GUI. It is niced and
+thread-capped: indexing is never urgent and must not freeze a laptop.
 """
 
 from __future__ import annotations
 
-import logging
-import multiprocessing as mp
+import os
+import signal
+import subprocess
 import sys
 import traceback
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+# Cap BLAS / torch / tokenizers in the child so embedding cannot saturate
+# every core. "1" is the point: indexing has no deadline.
+_THREAD_ENV = {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "TORCH_NUM_THREADS": "1",
+    "TOKENIZERS_PARALLELISM": "false",
+}
+
+_NICE_DELTA = 19
 
 
 def _index_worker(
@@ -85,30 +101,69 @@ def _index_worker(
         sys.exit(2)
 
 
-def run_in_subprocess(
-    target, args: tuple, timeout: float = 600.0, name: str = "vec-worker"
+def _child_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(_THREAD_ENV)
+    return env
+
+
+def run_low_priority(
+    cmd: list[str],
+    *,
+    stdin: bytes = b"",
+    timeout: float = 600.0,
 ) -> tuple[bool, str]:
-    """Run *target* in a spawned subprocess, returning ``(ok, message)``.
+    """Run *cmd* in a niced, thread-capped OS subprocess.
 
-    A native crash (SIGSEGV etc.) yields ``ok=False`` with the signal number;
-    a Python-level error yields a non-zero exit code; the parent stays up.
+    Returns ``(ok, message)``. A native crash or non-zero exit is ``ok=False``;
+    the parent stays up. Call from a worker thread — this blocks until the
+    child exits (or *timeout* seconds elapse).
+
+    Niceness is applied via the ``nice`` executable rather than ``preexec_fn``,
+    which can deadlock in a multithreaded Qt process.
     """
-    ctx = mp.get_context("spawn")
-    proc = ctx.Process(target=target, args=args, name=name)
-    proc.start()
-    proc.join(timeout=timeout)
+    if os.name == "posix":
+        cmd = ["nice", "-n", str(_NICE_DELTA), *cmd]
+    proc = subprocess.Popen(  # noqa: S603 — cmd is argv (nice + sys.executable -m)
+        cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        env=_child_env(),
+        start_new_session=True,
+    )
+    try:
+        try:
+            _, err = proc.communicate(stdin, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_group(proc)
+            proc.communicate()
+            return False, f"timed out after {timeout}s"
+    except Exception as exc:
+        _kill_group(proc)
+        return False, str(exc)
 
-    if proc.is_alive():
-        proc.terminate()
-        proc.join(5)
-        return False, f"timed out after {timeout}s"
-
-    code = proc.exitcode
+    code = proc.returncode
     if code == 0:
         return True, "ok"
     if code is not None and code < 0:
         return False, f"subprocess killed by signal {-code}"
+    detail = (err or b"").decode("utf-8", errors="replace").strip()
+    if detail:
+        return False, f"subprocess exited with code {code}: {detail}"
     return False, f"subprocess exited with code {code}"
+
+
+def _kill_group(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        if os.name == "posix":
+            os.killpg(proc.pid, signal.SIGKILL)
+        else:
+            proc.kill()
+    except OSError:
+        proc.kill()
 
 
 def index_in_subprocess(
@@ -119,11 +174,43 @@ def index_in_subprocess(
     typ_text: str,
     timeout: float = 600.0,
 ) -> tuple[bool, str]:
-    """Run :func:`_index_worker` in a spawned subprocess."""
+    """Run :func:`_index_worker` in a niced OS subprocess via this module's CLI."""
     Path(vecdb_dir).mkdir(parents=True, exist_ok=True)
-    return run_in_subprocess(
-        _index_worker,
-        (str(vecdb_dir), doc_uuid, doc_label, list(doc_tags), typ_text),
+    cmd = [
+        sys.executable,
+        "-m",
+        "evid.vec.safe_index",
+        "--vecdb",
+        str(vecdb_dir),
+        "--uuid",
+        doc_uuid,
+        "--label",
+        doc_label,
+        "--tags",
+        ",".join(doc_tags),
+    ]
+    return run_low_priority(
+        cmd,
+        stdin=typ_text.encode("utf-8"),
         timeout=timeout,
-        name=f"vec-index-{doc_uuid[:8]}",
     )
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI for ``python -m evid.vec.safe_index``. Typ text is read from stdin."""
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="evid.vec.safe_index")
+    parser.add_argument("--vecdb", required=True)
+    parser.add_argument("--uuid", required=True)
+    parser.add_argument("--label", default="")
+    parser.add_argument("--tags", default="")
+    args = parser.parse_args(argv)
+    typ_text = sys.stdin.read()
+    tags = [t for t in args.tags.split(",") if t]
+    _index_worker(args.vecdb, args.uuid, args.label, tags, typ_text)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
