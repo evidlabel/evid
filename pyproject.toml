@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "evid"
-version = "0.5.0"
+version = "0.6.1"
 description = "Evidence management: PDF labeling, vector search, and citation gather."
 requires-python = ">=3.12"
 dependencies = [
@@ -12,7 +12,6 @@ dependencies = [
     "pyyaml",
     "ruamel.yaml>=0.17",
     "python-slugify",
-    "PySide6",
     "arrow",
     "rich",
     "requests",
@@ -22,14 +21,15 @@ dependencies = [
     "treeparse>=0.2.8",
     "bibtexparser",
     "demoji",
-    "pandas",
     "GitPython",
     "rapidfuzz>=3.10.0,<4",
-    "numpy",
-    "chromadb",
-    "sentence-transformers",
-    "mcp>=1.2",
+    "mcp>=1.2,<2",
 ]
+
+[project.optional-dependencies]
+gui = ["PySide6"]
+vec = ["chromadb", "sentence-transformers"]
+all = ["PySide6", "chromadb", "sentence-transformers"]
 
 [project.scripts]
 evid = "evid.cli.main:main"
@@ -48,10 +48,11 @@ dev = [
     "pytest-qt",
     "ruff",
 ]
-# torch comes in via sentence-transformers. Its default PyPI wheel is the CUDA build,
-# which drags in ~15 nvidia-* packages (multiple GB) even on a machine with no NVIDIA
-# GPU. evid only runs a 384-dim embedding model, on CPU, so `cpu` is the default group.
-# On an NVIDIA box: `uv sync --no-default-groups --group gpu`.
+# torch comes in via the vec extra (sentence-transformers). Its default PyPI wheel is
+# the CUDA build, which drags in ~15 nvidia-* packages (multiple GB) even on a machine
+# with no NVIDIA GPU. evid only runs a 384-dim embedding model, on CPU, so `cpu` is the
+# default group. On an NVIDIA box:
+# `uv sync --no-default-groups --all-extras --group dev --group gpu`.
 cpu = ["torch"]
 gpu = ["torch"]
 
@@ -164,6 +165,9 @@ ignore = ["S101", "S104", "COM812", "ISC001", "E501"]
 "src/evid/config.py" = [
   "BLE001", "G004", "PTH123", "PTH118", "TRY003", "EM101",
   "RUF013", "FBT001", "FBT002",
+]
+"src/evid/extras.py" = [
+  "TRY003", "EM101",
 ]
 # MCP server: lazy imports (don't pull torch until a query) + warm singletons;
 # tool signatures take boolean named params (regex=...) by design

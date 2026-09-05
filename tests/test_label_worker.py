@@ -10,6 +10,8 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+
+pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 
 if TYPE_CHECKING:

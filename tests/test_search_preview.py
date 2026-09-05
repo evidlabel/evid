@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("PySide6")
+
 
 @pytest.fixture(scope="module")
 def qapp():

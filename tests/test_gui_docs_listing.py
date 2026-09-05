@@ -5,6 +5,8 @@ import os
 import pytest
 import yaml
 
+pytest.importorskip("PySide6")
+
 pytestmark = pytest.mark.skipif(
     os.environ.get("CI") != "true" and os.environ.get("HEADLESS") != "1",
     reason="GUI tests require headless/CI env (set HEADLESS=1)",

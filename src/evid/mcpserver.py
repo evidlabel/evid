@@ -23,6 +23,8 @@ import json
 import logging
 from pathlib import Path
 
+from evid import extras
+
 logger = logging.getLogger(__name__)
 
 # Resolved once in build_server(); shared so the embedding model and Chroma
@@ -66,27 +68,29 @@ def build_server(data_dir: Path, dataset: str):
 
     mcp = FastMCP(f"evid:{_SET.slug}")
 
-    @mcp.tool()
-    def search_vec(query: str, n: int = 10, tag: str = "") -> str:
-        """Semantic vector search over this server's dataset. Returns the top-n
-        matching chunks as JSON: score (cosine, higher=better), label, uuid,
-        chunk_idx, char_start, preview. Primary discovery tool; the model stays
-        warm across calls in this session."""
-        results = _vec_service().query(
-            _SET, query, n_results=n, filter_tags=[tag] if tag else None
-        )
-        out = [
-            {
-                "score": round(float(r.score), 4),
-                "label": r.doc.label,
-                "uuid": r.doc.uuid,
-                "chunk_idx": r.chunk_idx,
-                "char_start": r.char_start,
-                "preview": r.chunk_text[:400],
-            }
-            for r in results
-        ]
-        return json.dumps(out, ensure_ascii=False)
+    if extras.has_vec():
+
+        @mcp.tool()
+        def search_vec(query: str, n: int = 10, tag: str = "") -> str:
+            """Semantic vector search over this server's dataset. Returns the top-n
+            matching chunks as JSON: score (cosine, higher=better), label, uuid,
+            chunk_idx, char_start, preview. Primary discovery tool; the model stays
+            warm across calls in this session."""
+            results = _vec_service().query(
+                _SET, query, n_results=n, filter_tags=[tag] if tag else None
+            )
+            out = [
+                {
+                    "score": round(float(r.score), 4),
+                    "label": r.doc.label,
+                    "uuid": r.doc.uuid,
+                    "chunk_idx": r.chunk_idx,
+                    "char_start": r.char_start,
+                    "preview": r.chunk_text[:400],
+                }
+                for r in results
+            ]
+            return json.dumps(out, ensure_ascii=False)
 
     @mcp.tool()
     def search_text(query: str, regex: bool = False, n: int = 10) -> str:

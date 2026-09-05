@@ -6,6 +6,8 @@ import os
 import sys
 
 import pytest
+
+pytest.importorskip("PySide6")
 from PySide6.QtCore import Qt
 
 pytestmark = pytest.mark.skipif(

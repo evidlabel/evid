@@ -29,8 +29,16 @@ License: [MIT](LICENSE). CLI: `evid -h`. Agents: [`SKILL.md`](SKILL.md).
 
 Python 3.12+, [uv](https://docs.astral.sh/uv/), [`typst`](https://typst.app) on PATH.
 
+Default is a light CLI + MCP install (no Qt, no embedding model):
+
 ```bash
 uv tool install "evid @ git+https://github.com/evidlabel/evid.git"
+```
+
+Extras: `evid[gui]` (Qt), `evid[vec]` (ChromaDB + sentence-transformers), `evid[all]` (both). For `evid[vec]` / `evid[all]` as a tool, pin a non-CUDA torch:
+
+```bash
+UV_TORCH_BACKEND=auto uv tool install "evid[vec] @ git+https://github.com/evidlabel/evid.git"
 ```
 
 Data dir defaults to `~/.local/share/evid`. For a deliverable, pass `-d ./evid` on every command.
@@ -44,7 +52,7 @@ evid -d ./evid doc add paper.pdf -s my-case
 ## Development
 
 ```bash
-uv sync
+uv sync --all-extras
 HEADLESS=1 uv run pytest -v
 QT_QPA_PLATFORM=offscreen HEADLESS=1 uv run python scripts/gui_readme_shots.py
 ```

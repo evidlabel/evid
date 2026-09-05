@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from evid import extras
+
 if TYPE_CHECKING:
     from evid.models import Document, EvidenceSet, VecResult
 
@@ -17,6 +19,7 @@ class VecService:
     """One ChromaDB PersistentClient per EvidenceSet, opened lazily."""
 
     def __init__(self) -> None:
+        extras.require_vec()
         self._clients: dict[str, object] = {}  # slug → chromadb.PersistentClient
 
     def _client(self, evidence_set: EvidenceSet) -> object:

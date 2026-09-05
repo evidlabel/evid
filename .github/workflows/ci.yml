@@ -28,7 +28,7 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --all-extras
       - name: Run tests
         run: |
           xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" uv run pytest -v

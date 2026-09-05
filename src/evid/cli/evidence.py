@@ -40,6 +40,7 @@ def add_evidence(
     no_index: bool = False,
 ) -> None:
     """Add a PDF or URL to the specified dataset via DocIngester."""
+    from evid import extras
     from evid.services.doc_ingester import DocIngester
     from evid.services.set_manager import SetManager
     from evid.services.vec_service import VecService
@@ -52,15 +53,18 @@ def add_evidence(
         # set first via add_callback → _resolve_dataset.
         evidence_set = sm.create_set(dataset)
 
-    # --no-index: never construct VecService (keeps add fast and quiet).
-    vec_service = None if no_index else VecService()
+    # --no-index, or a light install without evid[vec]: never construct VecService.
+    do_index = not no_index and extras.has_vec()
+    if not no_index and not extras.has_vec():
+        print(extras.VEC_SKIP_INDEX)
+    vec_service = VecService() if do_index else None
     ingester = DocIngester(vec_service=vec_service)
 
     try:
         doc = ingester.ingest_source(
             source,
             evidence_set,
-            do_index=not no_index,
+            do_index=do_index,
         )
     except FileNotFoundError as e:
         sys.exit(str(e))

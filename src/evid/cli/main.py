@@ -101,7 +101,7 @@ app = cli(
 app.commands.append(
     command(
         name="gui",
-        help="Launch the GUI (close hides to a bottom-right corner hint; a second launch raises the running instance). Pass -d/--db PATH to open a project-local data directory (the directory that contains sets/).",
+        help="Launch the GUI (close hides to a bottom-right corner hint; a second launch raises the running instance). Pass -d/--db PATH to open a project-local data directory (the directory that contains sets/). Requires extra evid[gui].",
         callback=gui_callback,
         arguments=[
             argument(
@@ -156,7 +156,7 @@ set_group.commands.append(
 set_group.commands.append(
     command(
         name="reindex",
-        help="Rebuild the vector index for every document in a set",
+        help="Rebuild the vector index for every document in a set. Requires extra evid[vec].",
         callback=reindex_callback,
         options=[_DATASET_OPTION],
     )
@@ -285,7 +285,7 @@ doc_group.commands.append(
                 flags=["--from-search"],
                 dest="from_search",
                 arg_type=str,
-                help="Seed candidates from a vector search over the set (one of --from/--from-search)",
+                help="Seed candidates from a vector search over the set (one of --from/--from-search). Requires extra evid[vec].",
             ),
             option(
                 flags=["-n", "--n"],
@@ -385,7 +385,7 @@ app.subgroups.append(search_group)
 search_group.commands.append(
     command(
         name="vec",
-        help="Semantic vector search",
+        help="Semantic vector search. Requires extra evid[vec].",
         callback=search_vec_callback,
         arguments=[argument(name="query", arg_type=str)],
         options=[

@@ -24,6 +24,6 @@ A **pass** is a named job on one doc. They accumulate under `machine/` beside th
 
 ## Loop
 
-`doc add` (keep the index) → `doc passes` → `search vec` → `doc quote` / `#lab` → `set gather` → labquote.
+`doc add` → `doc passes` → `search text` / `search vec` → `doc quote` / `#lab` → `set gather` → labquote.
 
-Install: `uv tool install "evid @ git+https://github.com/evidlabel/evid.git"` (Python ≥ 3.12, `typst` on PATH).
+Install: `uv tool install "evid @ git+https://github.com/evidlabel/evid.git"` (CLI+MCP; Python ≥ 3.12, `typst` on PATH). Extras: `evid[gui]`, `evid[vec]`, `evid[all]`.

@@ -10,6 +10,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from evid import extras
 from evid.cli.dataset import (
     create_dataset,
     docs_dir,
@@ -278,6 +279,9 @@ def bibtex_callback(db: str = None, dataset: str = None, uuid: str = None):
 
 def _search_candidates(dataset: str, uuid: str, query: str, n: int):
     """Seed quote candidates from a vector search restricted to one document."""
+    if not extras.has_vec():
+        print(extras.VEC_INSTALL)
+        sys.exit(1)
     from evid.services.set_manager import SetManager
     from evid.services.vec_service import VecService
 
@@ -574,6 +578,9 @@ def search_vec_callback(
     format: str = "table",
 ):
     """Run a semantic vector search."""
+    if not extras.has_vec():
+        print(extras.VEC_INSTALL)
+        sys.exit(1)
     if not query:
         sys.exit("QUERY argument is required.")
     dataset = _resolve_dataset(dataset, "Select dataset to search", allow_create=False)
@@ -653,6 +660,9 @@ def reindex_callback(db: str = None, dataset: str = None):
     Re-chunks each doc's label.typ and replaces its existing vecdb entries.
     Needed after a chunking change so old chunks are refreshed.
     """
+    if not extras.has_vec():
+        print(extras.VEC_INSTALL)
+        sys.exit(1)
     dataset = _resolve_dataset(dataset, "Select dataset to reindex", allow_create=False)
 
     from evid.services.doc_ingester import DocIngester
@@ -710,12 +720,15 @@ def gui_callback(db: str = None, workdir: str = None):
         if not path.is_dir():
             sys.exit(f"workdir is not a directory: {path}")
         os.chdir(path)
+    if not extras.has_gui():
+        print(extras.GUI_INSTALL)
+        sys.exit(1)
     try:
         from evid.gui.main_window import main as gui_main
 
         gui_main(DIRECTORY if DIRECTORY_EXPLICIT else None)
     except ImportError:
-        print("GUI requires evid and PySide6. Install with: pip install evid pyside6")
+        print(extras.GUI_INSTALL)
         sys.exit(1)
 
 
