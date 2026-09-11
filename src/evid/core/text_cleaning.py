@@ -68,14 +68,14 @@ def _dehyphenate(text: str) -> str:
 
 def clean_text_for_typst(text: str) -> str:
     """Clean text for Typst by expanding ligatures and commenting lines with '@'."""
-    logger.info(f"clean_text_for_typst called with text length: {len(text)}")
+    logger.debug("clean_text_for_typst called with text length: %s", len(text))
     text = _rejoin_split_urls(text)
     # Expand ligatures
     for lig, repl in LIGATURES.items():
         if lig in text:
-            logger.info(f"Found ligature {lig!r} in text")
+            logger.debug("Found ligature %r in text", lig)
             text = text.replace(lig, repl)
-            logger.info(f"Replaced ligature {lig!r} with {repl!r}")
+            logger.debug("Replaced ligature %r with %r", lig, repl)
 
     # Split into lines
     lines = text.split("\n")

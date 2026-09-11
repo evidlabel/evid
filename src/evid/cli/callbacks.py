@@ -725,11 +725,10 @@ def gui_callback(db: str = None, workdir: str = None):
         sys.exit(1)
     try:
         from evid.gui.main_window import main as gui_main
-
-        gui_main(DIRECTORY if DIRECTORY_EXPLICIT else None)
     except ImportError:
         print(extras.GUI_INSTALL)
         sys.exit(1)
+    gui_main(DIRECTORY if DIRECTORY_EXPLICIT else None)
 
 
 def update_callback(db: str = None):

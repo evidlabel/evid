@@ -36,9 +36,9 @@ def test_vec_service_refuses_construct_without_extra(monkeypatch):
 
 
 def _make_pdf(path) -> None:
-    import fitz
+    import pymupdf
 
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 72), "The committee found the evidence conclusive.")
     doc.save(str(path))

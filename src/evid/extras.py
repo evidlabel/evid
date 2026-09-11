@@ -6,11 +6,13 @@ import importlib.util
 
 VEC_INSTALL = (
     "Vector search requires the vec extra. "
-    'Install with: uv tool install "evid[vec] @ git+https://github.com/evidlabel/evid.git"'
+    'Install with: uv tool install "evid[vec] @ git+https://github.com/evidlabel/evid.git" '
+    '(not PyPI — evid is git-only). From a checkout: uv pip install -e ".[vec]"'
 )
 GUI_INSTALL = (
-    "GUI requires the gui extra. "
-    'Install with: uv tool install "evid[gui] @ git+https://github.com/evidlabel/evid.git"'
+    "GUI requires the gui extra (PySide6). "
+    'Install with: uv tool install "evid[gui] @ git+https://github.com/evidlabel/evid.git" '
+    '(not PyPI — evid is git-only). From a checkout: uv pip install -e ".[gui]"'
 )
 VEC_SKIP_INDEX = "Skipping vector index (install evid[vec] to enable)."
 

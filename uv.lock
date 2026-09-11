@@ -761,7 +761,7 @@ gpu = [
 requires-dist = [
     { name = "arrow" },
     { name = "beautifulsoup4" },
-    { name = "bibtexparser" },
+    { name = "bibtexparser", specifier = ">=1.4,<2" },
     { name = "chromadb", marker = "extra == 'all'" },
     { name = "chromadb", marker = "extra == 'vec'" },
     { name = "demoji" },

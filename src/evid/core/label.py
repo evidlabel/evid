@@ -4,14 +4,10 @@ import logging
 import subprocess
 from pathlib import Path
 
-from rich.logging import RichHandler
-
 from evid.config import EvidConfig
 from evid.core.bibtex import generate_bib_from_typ
 from evid.core.typst_generation import text_to_typst, textpdf_to_typst
 
-# Configure Rich handler for colored logging
-logging.basicConfig(handlers=[RichHandler(rich_tracebacks=True)], level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -26,7 +22,7 @@ def create_label(
     label_file = file_path.parent / filename
     try:
         if not label_file.exists():
-            # Ensure static directory exists for frontend (used by fitz)
+            # Ensure static directory exists for frontend (used by pymupdf)
             Path("static").mkdir(exist_ok=True)
             if file_path.suffix.lower() == ".pdf":
                 textpdf_to_typst(file_path, label_file, autolabel)

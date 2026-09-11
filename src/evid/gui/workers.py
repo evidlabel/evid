@@ -123,11 +123,13 @@ class IndexQueueWorker(QThread):
     def run(self) -> None:
         import logging
 
+        from evid import extras
         from evid.services.doc_ingester import DocIngester
         from evid.services.vec_service import VecService
 
         _log = logging.getLogger(__name__)
-        ingester = DocIngester(vec_service=VecService())
+        vec = VecService() if extras.has_vec() else None
+        ingester = DocIngester(vec_service=vec)
         while True:
             job = self._queue.get()
             if job is None:

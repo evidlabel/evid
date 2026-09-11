@@ -19,7 +19,7 @@ dependencies = [
     "pypdf",
     "PyMuPDF",
     "treeparse>=0.2.8",
-    "bibtexparser",
+    "bibtexparser>=1.4,<2",
     "demoji",
     "GitPython",
     "rapidfuzz>=3.10.0,<4",

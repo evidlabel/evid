@@ -32,6 +32,37 @@ def test_main_window_creates(qapp, tmp_path):
     window.close()
 
 
+def test_main_window_creates_without_vec_extra(qapp, tmp_path, monkeypatch):
+    from evid import extras
+    from evid.config import EvidConfig
+    from evid.gui.main_window import EvidMgrWindow
+
+    monkeypatch.setattr(extras, "has_vec", lambda: False)
+    config = EvidConfig(data_dir=tmp_path)
+    window = EvidMgrWindow(config=config)
+    assert window._vec_service is None
+    assert not window._docs_tab._index_btn.isEnabled()
+    assert not window._search_tab._sub_tabs.isTabEnabled(1)
+    assert window._search_tab._sub_tabs.currentIndex() == 0
+    window.close()
+
+
+def test_gui_callback_does_not_mask_vec_import_error(monkeypatch, capsys):
+    import evid.cli.callbacks as cb
+    import evid.gui.main_window as mw
+    from evid import extras
+
+    monkeypatch.setattr(extras, "has_gui", lambda: True)
+
+    def _boom(*_a, **_k):
+        raise ImportError("Vector search requires the vec extra")
+
+    monkeypatch.setattr(mw, "main", _boom)
+    with pytest.raises(ImportError, match="vec extra"):
+        cb.gui_callback()
+    assert "evid[gui]" not in capsys.readouterr().out
+
+
 def test_main_window_help_button_opens_dialog(qapp, tmp_path):
     from unittest.mock import patch
 

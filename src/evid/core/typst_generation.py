@@ -132,7 +132,7 @@ def textpdf_to_typst(
     pdfname: Path, outputfile: Path = None, autolabel: bool = False
 ) -> str:
     """Generate Typst content from PDF file."""
-    import fitz
+    import pymupdf
 
     info_file = pdfname.with_name("info.yml")
     if info_file.exists():
@@ -160,12 +160,12 @@ def textpdf_to_typst(
     date_escaped = date.replace("\\", "\\\\").replace('"', '\\"')
     title_display = name.replace("_", " ")
 
-    pdf = fitz.open(pdfname)
+    pdf = pymupdf.open(pdfname)
     body = ""
     para_num = 1
     for i, page in enumerate(pdf):
         # Disable TEXT_PRESERVE_LIGATURES to dissolve ligatures
-        flags = fitz.TEXT_PRESERVE_LIGATURES
+        flags = pymupdf.TEXT_PRESERVE_LIGATURES
         text = clean_text_for_typst(page.get_text(flags=flags))
         page_body = f"#mset(values: (opage: {i + 1}))\n== Page {i + 1}\n"
         if autolabel:

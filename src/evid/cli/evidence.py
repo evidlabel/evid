@@ -89,13 +89,13 @@ def add_evidence(
         except Exception:
             logger.exception("Could not print info.yml for %s", doc.uuid)
 
-    logger.info("Added document to %s", doc.path)
+    logger.debug("Added document to %s", doc.path)
 
     if label:
         pdf = resolve_doc_pdf(doc.path)
         if pdf is None:
             sys.exit(f"No PDF found for document {doc.uuid}")
-        logger.info("Opening label file for %s...", pdf.name)
+        logger.debug("Opening label file for %s...", pdf.name)
         create_label(pdf, dataset, doc.uuid, autolabel=autolabel)
 
 

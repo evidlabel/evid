@@ -6,9 +6,10 @@ huggingface_hub, sentence_transformers, chromadb, urllib3, …) then dumped its
 INFO/DEBUG chatter — plus progress bars — into the terminal, drowning the actual
 command output (notably ``search vec`` and ``doc add``).
 
-``configure_logging`` replaces that: the evid namespace logs at INFO (DEBUG with
-``--verbose`` / ``EVID_LOG_LEVEL``), noisy libraries are clamped to WARNING, and
-the model-download/encode progress bars are disabled via environment variables.
+``configure_logging`` replaces that: the evid namespace is WARNING by default
+(DEBUG with ``--verbose`` / ``EVID_LOG_LEVEL``), noisy libraries are clamped to
+WARNING, and the model-download/encode progress bars are disabled via
+environment variables. Logs go to stderr so stdout stays the command result.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from __future__ import annotations
 import logging
 import os
 
+from rich.console import Console
 from rich.logging import RichHandler
 
 # Third-party loggers that otherwise flood the terminal at INFO/DEBUG.
@@ -42,8 +44,8 @@ def configure_logging(*, verbose: bool = False) -> None:
     Args:
         verbose: When True (``-v``/``--verbose``), the evid namespace logs at
             DEBUG. Otherwise the level comes from ``EVID_LOG_LEVEL`` (default
-            INFO). The root logger stays at WARNING so third-party libraries are
-            quiet unless they emit a genuine warning/error.
+            WARNING). The root logger stays at WARNING so third-party libraries
+            are quiet unless they emit a genuine warning/error.
     """
     # Silence progress bars / advisory spam from the embedding stack. Set before
     # those libraries are imported (imports are lazy, inside vec_service), so the
@@ -61,19 +63,32 @@ def configure_logging(*, verbose: bool = False) -> None:
         logging.DEBUG
         if verbose
         else getattr(
-            logging, os.environ.get("EVID_LOG_LEVEL", "INFO").upper(), logging.INFO
+            logging,
+            os.environ.get("EVID_LOG_LEVEL", "WARNING").upper(),
+            logging.WARNING,
         )
     )
 
+    root = logging.getLogger()
     if not _state["configured"]:
-        logging.basicConfig(
-            level=logging.WARNING,
-            format="%(message)s",
-            handlers=[RichHandler(rich_tracebacks=True, show_path=False)],
+        # Drop import-time RichHandlers (e.g. leftover basicConfig) so the
+        # CLI format is the one we set here. Leave other handlers (pytest).
+        for handler in list(root.handlers):
+            if isinstance(handler, RichHandler):
+                root.removeHandler(handler)
+                handler.close()
+        handler = RichHandler(
+            console=Console(stderr=True),
+            rich_tracebacks=True,
+            show_path=False,
+            show_time=False,
+            markup=False,
         )
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        root.addHandler(handler)
         _state["configured"] = True
 
-    logging.getLogger().setLevel(logging.WARNING)
+    root.setLevel(logging.WARNING)
     logging.getLogger("evid").setLevel(evid_level)
     for name in _NOISY_LOGGERS:
         logging.getLogger(name).setLevel(logging.WARNING)

@@ -603,6 +603,11 @@ class DocsTab(QWidget):
             "Index all unindexed documents into the vector store"
         )
         self._index_btn.clicked.connect(self._on_index_docs)
+        if vec_service is None:
+            from evid import extras
+
+            self._index_btn.setEnabled(False)
+            self._index_btn.setToolTip(extras.VEC_INSTALL)
         self._open_editor_btn = QPushButton("Label")
         self._open_editor_btn.setToolTip(
             "Open label.typ in editor (generates it from PDF if missing)"
@@ -1333,6 +1338,13 @@ class DocsTab(QWidget):
         with contextlib.suppress(Exception):
             self.window().statusBar().showMessage(msg, timeout)
 
+    def _enqueue_index(self, doc_dir: Path, evidence_set: EvidenceSet) -> None:
+        """Queue a vecdb index if the vec extra is installed."""
+        if self._vec_service is None:
+            return
+        self._vec_service.close(evidence_set.slug)
+        self._ensure_index_queue().enqueue(doc_dir, evidence_set)
+
     def _ensure_index_queue(self):
         """Lazily create and start the single background index queue worker."""
         if self._index_queue is None:
@@ -1360,9 +1372,7 @@ class DocsTab(QWidget):
             # Defer the slow vecdb index to the serialized background queue.
             if self._evidence_set:
                 doc_dir = self._evidence_set.path / "docs" / doc_uuid
-                # Release the main client so the indexing subprocess owns the vecdb.
-                self._vec_service.close(self._evidence_set.slug)
-                self._ensure_index_queue().enqueue(doc_dir, self._evidence_set)
+                self._enqueue_index(doc_dir, self._evidence_set)
             if self._open_in_labeller_after_ingest:
                 self._open_in_labeller_after_ingest = False
                 for row in range(self._table.rowCount()):
@@ -1415,6 +1425,11 @@ class DocsTab(QWidget):
     # ── indexing ──────────────────────────────────────────────────────────
 
     def _on_index_docs(self) -> None:
+        if self._vec_service is None:
+            from evid import extras
+
+            QMessageBox.information(self, "Vector index", extras.VEC_INSTALL)
+            return
         if not self._evidence_set:
             QMessageBox.warning(self, "No set", "Select an evidence set first.")
             return
@@ -1426,11 +1441,8 @@ class DocsTab(QWidget):
             return
 
         # Route through the serialized background queue so the GUI stays usable.
-        # Release the main client so the indexing subprocesses own the vecdb.
-        self._vec_service.close(self._evidence_set.slug)
-        q = self._ensure_index_queue()
         for doc in unindexed:
-            q.enqueue(doc.path, self._evidence_set)
+            self._enqueue_index(doc.path, self._evidence_set)
         self._status(f"Indexing {len(unindexed)} document(s) in background…")
 
     # ── editor / dir ──────────────────────────────────────────────────────
@@ -1818,8 +1830,7 @@ class DocsTab(QWidget):
             progress_dlg.close()
             dest_doc_dir = dest_set.path / "docs" / doc_uuid
             if dest_doc_dir.exists():
-                self._vec_service.close(dest_set.slug)
-                self._ensure_index_queue().enqueue(dest_doc_dir, dest_set)
+                self._enqueue_index(dest_doc_dir, dest_set)
             self._on_copy_done(doc_uuid, dest_slug)
 
         worker.progress.connect(_on_copy_progress)

@@ -20,7 +20,7 @@ Discover flags from the installed CLI: `evid -h`, `evid <path> -h`, `evid -j`. A
 
 A **pass** is a named job on one doc. They accumulate under `machine/` beside the document — the standing analysis of that doc, not a chat byproduct. `doc passes` lists the ledger; `doc quote` records the next pass. Hayagriva holds the verbatim cites; the pass is the job history (not citable). Read existing passes before running another.
 
-`doc quote --from` is candidates from **that** uuid's own text — one JSON file per doc. `--from-search` seeds from the set. `matched: false` → new candidate from that doc, quote again. Hayagriva is tool output.
+`doc quote --from` is candidates from **that** uuid's own text. Write the candidate JSON in that doc's `machine/` as a **new file each pass**: `machine/from-<YYYY-MM-DDTHH-MM-SSZ>-<slug>.json`. Never `/tmp`. Never reuse `quotes.json`. evid records the pass as `machine/<YYYY-MM-DDTHH-MM-SSZ>_<hex>.json`. Replay with `--from machine/<pass>.json`. `--from-search` seeds from the set. `matched: false` → new candidate from that doc, quote again. Hayagriva is tool output.
 
 ## Loop
 

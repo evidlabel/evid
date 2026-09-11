@@ -132,12 +132,12 @@ def _read_source(doc_dir: Path) -> tuple[str, list[tuple[int, int]]]:
     """
     pdfs = sorted(doc_dir.glob("*.pdf"))
     if pdfs:
-        import fitz
+        import pymupdf
 
         parts: list[str] = []
         page_index: list[tuple[int, int]] = []
         offset = 0
-        with fitz.open(pdfs[0]) as pdf:
+        with pymupdf.open(pdfs[0]) as pdf:
             for i, page in enumerate(pdf):
                 page_index.append((offset, i + 1))
                 # De-hyphenate per page so verbatim spans don't carry the PDF's

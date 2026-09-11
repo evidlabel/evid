@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
-import fitz
+import pymupdf
 
 import evid.services.doc_ingester as doc_ingester_mod
 import evid.services.set_manager as sm_mod
@@ -13,7 +13,7 @@ from evid.models import Document
 
 
 def _make_pdf(path):
-    doc = fitz.open()
+    doc = pymupdf.open()
     page = doc.new_page()
     page.insert_text((72, 72), "The committee found the evidence conclusive.")
     doc.save(str(path))

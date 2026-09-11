@@ -82,6 +82,11 @@ class SearchTab(QWidget):
         self._sub_tabs.addTab("Full-text search")
         self._sub_tabs.currentChanged.connect(self._on_sub_tab_changed)
         layout.addWidget(self._sub_tabs, 0)
+        if vec_service is None:
+            from evid import extras
+
+            self._sub_tabs.setTabEnabled(1, False)
+            self._sub_tabs.setTabToolTip(1, extras.VEC_INSTALL)
 
         # Meta search area
         self._meta_widget = QWidget()
@@ -143,8 +148,8 @@ class SearchTab(QWidget):
         tv.addLayout(trow)
         layout.addWidget(self._text_widget, 0)
 
-        # Start on Vector search tab
-        self._sub_tabs.setCurrentIndex(1)
+        # Vector search when the extra is present; otherwise Meta.
+        self._sub_tabs.setCurrentIndex(1 if vec_service is not None else 0)
 
         # Results table (multi-select, right-click menu)
         self._table = QTableWidget(0, len(_RESULT_COLS))
@@ -306,6 +311,11 @@ class SearchTab(QWidget):
             self._run_pending_search()
 
     def _run_vector_search(self) -> None:
+        if self._vec_service is None:
+            from evid import extras
+
+            QMessageBox.information(self, "Vector search", extras.VEC_INSTALL)
+            return
         if not self._evidence_set:
             QMessageBox.warning(self, "No set", "Select an evidence set first.")
             return

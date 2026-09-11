@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from evid import extras
 from evid.config import EvidConfig
 from evid.gui.sidebar import Sidebar
 from evid.gui.signals import AppSignals
@@ -160,7 +161,7 @@ class EvidWindow(QMainWindow):
 
         # ── services ──────────────────────────────────────────────────────
         self._set_manager = SetManager(data_dir)
-        self._vec_service = VecService()
+        self._vec_service = VecService() if extras.has_vec() else None
         self._tag_service = TagService(data_dir)
         self._ingester = DocIngester(vec_service=self._vec_service)
         self._signals = AppSignals()

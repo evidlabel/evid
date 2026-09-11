@@ -35,7 +35,7 @@ _TOTAL_STEPS = 7
 
 
 def _noop(step: int, total: int, msg: str) -> None:
-    logger.info("[%d/%d] %s", step, total, msg)
+    logger.debug("[%d/%d] %s", step, total, msg)
 
 
 @dataclass
@@ -104,7 +104,7 @@ def resolve_source(source: str) -> ResolvedSource:
         file_name = Path(file_name).stem + ".pdf"
         pdf_path = Path(tmp.name) / file_name
         pdf_path.write_bytes(response.content)
-        logger.info("Downloaded PDF from URL: %s", file_name)
+        logger.debug("Downloaded PDF from URL: %s", file_name)
         return ResolvedSource(
             pdf_path=pdf_path,
             source_url=source,
@@ -123,7 +123,7 @@ def resolve_source(source: str) -> ResolvedSource:
     # Prefer the page's own publish date; the rendered PDF's creation date is
     # "now", which would otherwise become a wrong citation date.
     web_page_date = extract_html_date(html_str)
-    logger.info(
+    logger.debug(
         "Rendered HTML→PDF: %s (title=%r date=%r)",
         rendered_pdf.name,
         web_page_title,
@@ -226,7 +226,7 @@ class DocIngester:
 
         # ── 1. Content hash → UUID ────────────────────────────────────────────
         p(1, n, f"Computing UUID for {pdf_path.name}")
-        logger.info("Ingesting '%s' into set '%s'", pdf_path.name, evidence_set.slug)
+        logger.debug("Ingesting '%s' into set '%s'", pdf_path.name, evidence_set.slug)
         with pdf_path.open("rb") as f:
             content_bytes = f.read()
         digest = hashlib.sha256(content_bytes).digest()[:16]
@@ -235,7 +235,7 @@ class DocIngester:
 
         doc_dir = evidence_set.path / "docs" / doc_uuid
         if doc_dir.exists():
-            logger.info(
+            logger.debug(
                 "Already ingested: %s in '%s' — skipping", doc_uuid, evidence_set.slug
             )
             self._last_was_existing = True
@@ -278,7 +278,7 @@ class DocIngester:
         doc_authors = authors or auto_authors
         doc_dates = dates or auto_date
         doc_label = label or doc_title
-        logger.info(
+        logger.debug(
             "Metadata: label=%r title=%r authors=%r", doc_label, doc_title, doc_authors
         )
 
@@ -355,7 +355,7 @@ class DocIngester:
                 )
                 if ok:
                     meta["indexed"] = True
-                    logger.info("Vector index updated for %s", doc_uuid)
+                    logger.debug("Vector index updated for %s", doc_uuid)
                 else:
                     logger.warning("Vector index skipped for %s: %s", doc_uuid, msg)
                     # Close the ChromaDB client on failure to free the file lock.
@@ -382,7 +382,7 @@ class DocIngester:
 
         write_meta(doc_dir, meta)
 
-        logger.info("Ingested %s into set '%s'", doc_uuid, evidence_set.slug)
+        logger.debug("Ingested %s into set '%s'", doc_uuid, evidence_set.slug)
         return doc
 
     def index_existing(
@@ -419,7 +419,7 @@ class DocIngester:
                 "Embedding %d chars for existing doc %s", len(typ_text), doc_dir.name
             )
 
-        logger.info(
+        logger.debug(
             "Indexing existing doc %s into '%s'", doc_dir.name, evidence_set.slug
         )
         try:
@@ -439,7 +439,7 @@ class DocIngester:
         meta["indexed"] = True
         write_meta(doc_dir, meta)
 
-        logger.info(
+        logger.debug(
             "Indexed existing doc %s into set '%s'", doc_dir.name, evidence_set.slug
         )
         return True

@@ -60,6 +60,25 @@ def test_json_to_bib_empty_raises(tmp_path):
         json_to_bib(json_file, workdir / "label.bib", exclude_note=True)
 
 
+def test_generate_bib_from_typ_empty_labels_is_ok(tmp_path, monkeypatch):
+    """Unlabelled docs query to [] — that is not a BibTeX failure."""
+    from evid.core.bibtex import generate_bib_from_typ
+
+    typ = tmp_path / "label.typ"
+    typ.write_text("// no labs\n", encoding="utf-8")
+
+    def _run(*_args, **kwargs):
+        kwargs["stdout"].write("[]")
+        return subprocess.CompletedProcess(
+            args=["typst", "query"], returncode=0, stderr=b""
+        )
+
+    monkeypatch.setattr("evid.core.bibtex.subprocess.run", _run)
+    ok, msg = generate_bib_from_typ(typ)
+    assert ok is True
+    assert msg == ""
+
+
 def test_json_to_bib_missing_key_raises(tmp_path):
     workdir = _doc(tmp_path)
     json_file = _write_json(workdir, [{"text": "no key here", "opage": 1}])

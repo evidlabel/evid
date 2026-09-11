@@ -40,20 +40,28 @@ def generate_bib_from_typ(
         cmd_for_shell = " ".join(
             [f'"{arg}"' if " " in arg else arg for arg in result.args]
         )
-        logger.info(f"Running command: {cmd_for_shell} > {json_file}")
+        logger.debug("Running command: %s > %s", cmd_for_shell, json_file)
         stderr_output = result.stderr.decode("utf-8")
         if stderr_output:
-            logger.info(f"Stderr: {stderr_output}")
+            logger.debug("Stderr: %s", stderr_output)
         if result.returncode != 0:
             if "text is not locatable" in stderr_output:
-                logger.warning(f"Ignoring non-fatal Typst query error: {stderr_output}")
+                logger.warning(
+                    "Ignoring non-fatal Typst query error: %s", stderr_output
+                )
             else:
                 error_msg = f"Error running typst query on {typ_file}: Command returned non-zero exit status {result.returncode}.\nStderr: {stderr_output}"
                 return False, error_msg
         try:
             json_to_bib(json_file, bib_file, exclude_note=exclude_note)
-            logger.info(f"Generated BibTeX file: {bib_file}")
+            logger.debug("Generated BibTeX file: %s", bib_file)
             return True, ""
+        except ValueError as e:
+            # Fresh ingest has no #lab tags yet — typst query writes [].
+            if "empty" in str(e).lower():
+                logger.debug("No <lab> labels in %s", typ_file)
+                return True, ""
+            return False, f"Failed to generate BibTeX for {typ_file}: {e!s}"
         except Exception as e:
             return False, f"Failed to generate BibTeX for {typ_file}: {e!s}"
     except Exception as e:
