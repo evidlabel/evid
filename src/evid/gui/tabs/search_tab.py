@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import logging
-import subprocess
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, QUrl
@@ -32,6 +31,8 @@ from PySide6.QtWidgets import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from evid.gui.signals import AppSignals
     from evid.models import Document, EvidenceSet, VecResult
     from evid.services.tag_service import TagService
@@ -607,16 +608,22 @@ class SearchTab(QWidget):
             doc_dir = self._evidence_set.path / "docs" / self._text_hits[row].uuid
             pdf = resolve_doc_pdf(doc_dir)
             if pdf:
-                QDesktopServices.openUrl(QUrl.fromLocalFile(str(pdf)))
+                self._open_local(pdf)
+            else:
+                self._status("No PDF found for this document", 4000)
             return
         if doc is None:
+            self._status("Select a document first", 4000)
             return
         if doc.source_url:
-            QDesktopServices.openUrl(QUrl(doc.source_url))
+            if not QDesktopServices.openUrl(QUrl(doc.source_url)):
+                self._status(f"Could not open URL: {doc.source_url}", 6000)
             return
         pdf = resolve_doc_pdf(doc.path)
         if pdf:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(pdf)))
+            self._open_local(pdf)
+        else:
+            self._status("No PDF found for this document", 4000)
 
     def _on_preview_copy_uuid(self) -> None:
         if self._prev_current_uuid:
@@ -726,9 +733,12 @@ class SearchTab(QWidget):
 
             pdf = resolve_doc_pdf(doc_dir)
             if pdf:
-                subprocess.Popen(["xdg-open", str(pdf)])
+                self._open_local(pdf)
+            else:
+                self._status("No PDF found for this document", 4000)
         elif action is act_open_url and doc0:
-            QDesktopServices.openUrl(QUrl(doc0.source_url))
+            if not QDesktopServices.openUrl(QUrl(doc0.source_url)):
+                self._status(f"Could not open URL: {doc0.source_url}", 6000)
         elif action is act_tag:
             if not self._evidence_set:
                 return
@@ -834,17 +844,29 @@ class SearchTab(QWidget):
             return ""
         return combo.currentText().strip()
 
+    def _status(self, msg: str, timeout: int = 4000) -> None:
+        with contextlib.suppress(Exception):
+            self.window().statusBar().showMessage(msg, timeout)
+
+    def _open_local(self, path: str | Path) -> None:
+        from evid.gui.open_external import open_local_path
+
+        err = open_local_path(path)
+        if err:
+            logger.warning("%s", err)
+            self._status(err, 6000)
+
     def _open_dir(self, uuid: str) -> None:
         if not self._evidence_set:
+            logger.info("Open folder: no evidence set")
+            self._status("Select an evidence set first", 4000)
             return
-        doc_dir = self._evidence_set.path / "docs" / uuid
-        try:
-            subprocess.Popen(["xdg-open", str(doc_dir)])
-        except Exception as exc:
-            logger.warning("Could not open folder: %s", exc)
+        self._open_local(self._evidence_set.path / "docs" / uuid)
 
     def _label_doc(self, uuid: str) -> None:
         if not self._evidence_set:
+            logger.info("Label: no evidence set")
+            self._status("Select an evidence set first", 4000)
             return
         doc_dir = self._evidence_set.path / "docs" / uuid
         self._labeler.label_doc(doc_dir, uuid)
@@ -856,12 +878,8 @@ class SearchTab(QWidget):
         return "code"
 
     def _on_label_done(self, doc_uuid: str) -> None:
-        with contextlib.suppress(Exception):
-            self.window().statusBar().showMessage("Labels updated", 2000)
+        self._status("Labels updated", 2000)
 
     def _on_label_error(self, msg: str) -> None:
-        logger.warning("Label regeneration failed: %s", msg)
-        with contextlib.suppress(Exception):
-            self.window().statusBar().showMessage(
-                f"Label compile failed: {msg[:120]}", 5000
-            )
+        logger.warning("Label failed: %s", msg)
+        self._status(f"Label failed: {msg[:120]}", 5000)

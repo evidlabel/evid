@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 import shutil
-import subprocess
 from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -241,10 +239,11 @@ class AddDocDialog(QDialog):
         self._preview.setPlainText("\n".join(lines))
 
     def _view_file(self) -> None:
-        try:
-            subprocess.Popen(["xdg-open", str(self._pdf_path)])
-        except Exception as exc:
-            logger.warning("Could not open file: %s", exc)
+        from evid.gui.open_external import open_local_path
+
+        err = open_local_path(self._pdf_path)
+        if err:
+            logger.warning("%s", err)
 
 
 # ── flow layout ───────────────────────────────────────────────────────────────
@@ -613,9 +612,11 @@ class DocsTab(QWidget):
             "Open label.typ in editor (generates it from PDF if missing)"
         )
         self._open_editor_btn.clicked.connect(self._on_label_doc)
+        self._open_editor_btn.setEnabled(False)
         self._open_dir_btn = QPushButton("Open dir")
-        self._open_dir_btn.setToolTip("Open document directory in editor")
+        self._open_dir_btn.setToolTip("Open document directory")
         self._open_dir_btn.clicked.connect(self._on_open_dir)
+        self._open_dir_btn.setEnabled(False)
         for btn in [
             self._ingest_btn,
             self._url_btn,
@@ -998,15 +999,21 @@ class DocsTab(QWidget):
             return
 
         if action is act_label:
-            self._on_label_doc()
+            self._on_label_doc(doc)
         elif action is act_open_dir:
-            self._on_open_dir()
+            self._on_open_dir(doc)
         elif action is act_open_pdf and doc:
+            from evid.gui.open_external import open_local_path
             from evid.services.doc_tags import resolve_doc_pdf
 
             pdf = resolve_doc_pdf(doc.path)
             if pdf:
-                subprocess.Popen(["xdg-open", str(pdf)])
+                err = open_local_path(pdf)
+                if err:
+                    logger.warning("%s", err)
+                    self._status(err, 6000)
+            else:
+                self._status("No PDF found for this document", 4000)
         elif action is act_open_url and doc:
             from PySide6.QtCore import QUrl
             from PySide6.QtGui import QDesktopServices
@@ -1117,6 +1124,7 @@ class DocsTab(QWidget):
 
     def _on_selection_changed(self) -> None:
         doc = self._selected_doc()
+        self._set_doc_actions_enabled(self._doc_for_action() is not None)
         if not doc:
             self._label_keys_list.clear()
             self._label_key_text.clear()
@@ -1453,24 +1461,40 @@ class DocsTab(QWidget):
             return parent._config.editor
         return "code"
 
-    def _open_with_editor(self, path: str) -> None:
-        editor = self._editor()
-        if shutil.which(editor):
-            subprocess.Popen([editor, path])
-        else:
-            from PySide6.QtCore import QUrl
-            from PySide6.QtGui import QDesktopServices
-
-            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
-
-    def _on_open_dir(self) -> None:
+    def _doc_for_action(self) -> Document | None:
+        """Document for Label / Open dir: current row, else first selected."""
         doc = self._selected_doc()
         if doc:
-            self._open_with_editor(str(doc.path))
+            return doc
+        docs = self._selected_docs()
+        return docs[0] if docs else None
 
-    def _on_label_doc(self) -> None:
-        doc = self._selected_doc()
+    def _set_doc_actions_enabled(self, enabled: bool) -> None:
+        self._open_editor_btn.setEnabled(enabled)
+        self._open_dir_btn.setEnabled(enabled)
+
+    def _on_open_dir(self, doc: Document | None = None) -> None:
+        if doc is None:
+            doc = self._doc_for_action()
         if not doc:
+            logger.info("Open dir: no document selected")
+            self._status("Select a document first", 4000)
+            return
+        from evid.gui.open_external import open_local_path
+
+        err = open_local_path(doc.path)
+        if err:
+            logger.warning("%s", err)
+            self._status(err, 6000)
+        else:
+            logger.info("Opened directory %s", doc.path)
+
+    def _on_label_doc(self, doc: Document | None = None) -> None:
+        if doc is None:
+            doc = self._doc_for_action()
+        if not doc:
+            logger.info("Label: no document selected")
+            self._status("Select a document first", 4000)
             return
         self._labeler.label_doc(doc.path, doc.uuid)
 
@@ -1529,15 +1553,22 @@ class DocsTab(QWidget):
     def _on_uuid_view(self) -> None:
         doc = self._selected_doc()
         if not doc:
+            self._status("Select a document first", 4000)
             return
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
 
+        from evid.gui.open_external import open_local_path
+
         url = self._detail_url.text().strip()
         if url:
-            QDesktopServices.openUrl(QUrl(url))
-        else:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(doc.path)))
+            if not QDesktopServices.openUrl(QUrl(url)):
+                self._status(f"Could not open URL: {url}", 6000)
+            return
+        err = open_local_path(doc.path)
+        if err:
+            logger.warning("%s", err)
+            self._status(err, 6000)
 
     def _on_uuid_copy(self) -> None:
         from PySide6.QtWidgets import QApplication
@@ -1870,8 +1901,5 @@ class DocsTab(QWidget):
             logger.exception("Error after label regeneration for %s", doc_uuid)
 
     def _on_label_error(self, msg: str) -> None:
-        logger.warning("Label regeneration failed: %s", msg)
-        with contextlib.suppress(Exception):
-            self.window().statusBar().showMessage(
-                f"Label compile failed: {msg[:120]}", 5000
-            )
+        logger.warning("Label failed: %s", msg)
+        self._status(f"Label failed: {msg[:120]}", 5000)

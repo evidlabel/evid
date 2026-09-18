@@ -27,10 +27,15 @@ class GuiInstance(QObject):
             return None
         QLocalServer.removeServer(name)
         server = QLocalServer()
-        if not server.listen(name):
-            _notify_existing(name)
+        if server.listen(name):
+            return cls(server, name)
+        # Stale socket: unlinked but a stopped peer may still hold the bind.
+        if _notify_existing(name):
             return None
-        return cls(server, name)
+        QLocalServer.removeServer(name)
+        if server.listen(name):
+            return cls(server, name)
+        return None
 
     def release(self) -> None:
         self._server.close()
@@ -47,19 +52,29 @@ class GuiInstance(QObject):
     def _read(self, sock: QLocalSocket) -> None:
         data = bytes(sock.readAll())
         if b"raise" in data:
+            sock.write(b"ok\n")
+            sock.waitForBytesWritten(200)
+            sock.flush()
             self.raise_requested.emit()
         sock.disconnectFromServer()
 
 
 def _notify_existing(name: str) -> bool:
+    """Tell a live primary to raise. False if nobody acks (stale/stopped)."""
     sock = QLocalSocket()
     sock.connectToServer(name)
     if not sock.waitForConnected(200):
         return False
     sock.write(b"raise\n")
-    sock.waitForBytesWritten(500)
+    if not sock.waitForBytesWritten(500):
+        sock.disconnectFromServer()
+        return False
     sock.flush()
+    if not sock.waitForReadyRead(400):
+        sock.disconnectFromServer()
+        return False
+    reply = bytes(sock.readAll())
     sock.disconnectFromServer()
     if sock.state() != QLocalSocket.LocalSocketState.UnconnectedState:
         sock.waitForDisconnected(200)
-    return True
+    return b"ok" in reply

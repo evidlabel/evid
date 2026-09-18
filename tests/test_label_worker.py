@@ -42,15 +42,13 @@ def _make_tab(tmp_path, qapp):
     from evid.gui.tabs.docs_tab import DocsTab
     from evid.services.doc_ingester import DocIngester
     from evid.services.tag_service import TagService
-    from evid.services.vec_service import VecService
 
     EvidConfig(data_dir=tmp_path)  # ensure data_dir exists
     signals = AppSignals()
     tag_svc = TagService(tmp_path / "tags.yml")
-    vec_svc = VecService()
-    ingester = DocIngester(vec_service=vec_svc)
+    ingester = DocIngester(vec_service=None)
 
-    tab = DocsTab(ingester, vec_svc, signals, tag_svc)
+    tab = DocsTab(ingester, None, signals, tag_svc)
     mw = QMainWindow()
     mw.setCentralWidget(tab)
     # Store mw on tab so it isn't garbage-collected before the test finishes
@@ -199,7 +197,7 @@ def test_open_editor_registers_watcher(qapp, tmp_path):
     tab._refresh_table([doc])
     tab._table.selectRow(0)
 
-    with patch("subprocess.Popen"):
+    with patch("evid.gui.label_controller.open_local_path", return_value=None):
         tab._on_label_doc()
 
     assert typ_path in tab._labeler._watcher.files()

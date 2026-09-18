@@ -21,14 +21,13 @@ Workflow
 from __future__ import annotations
 
 import logging
-import shutil
-import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QFileSystemWatcher, QObject, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QFileSystemWatcher, QObject, Qt, Signal
 from PySide6.QtWidgets import QProgressDialog, QWidget
+
+from evid.gui.open_external import open_local_path
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +55,9 @@ class LabelController(QObject):
 
     def label_doc(self, doc_dir: Path, uuid: str) -> None:
         """Open the label file for *uuid*, generating it first if needed."""
+        if not doc_dir.exists():
+            self.label_error.emit(f"Document directory missing: {doc_dir}")
+            return
         typ_path = doc_dir / "label.typ"
         if not typ_path.exists():
             existing = list(doc_dir.glob("*.typ"))
@@ -89,20 +91,14 @@ class LabelController(QObject):
 
     def _open_and_watch(self, uuid: str, typ_path: Path) -> None:
         typ_str = str(typ_path)
-        self._open_file(typ_str)
+        err = open_local_path(typ_path, editor=self._get_editor())
+        if err:
+            logger.warning("%s", err)
+            self.label_error.emit(err)
         if typ_str not in self._watcher.files():
-            self._watcher.addPath(typ_str)
+            if not self._watcher.addPath(typ_str):
+                logger.warning("Could not watch %s for label updates", typ_str)
         self._watched[typ_str] = uuid
-
-    def _open_file(self, path_str: str) -> None:
-        editor = self._get_editor()
-        if shutil.which(editor):
-            try:
-                subprocess.Popen([editor, path_str])
-            except Exception as exc:
-                logger.warning("Could not open editor %r: %s", editor, exc)
-        else:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(path_str))
 
     def _start_typgen(self, uuid: str, source: Path, typ_path: Path) -> None:
         from evid.gui.workers import TypGenWorker, track_worker

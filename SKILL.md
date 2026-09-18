@@ -22,6 +22,8 @@ A **pass** is a named job on one doc. They accumulate under `machine/` beside th
 
 `doc quote --from` is candidates from **that** uuid's own text. Write the candidate JSON in that doc's `machine/` as a **new file each pass**: `machine/from-<YYYY-MM-DDTHH-MM-SSZ>-<slug>.json`. Never `/tmp`. Never reuse `quotes.json`. evid records the pass as `machine/<YYYY-MM-DDTHH-MM-SSZ>_<hex>.json`. Replay with `--from machine/<pass>.json`. `--from-search` seeds from the set. `matched: false` → new candidate from that doc, quote again. Hayagriva is tool output.
 
+A candidate is one span on one page of that uuid's text. A folio (standalone page number) in the matched `title:` means the span crossed a page break: `matched` is not enough. Pass again with a page-local span.
+
 ## Loop
 
 `doc add` → `doc passes` → `search text` / `search vec` → `doc quote` / `#lab` → `set gather` → labquote.

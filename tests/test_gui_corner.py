@@ -141,6 +141,26 @@ def test_hide_on_close_shows_corner_hint(qapp, tmp_path):
     assert not any(h.isVisible() for h in hints)
 
 
+def test_stale_socket_without_ack_is_taken_over(qapp):
+    """A stopped/deaf listener must not block a new evid gui."""
+    import uuid
+
+    from PySide6.QtNetwork import QLocalServer
+
+    from evid.gui.single_instance import GuiInstance
+
+    name = f"evid-gui-test-{uuid.uuid4().hex}"
+    stale = QLocalServer()
+    assert stale.listen(name)
+    try:
+        primary = GuiInstance.acquire(name)
+        assert primary is not None
+        primary.release()
+    finally:
+        stale.close()
+        QLocalServer.removeServer(name)
+
+
 def test_second_instance_asks_primary_to_raise(qapp, qtbot):
     import uuid
 
@@ -218,14 +238,81 @@ def test_corner_watcher_activates_from_cursor_without_a_hint_widget(qapp, qtbot)
         watcher.stop()
 
 
-def test_prefer_x11_hot_corner_sets_xcb_on_wayland(monkeypatch):
+def _wayland_xcb_env(monkeypatch) -> None:
     monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
+    monkeypatch.delenv("XCURSOR_SIZE", raising=False)
+    monkeypatch.delenv("XCURSOR_THEME", raising=False)
+    monkeypatch.delenv("QT_SCALE_FACTOR", raising=False)
+    monkeypatch.delenv("GDK_SCALE", raising=False)
     monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
     monkeypatch.setenv("DISPLAY", ":0")
+
+
+def test_prefer_x11_hot_corner_sets_xcb_on_wayland(monkeypatch):
+    _wayland_xcb_env(monkeypatch)
+    monkeypatch.setattr("evid.gui.main_window._gsettings_get", lambda *_a, **_k: None)
+    monkeypatch.setattr("evid.gui.main_window._xft_dpi_scale", lambda: None)
     from evid.gui.main_window import prefer_x11_hot_corner
 
     prefer_x11_hot_corner()
     assert os.environ.get("QT_QPA_PLATFORM") == "xcb"
+
+
+def test_prefer_x11_syncs_cursor_theme_and_scaled_size(monkeypatch):
+    """xcb on Wayland must use physical cursor pixels or hover shrinks the pointer."""
+    _wayland_xcb_env(monkeypatch)
+
+    def fake_gsettings(_schema, key):
+        return {
+            "cursor-theme": "Yaru",
+            "cursor-size": "24",
+            "scaling-factor": "0",
+        }.get(key)
+
+    monkeypatch.setattr("evid.gui.main_window._gsettings_get", fake_gsettings)
+    monkeypatch.setattr("evid.gui.main_window._xft_dpi_scale", lambda: 2.0)
+    from evid.gui.main_window import prefer_x11_hot_corner
+
+    prefer_x11_hot_corner()
+    assert os.environ.get("QT_QPA_PLATFORM") == "xcb"
+    assert os.environ.get("XCURSOR_THEME") == "Yaru"
+    assert os.environ.get("XCURSOR_SIZE") == "48"
+
+
+def test_prefer_x11_keeps_user_xcursor_size(monkeypatch):
+    _wayland_xcb_env(monkeypatch)
+    monkeypatch.setenv("XCURSOR_SIZE", "32")
+    monkeypatch.setenv("XCURSOR_THEME", "Adwaita")
+    monkeypatch.setattr(
+        "evid.gui.main_window._gsettings_get",
+        lambda _s, key: "Yaru" if key == "cursor-theme" else "24",
+    )
+    monkeypatch.setattr("evid.gui.main_window._xft_dpi_scale", lambda: 2.0)
+    from evid.gui.main_window import prefer_x11_hot_corner
+
+    prefer_x11_hot_corner()
+    assert os.environ.get("XCURSOR_SIZE") == "32"
+    assert os.environ.get("XCURSOR_THEME") == "Adwaita"
+
+
+def test_prefer_x11_syncs_cursor_when_xcb_already_chosen(monkeypatch):
+    monkeypatch.setenv("QT_QPA_PLATFORM", "xcb")
+    monkeypatch.delenv("XCURSOR_SIZE", raising=False)
+    monkeypatch.delenv("XCURSOR_THEME", raising=False)
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setattr(
+        "evid.gui.main_window._gsettings_get",
+        lambda _s, key: {"cursor-theme": "Yaru", "cursor-size": "24"}.get(key),
+    )
+    monkeypatch.setattr("evid.gui.main_window._xft_dpi_scale", lambda: None)
+    monkeypatch.setattr("evid.gui.main_window._toolkit_scale", lambda: None)
+    from evid.gui.main_window import prefer_x11_hot_corner
+
+    prefer_x11_hot_corner()
+    assert os.environ.get("QT_QPA_PLATFORM") == "xcb"
+    assert os.environ.get("XCURSOR_THEME") == "Yaru"
+    assert os.environ.get("XCURSOR_SIZE") == "24"
 
 
 def test_jura_logo_icon_uses_brand_blue(qapp):

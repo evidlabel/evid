@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
 
 from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QTimer, Signal
@@ -499,17 +500,131 @@ def _schedule_bottom_right_quarter(window: QWidget) -> None:
         QTimer.singleShot(ms, window, lambda w=window: _place_bottom_right_quarter(w))
 
 
+_GSETTINGS_INTERFACE = "org.gnome.desktop.interface"
+
+
+def _gsettings_get(schema: str, key: str) -> str | None:
+    try:
+        proc = subprocess.run(
+            ["gsettings", "get", schema, key],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0 or not proc.stdout.strip():
+        return None
+    val = proc.stdout.strip()
+    if val.startswith("uint32 "):
+        val = val[7:].strip()
+    if len(val) >= 2 and val[0] == "'" and val[-1] == "'":
+        val = val[1:-1]
+    return val or None
+
+
+def _xft_dpi_scale() -> float | None:
+    try:
+        proc = subprocess.run(
+            ["xrdb", "-query"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    for line in proc.stdout.splitlines():
+        name, _, rest = line.partition(":")
+        if name.strip().lower() != "xft.dpi":
+            continue
+        try:
+            dpi = float(rest.strip())
+        except ValueError:
+            return None
+        if dpi > 0:
+            return dpi / 96.0
+    return None
+
+
+def _toolkit_scale() -> float | None:
+    for key in ("QT_SCALE_FACTOR", "GDK_SCALE"):
+        raw = os.environ.get(key)
+        if not raw:
+            continue
+        try:
+            scale = float(raw)
+        except ValueError:
+            continue
+        if scale > 0:
+            return scale
+    return None
+
+
+def _desktop_scale() -> float:
+    toolkit = _toolkit_scale()
+    if toolkit:
+        return toolkit
+    raw = _gsettings_get(_GSETTINGS_INTERFACE, "scaling-factor")
+    if raw:
+        try:
+            n = int(raw)
+        except ValueError:
+            n = 0
+        if n >= 2:
+            return float(n)
+    xft = _xft_dpi_scale()
+    if xft is not None and xft >= 1.1:
+        return xft
+    return 1.0
+
+
+def _sync_x11_cursor() -> None:
+    """Match Xcursor to the Wayland compositor.
+
+    Hovering an xcb window otherwise swaps mutter's scaled cursor for Qt's
+    default 24px Xcursor, so the pointer shrinks. X11 size is physical
+    pixels; GNOME ``cursor-size`` is logical.
+    """
+    if not os.environ.get("XCURSOR_THEME"):
+        theme = _gsettings_get(_GSETTINGS_INTERFACE, "cursor-theme")
+        if theme:
+            os.environ["XCURSOR_THEME"] = theme
+    if os.environ.get("XCURSOR_SIZE"):
+        return
+    raw = _gsettings_get(_GSETTINGS_INTERFACE, "cursor-size")
+    try:
+        logical = int(raw) if raw else 24
+    except ValueError:
+        logical = 24
+    if logical <= 0:
+        logical = 24
+    physical = max(1, round(logical * _desktop_scale()))
+    os.environ["XCURSOR_SIZE"] = str(physical)
+
+
 def prefer_x11_hot_corner() -> None:
     """Use XWayland so the compositor honors window position.
 
     GNOME on Wayland ignores xdg-toplevel move requests, so the window lands
     at the top-left. XWayland (xcb) accepts setGeometry. Do not override an
     explicit QT_QPA_PLATFORM (tests use offscreen).
+
+    xcb cursors are physical pixels; without a matching XCURSOR_SIZE the
+    pointer shrinks on hover. Sync theme/size from the desktop when we
+    switch to xcb (or when the user already chose xcb on Wayland).
     """
-    if os.environ.get("QT_QPA_PLATFORM"):
+    platform = os.environ.get("QT_QPA_PLATFORM")
+    if platform:
+        if platform == "xcb" and os.environ.get("WAYLAND_DISPLAY"):
+            _sync_x11_cursor()
         return
     if os.environ.get("WAYLAND_DISPLAY") and os.environ.get("DISPLAY"):
         os.environ["QT_QPA_PLATFORM"] = "xcb"
+        _sync_x11_cursor()
 
 
 def main(db_dir: Path | None = None) -> None:
@@ -524,13 +639,14 @@ def main(db_dir: Path | None = None) -> None:
     if db_dir is not None:
         config = EvidConfig.load()
         config.data_dir = _Path(db_dir)
-    _print_startup_banner((config or EvidConfig.load()).data_dir)
     app = QApplication(sys.argv)
     app.setApplicationName("evid")
     app.setWindowIcon(_evid_icon())
     window = bootstrap_gui(app, config, background=not headless)
     if window is None:
+        print("Raised the running evid GUI.")
         sys.exit(0)
+    _print_startup_banner((config or EvidConfig.load()).data_dir)
     window.reveal()
     if not headless:
         sys.exit(app.exec())
