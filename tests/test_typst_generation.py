@@ -1,10 +1,12 @@
 """Tests for web_to_pdf — title/URL injection into Typst markup."""
 
 import shutil
+import subprocess
 
 import pytest
+import yaml
 
-from evid.core.typst_generation import web_to_pdf
+from evid.core.typst_generation import text_to_typst, web_to_pdf
 
 needs_typst = pytest.mark.skipif(
     shutil.which("typst") is None, reason="typst binary not on PATH"
@@ -47,6 +49,55 @@ def test_web_to_pdf_title_with_markup_specials(tmp_path):
     )
     pdf_path, _ = web_to_pdf("https://example.com/post", tmp_path, html=html)
     assert pdf_path.exists()
+
+
+@needs_typst
+def test_markup_heading_with_hashtag_is_unknown_variable(tmp_path):
+    """Bare ``= #dkpol | …`` is the failure mode ingest hits on social titles."""
+    typ = tmp_path / "bad.typ"
+    pdf = tmp_path / "bad.pdf"
+    typ.write_text("= #dkpol | Christian Foldager\n", encoding="utf-8")
+    proc = subprocess.run(
+        ["typst", "compile", str(typ), str(pdf)],
+        capture_output=True,
+    )
+    assert proc.returncode != 0
+    assert b"unknown variable: dkpol" in proc.stderr
+
+
+@needs_typst
+def test_string_bound_hashtag_heading_compiles(tmp_path):
+    """Binding the title as a Typst string keeps ``#dkpol`` literal."""
+    typ = tmp_path / "ok.typ"
+    pdf = tmp_path / "ok.pdf"
+    typ.write_text(
+        '#let doc_title = "#dkpol | Christian Foldager"\n= #doc_title\n',
+        encoding="utf-8",
+    )
+    proc = subprocess.run(
+        ["typst", "compile", str(typ), str(pdf)],
+        capture_output=True,
+    )
+    assert proc.returncode == 0, proc.stderr.decode()
+
+
+def test_text_to_typst_binds_hashtag_label(tmp_path):
+    """info.yml label with a social hashtag must not become markup ``= #dkpol``."""
+    info = {
+        "uuid": "c5927b8e384df1aad0936cfc3ea2e5ca",
+        "label": "#dkpol | Christian Foldager",
+        "title": "#dkpol | Christian Foldager",
+        "dates": "2024",
+    }
+    with (tmp_path / "info.yml").open("w", encoding="utf-8") as f:
+        yaml.safe_dump(info, f)
+    (tmp_path / "doc.txt").write_text("body paragraph\n", encoding="utf-8")
+    out = tmp_path / "label.typ"
+    text_to_typst(tmp_path / "doc.txt", out)
+    content = out.read_text(encoding="utf-8")
+    assert "= #dkpol" not in content
+    assert '#let doc_title = "#dkpol | Christian Foldager"' in content
+    assert "= #doc_title" in content
 
 
 @needs_typst

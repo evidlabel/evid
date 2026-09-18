@@ -60,6 +60,31 @@ def _typst_str_escape(s: str) -> str:
     )
 
 
+def _label_typ_document(name: str, date: str, body: str) -> str:
+    """Wrap *body* in a label.typ document.
+
+    The document title is a Typst string, then printed with ``= #doc_title``.
+    Interpolating the label into markup (``= #dkpol | …``) makes ``#dkpol`` a
+    code escape ('unknown variable'). Same pattern as ``web_to_pdf``.
+    """
+    name_escaped = _typst_str_escape(str(name))
+    date_escaped = _typst_str_escape(str(date))
+    return f"""#import "@preview/labtyp:0.1.0": lablist, lab, mset
+
+#mset(values: (
+  title: "{name_escaped}",
+  date: "{date_escaped}"))
+
+#let doc_title = "{name_escaped}"
+= #doc_title
+
+{body}
+
+= List of Labels
+#lablist()
+"""
+
+
 def web_to_pdf(url: str, output_dir: Path, html: str = None) -> tuple:
     """Fetch a web page, render it as a timestamped Typst document, compile to PDF.
 
@@ -155,11 +180,6 @@ def textpdf_to_typst(
     else:
         date, name = "DATE", "NAME"
 
-    # Escape for Typst string literals
-    name_escaped = name.replace("\\", "\\\\").replace('"', '\\"')
-    date_escaped = date.replace("\\", "\\\\").replace('"', '\\"')
-    title_display = name.replace("_", " ")
-
     pdf = pymupdf.open(pdfname)
     body = ""
     para_num = 1
@@ -181,19 +201,7 @@ def textpdf_to_typst(
         body += page_body
     pdf.close()
 
-    typst_content = f"""#import "@preview/labtyp:0.1.0": lablist, lab, mset
-
-#mset(values: (
-  title: "{name_escaped}",
-  date: "{date_escaped}"))
-
-= {title_display}
-
-{body}
-
-= List of Labels
-#lablist()
-"""
+    typst_content = _label_typ_document(name, date, body)
 
     if outputfile:
         outputfile.write_text(typst_content)
@@ -225,11 +233,6 @@ def text_to_typst(
     else:
         date, name = "DATE", "NAME"
 
-    # Escape for Typst string literals
-    name_escaped = name.replace("\\", "\\\\").replace('"', '\\"')
-    date_escaped = date.replace("\\", "\\\\").replace('"', '\\"')
-    title_display = name.replace("_", " ")
-
     with txtname.open("r", encoding="utf-8") as f:
         text = clean_text_for_typst(f.read())
 
@@ -244,19 +247,7 @@ def text_to_typst(
     else:
         body = text + "\n\n"
 
-    typst_content = f"""#import "@preview/labtyp:0.1.0": lablist, lab, mset
-
-#mset(values: (
-  title: "{name_escaped}",
-  date: "{date_escaped}"))
-
-= {title_display}
-
-{body}
-
-= List of Labels
-#lablist()
-"""
+    typst_content = _label_typ_document(name, date, body)
 
     if outputfile:
         outputfile.write_text(typst_content)
