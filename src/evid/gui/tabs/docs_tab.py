@@ -350,7 +350,9 @@ class TagPill(QPushButton):
         self._state = self._STATE_DEFAULT
         self._drag_start: QPoint | None = None
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        from evid.gui.theme import use_themed_arrow
+
+        use_themed_arrow(self)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._refresh_text()
         self._refresh_style()
@@ -474,7 +476,9 @@ class TagPillPool(QWidget):
             "QPushButton:hover{color:#333;border-color:#555;}"
         )
         self._new_pill.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self._new_pill.setCursor(Qt.CursorShape.PointingHandCursor)
+        from evid.gui.theme import use_themed_arrow
+
+        use_themed_arrow(self._new_pill)
 
     def set_callbacks(
         self,

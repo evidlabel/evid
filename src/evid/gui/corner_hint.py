@@ -32,7 +32,9 @@ class CornerHint(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(_HINT_SIZE, _HINT_SIZE)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        from evid.gui.theme import use_themed_arrow
+
+        use_themed_arrow(self)
         self.setToolTip("evid")
         self._logo = QPixmap()
 

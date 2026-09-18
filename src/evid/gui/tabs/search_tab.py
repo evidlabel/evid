@@ -78,6 +78,9 @@ class SearchTab(QWidget):
 
         # Sub-tabs: Meta / Vector / Full-text
         self._sub_tabs = QTabBar()
+        from evid.gui.theme import use_themed_arrow
+
+        use_themed_arrow(self._sub_tabs)
         self._sub_tabs.addTab("Meta search")
         self._sub_tabs.addTab("Vector search")
         self._sub_tabs.addTab("Full-text search")

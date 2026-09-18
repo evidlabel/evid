@@ -1,6 +1,6 @@
 """Theme helpers — adapted from evid.gui.main."""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QWidget
 
@@ -14,6 +14,39 @@ def is_dark_mode() -> bool:
     except AttributeError:
         pass
     return False
+
+
+class _ThemedArrowFilter(QObject):
+    """Restores left_ptr if a style sets pointing_hand on hover."""
+
+    def eventFilter(self, obj: QObject, event: QEvent) -> bool:
+        if event.type() in (
+            QEvent.Type.Enter,
+            QEvent.Type.HoverEnter,
+            QEvent.Type.Polish,
+        ):
+            if (
+                isinstance(obj, QWidget)
+                and obj.cursor().shape() != Qt.CursorShape.ArrowCursor
+            ):
+                obj.setCursor(Qt.CursorShape.ArrowCursor)
+        return False
+
+
+def use_themed_arrow(widget: QWidget) -> None:
+    """Use left_ptr instead of pointing_hand.
+
+    Xcursor looks up ``pointing_hand``; Yaru/Adwaita often only ship ``hand2``
+    / ``pointer`` at the scaled size, so Qt falls back to a 24px bitmap.
+    ``ArrowCursor`` is ``left_ptr``, which the theme has. Styles that swap
+    to pointing_hand on hover are pinned back on enter.
+    """
+    widget.setCursor(Qt.CursorShape.ArrowCursor)
+    filt = widget.findChild(_ThemedArrowFilter, "themed_arrow")
+    if filt is None:
+        filt = _ThemedArrowFilter(widget)
+        filt.setObjectName("themed_arrow")
+        widget.installEventFilter(filt)
 
 
 def apply_theme(widget: QWidget) -> None:

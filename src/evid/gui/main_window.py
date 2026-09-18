@@ -29,7 +29,7 @@ from evid import extras
 from evid.config import EvidConfig
 from evid.gui.sidebar import Sidebar
 from evid.gui.signals import AppSignals
-from evid.gui.theme import apply_theme
+from evid.gui.theme import apply_theme, use_themed_arrow
 from evid.services.doc_ingester import DocIngester
 from evid.services.set_manager import SetManager
 from evid.services.tag_service import TagService
@@ -138,12 +138,15 @@ class _ClickThroughTooltips(QObject):
 
     QTipLabel is a top-level popup. The first click (including right-click)
     otherwise dismisses it instead of reaching the widget underneath, so
-    table context menus fail after a row hover.
+    table context menus fail after a row hover. It is also its own X window:
+    a default cursor there is Qt's 24px bitmap, which looks tiny next to the
+    themed left_ptr used in the main window.
     """
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         if obj.inherits("QTipLabel"):
             obj.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            obj.unsetCursor()
         return False
 
 
@@ -207,6 +210,12 @@ class EvidWindow(QMainWindow):
         self._help_btn.setToolTip("Shortcuts and GUI overview (F1)")
         self._help_btn.clicked.connect(self._on_help)
         top_layout.addWidget(self._help_btn)
+        # Styles (and QTabBar) often set pointing_hand on tabs/buttons. That
+        # Xcursor name is frequently missing at the scaled size, so Qt falls
+        # back to a 24px bitmap — only this chrome looked tiny.
+        use_themed_arrow(top_bar)
+        use_themed_arrow(self._tab_bar)
+        use_themed_arrow(self._help_btn)
         right_layout.addWidget(top_bar)
         right_layout.addWidget(self._stack)
 

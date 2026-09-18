@@ -165,8 +165,23 @@ def test_hover_tooltip_is_click_through(qapp, tmp_path):
     assert tips, "expected a visible hover tooltip"
     for tip in tips:
         assert tip.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        assert tip.cursor().shape() == Qt.CursorShape.ArrowCursor
     QToolTip.hideText()
     qapp.processEvents()
+    window.close()
+
+
+def test_top_bar_uses_themed_arrow_cursor(qapp, tmp_path):
+    """Tabs/Help must not use pointing_hand (24px bitmap fallback on X11)."""
+    from PySide6.QtCore import Qt
+
+    from evid.config import EvidConfig
+    from evid.gui.main_window import EvidMgrWindow
+
+    config = EvidConfig(data_dir=tmp_path)
+    window = EvidMgrWindow(config=config)
+    assert window._tab_bar.cursor().shape() == Qt.CursorShape.ArrowCursor
+    assert window._help_btn.cursor().shape() == Qt.CursorShape.ArrowCursor
     window.close()
 
 
