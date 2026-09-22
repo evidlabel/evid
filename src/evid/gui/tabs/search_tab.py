@@ -315,18 +315,20 @@ class SearchTab(QWidget):
             self._run_pending_search()
 
     def _run_vector_search(self) -> None:
-        if self._vec_service is None:
-            from evid import extras
-
-            QMessageBox.information(self, "Vector search", extras.VEC_INSTALL)
+        if not self._query_edit.text().strip():
+            return
+        if self._search_busy:
+            # Queue before any dialog. QMessageBox.exec never returns under
+            # xvfb, so a modal here hangs CI until the job timeout.
+            self._pending_search = self._run_vector_search
             return
         if not self._evidence_set:
             QMessageBox.warning(self, "No set", "Select an evidence set first.")
             return
-        if not self._query_edit.text().strip():
-            return
-        if self._search_busy:
-            self._pending_search = self._run_vector_search
+        if self._vec_service is None:
+            from evid import extras
+
+            QMessageBox.information(self, "Vector search", extras.VEC_INSTALL)
             return
         query = self._query_edit.text().strip()
         from evid.gui.workers import VectorSearchWorker, track_worker
