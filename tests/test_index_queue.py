@@ -200,6 +200,13 @@ def test_copy_enqueues_background_index(qapp, tmp_path):
             enqueued.append((Path(doc_dir), es.slug))
 
     window._docs_tab._index_queue = _FakeQ()
+
+    class _Vec:
+        def close(self, _slug: str) -> None:
+            return None
+
+    # Copy enqueues only when a vec service exists. A gui-only install has none.
+    window._docs_tab._vec_service = _Vec()
     window._docs_tab.start_copy_doc(src, dest_set)
     for w in list(window._docs_tab._workers):
         w.wait(5000)

@@ -133,6 +133,12 @@ class _TabCycleFilter(QObject):
         return False
 
 
+# Module flag, not an instance attribute. Qt can hand the filter a fresh
+# Python wrapper that never ran __init__, and unsetCursor() re-enters this
+# filter on that wrapper until the stack overflows.
+_tooltip_adjusting = False
+
+
 class _ClickThroughTooltips(QObject):
     """Let mouse clicks pass through hover tooltips.
 
@@ -144,9 +150,19 @@ class _ClickThroughTooltips(QObject):
     """
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
-        if obj.inherits("QTipLabel"):
-            obj.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        global _tooltip_adjusting
+        if _tooltip_adjusting or not obj.inherits("QTipLabel"):
+            return False
+        if obj.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents) and (
+            obj.cursor().shape() == Qt.CursorShape.ArrowCursor
+        ):
+            return False
+        _tooltip_adjusting = True
+        try:
+            obj.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
             obj.unsetCursor()
+        finally:
+            _tooltip_adjusting = False
         return False
 
 

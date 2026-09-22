@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QEventLoop, QObject, QTimer, Signal
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 _DEFAULT_NAME = "evid-gui"
@@ -53,28 +53,46 @@ class GuiInstance(QObject):
         data = bytes(sock.readAll())
         if b"raise" in data:
             sock.write(b"ok\n")
-            sock.waitForBytesWritten(200)
             sock.flush()
             self.raise_requested.emit()
+        # waitForBytesWritten() here nests another loop in the client's
+        # thread and can drop the ack. The peer reads "ok" and disconnects.
         sock.disconnectFromServer()
 
 
 def _notify_existing(name: str) -> bool:
-    """Tell a live primary to raise. False if nobody acks (stale/stopped)."""
+    """Tell a live primary to raise. False if nobody acks (stale/stopped).
+
+    Pump a real event loop. ``QLocalSocket.waitFor*`` does not deliver
+    ``QLocalServer.newConnection`` when both sockets share the test thread,
+    so the primary never acks and ``acquire`` steals a live lock.
+    """
     sock = QLocalSocket()
+    loop = QEventLoop()
+    ack = False
+    done = False
+
+    def finish() -> None:
+        nonlocal ack, done
+        if done:
+            return
+        done = True
+        if sock.isReadable() and b"ok" in bytes(sock.readAll()):
+            ack = True
+        if loop.isRunning():
+            loop.quit()
+
+    def on_connected() -> None:
+        sock.write(b"raise\n")
+        sock.flush()
+
+    sock.connected.connect(on_connected)
+    sock.readyRead.connect(finish)
+    sock.errorOccurred.connect(lambda _err: finish())
+    QTimer.singleShot(800, finish)
     sock.connectToServer(name)
-    if not sock.waitForConnected(200):
-        return False
-    sock.write(b"raise\n")
-    if not sock.waitForBytesWritten(500):
-        sock.disconnectFromServer()
-        return False
-    sock.flush()
-    if not sock.waitForReadyRead(400):
-        sock.disconnectFromServer()
-        return False
-    reply = bytes(sock.readAll())
+    if not ack and sock.state() != QLocalSocket.LocalSocketState.UnconnectedState:
+        loop.exec()
+    done = True
     sock.disconnectFromServer()
-    if sock.state() != QLocalSocket.LocalSocketState.UnconnectedState:
-        sock.waitForDisconnected(200)
-    return b"ok" in reply
+    return ack

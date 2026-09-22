@@ -20,6 +20,13 @@ repos:
 
   - repo: local
     hooks:
+      - id: pytest
+        name: pytest
+        language: system
+        entry: bash -c 'HEADLESS=1 QT_QPA_PLATFORM=offscreen CI=true uv run --no-sync pytest -q --tb=short'
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
       - id: readme-gui-shots
         name: README GUI screenshots
         language: system

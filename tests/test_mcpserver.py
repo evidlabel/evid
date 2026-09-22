@@ -8,6 +8,7 @@ import json
 import pytest
 import yaml
 
+from evid import extras
 from evid.mcpserver import build_server
 from evid.services.set_manager import SetManager
 
@@ -36,21 +37,21 @@ def test_tools_registered_no_list_sets(tmp_path):
     _seed(tmp_path)
     m = build_server(tmp_path, "my-case")
     names = {t.name for t in asyncio.run(m.list_tools())}
-    # Scoped server: no list_sets discovery tool.
-    assert names == {
-        "search_vec",
-        "search_text",
-        "search_meta",
-        "list_docs",
-        "doc_quotes",
-    }
+    # Scoped server: no list_sets discovery tool. search_vec needs evid[vec].
+    expected = {"search_text", "search_meta", "list_docs", "doc_quotes"}
+    if extras.has_vec():
+        expected.add("search_vec")
+    assert names == expected
 
 
 def test_tools_take_no_dataset_arg(tmp_path):
     _seed(tmp_path)
     m = build_server(tmp_path, "my-case")
     tools = {t.name: t for t in asyncio.run(m.list_tools())}
-    for name in ("search_vec", "search_text", "search_meta", "list_docs"):
+    names = ["search_text", "search_meta", "list_docs"]
+    if extras.has_vec():
+        names.insert(0, "search_vec")
+    for name in names:
         props = tools[name].inputSchema.get("properties", {})
         assert "dataset" not in props, f"{name} must not expose a dataset param"
 

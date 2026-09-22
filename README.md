@@ -57,4 +57,4 @@ HEADLESS=1 uv run pytest -v
 QT_QPA_PLATFORM=offscreen HEADLESS=1 uv run python scripts/gui_readme_shots.py
 ```
 
-`pre-commit install` also installs a **pre-push** hook that regenerates `assets/gui-docs.png` and `assets/gui-search.png` and fails if they differ from git.
+`pre-commit install` runs the headless pytest suite on each commit (`HEADLESS=1`, offscreen Qt, `uv run --no-sync`), and a **pre-push** hook that regenerates `assets/gui-docs.png` and `assets/gui-search.png` and fails if they differ from git.

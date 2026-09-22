@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pymupdf
 
+import evid.extras as extras_mod
 import evid.services.doc_ingester as doc_ingester_mod
 import evid.services.set_manager as sm_mod
 import evid.services.vec_service as vec_mod
@@ -82,6 +83,8 @@ def test_indexing_runs_without_no_index(tmp_path, monkeypatch):
     monkeypatch.setattr(doc_ingester_mod, "DocIngester", _Recorder)
     monkeypatch.setattr(sm_mod, "SetManager", _FakeSetManager)
     monkeypatch.setattr(vec_mod, "VecService", lambda *_a, **_k: "VEC")
+    # add_evidence only builds VecService when the vec extra is present.
+    monkeypatch.setattr(extras_mod, "has_vec", lambda: True)
 
     add_evidence(tmp_path / "db", "demo", str(pdf), no_index=False)
     assert any(c.get("vec_service") == "VEC" for c in calls)
