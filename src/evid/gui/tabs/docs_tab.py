@@ -1484,11 +1484,22 @@ class DocsTab(QWidget):
         worker.start()
 
     def _status(self, msg: str, timeout: int = 0) -> None:
-        """Show a non-blocking message in the main-window status bar."""
+        """Show a non-blocking message in the main-window status bar.
+
+        The bar auto-hides when empty (and after a timed message expires) so it
+        does not leave a permanent empty strip below the docs tab.
+        """
         import contextlib
 
         with contextlib.suppress(Exception):
-            self.window().statusBar().showMessage(msg, timeout)
+            bar = self.window().statusBar()
+            if not getattr(self, "_status_bar_wired", False):
+                bar.messageChanged.connect(lambda m: bar.setVisible(bool(m)))
+                self._status_bar_wired = True
+            if msg:
+                bar.showMessage(msg, timeout)
+            else:
+                bar.clearMessage()
 
     def _enqueue_index(self, doc_dir: Path, evidence_set: EvidenceSet) -> None:
         """Queue a vecdb index if the vec extra is installed."""

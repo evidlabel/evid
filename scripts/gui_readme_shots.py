@@ -157,6 +157,10 @@ def main() -> None:
     if win._docs_tab._table.rowCount() > 0:
         win._docs_tab._table.selectRow(0)
     _pump(app, 50)
+    # Re-assert the size: a transient status-bar message during load can grow the
+    # window's minimum height, and the window does not shrink back when it hides.
+    win.resize(1200, 760)
+    _pump(app, 20)
     _grab(win, OUT_DOCS)
 
     win._tab_bar.setCurrentIndex(1)
@@ -169,6 +173,8 @@ def main() -> None:
     _wait_rows(app, search._table)
     search._table.selectRow(0)
     _pump(app, 80)
+    win.resize(1200, 760)
+    _pump(app, 20)
     _grab(win, OUT_SEARCH)
 
     win.close()
