@@ -9,6 +9,7 @@ import yaml
 
 from evid.models import TagItem
 from evid.services.tag_service import TagService
+from evid.utils.yaml_io import load_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +26,21 @@ def format_tags_field(tags: list[str]) -> str:
 
 
 def resolve_doc_pdf(doc_dir: Path) -> Path | None:
-    """Return the primary PDF for a document directory, if any exists."""
+    """Return the primary PDF for a document directory, if any exists.
+
+    Checks the canonical ``original.pdf`` first (every evid ingest stores the
+    PDF under that name) so the common case avoids parsing ``info.yml`` at all —
+    this runs once per document when the docs table is rebuilt.
+    """
+    original = doc_dir / "original.pdf"
+    if original.is_file():
+        return original
+
     info_path = doc_dir / "info.yml"
     if info_path.exists():
         try:
             with info_path.open(encoding="utf-8") as f:
-                info = yaml.safe_load(f) or {}
+                info = load_yaml(f) or {}
             name = info.get("original_name") or info.get("original_filename")
             if name:
                 candidate = doc_dir / name
@@ -41,10 +51,6 @@ def resolve_doc_pdf(doc_dir: Path) -> Path | None:
                 "Could not read original_name from %s", info_path, exc_info=True
             )
 
-    original = doc_dir / "original.pdf"
-    if original.is_file():
-        return original
-
     pdfs = sorted(doc_dir.glob("*.pdf"))
     return pdfs[0] if pdfs else None
 
@@ -53,7 +59,7 @@ def _read_info_tags(info_path: Path) -> list[str]:
     if not info_path.exists():
         return []
     with info_path.open(encoding="utf-8") as f:
-        info = yaml.safe_load(f) or {}
+        info = load_yaml(f) or {}
     return parse_tags_field(info.get("tags", ""))
 
 
@@ -61,7 +67,7 @@ def _write_info_tags(info_path: Path, tags: list[str]) -> None:
     info: dict = {}
     if info_path.exists():
         with info_path.open(encoding="utf-8") as f:
-            info = yaml.safe_load(f) or {}
+            info = load_yaml(f) or {}
     info["tags"] = format_tags_field(tags)
     with info_path.open("w", encoding="utf-8") as f:
         yaml.safe_dump(info, f, allow_unicode=True)

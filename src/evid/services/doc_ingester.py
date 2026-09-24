@@ -173,11 +173,13 @@ class DocIngester:
         dates: str = "",
         tags: list[str] | None = None,
         do_index: bool = True,
+        pool: object | None = None,
     ) -> Document:
         """Resolve *source* (path or URL) and run the full ingest pipeline.
 
         Caller-supplied *title* / *authors* / *dates* / *label* override both
-        URL-derived hints and PDF-extracted metadata.
+        URL-derived hints and PDF-extracted metadata. *pool* is an optional
+        long-lived ``IndexWorkerPool`` reused across a batch.
         """
         resolved = resolve_source(source)
         return self.ingest(
@@ -191,6 +193,7 @@ class DocIngester:
             source_url=resolved.source_url,
             temp_dir=resolved.temp_dir,
             do_index=do_index,
+            pool=pool,
         )
 
     def ingest(
@@ -205,6 +208,7 @@ class DocIngester:
         source_url: str = "",
         temp_dir: object = None,
         do_index: bool = True,
+        pool: object | None = None,
     ) -> Document:
         """Ingest a single PDF into *evidence_set*. Returns the new Document.
 
@@ -351,7 +355,7 @@ class DocIngester:
                 )
                 logger.debug("Embedding %d chars for %s", len(typ_text), doc_uuid)
                 ok, msg = self.vec_service.index_document_isolated(  # type: ignore[attr-defined]
-                    doc, typ_text, evidence_set
+                    doc, typ_text, evidence_set, pool=pool
                 )
                 if ok:
                     meta["indexed"] = True
@@ -389,10 +393,13 @@ class DocIngester:
         self,
         doc_dir: Path,
         evidence_set: EvidenceSet,
+        pool: object | None = None,
     ) -> bool:
         """Index an already-imported document that has a .typ file but no vecdb entry.
 
-        Returns True if indexing succeeded.
+        *pool* is an optional long-lived ``IndexWorkerPool`` reused across a
+        batch so the embedding model loads once. Returns True if indexing
+        succeeded.
         """
         if self.vec_service is None:
             logger.warning("No VecService configured; cannot index %s", doc_dir.name)
@@ -424,7 +431,7 @@ class DocIngester:
         )
         try:
             ok, msg = self.vec_service.index_document_isolated(
-                doc, typ_text, evidence_set
+                doc, typ_text, evidence_set, pool=pool
             )
             if not ok:
                 logger.warning("Isolated index failed for %s: %s", doc_dir.name, msg)

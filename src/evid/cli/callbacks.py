@@ -253,13 +253,13 @@ def gather_callback(
 
 def add_callback(
     db: str = None,
-    source: str = None,
+    source: str | list[str] = None,
     label: bool = False,
     autolabel: bool = False,
     dataset: str = None,
     no_index: bool = False,
 ):
-    """Add a document to a dataset."""
+    """Add one or more documents (PDFs, a directory, or URLs) to a dataset."""
     dataset = _resolve_dataset(dataset, "Select dataset for adding document")
     add_evidence(DIRECTORY, dataset, source, label, autolabel, no_index=no_index)
 
@@ -678,9 +678,14 @@ def reindex_callback(db: str = None, dataset: str = None):
     docs_dir = evidence_set.path / "docs"
     doc_dirs = sorted(d for d in docs_dir.iterdir() if d.is_dir())
     ok = 0
-    for doc_dir in doc_dirs:
-        if ingester.index_existing(doc_dir, evidence_set):
-            ok += 1
+    # One long-lived index child for the whole set: the embedding model loads
+    # once instead of once per document.
+    from evid.vec.safe_index import IndexWorkerPool
+
+    with IndexWorkerPool() as pool:
+        for doc_dir in doc_dirs:
+            if ingester.index_existing(doc_dir, evidence_set, pool=pool):
+                ok += 1
     print(f"Reindexed {ok}/{len(doc_dirs)} document(s) in '{dataset}'.")
 
 

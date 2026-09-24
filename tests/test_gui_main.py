@@ -118,7 +118,7 @@ def test_sidebar_create_set(qapp, tmp_path):
     window.close()
 
 
-def test_docs_tab_loads_selected_set_on_startup(qapp, tmp_path):
+def test_docs_tab_loads_selected_set_on_startup(qapp, tmp_path, wait_for_docs):
     from evid.config import EvidConfig
     from evid.gui.main_window import EvidMgrWindow
 
@@ -127,6 +127,7 @@ def test_docs_tab_loads_selected_set_on_startup(qapp, tmp_path):
     window._set_manager.create_set("Startup Set")
     window._sidebar.refresh()
     window._sidebar.select_first()
+    wait_for_docs(qapp, window._docs_tab)
     assert window._docs_tab._evidence_set is not None
     assert window._docs_tab._evidence_set.slug == window._sidebar.active_set().slug
     window.close()
@@ -216,7 +217,7 @@ def _context_menu_stub():
     return mock_menu
 
 
-def test_docs_right_click_opens_menu_on_unselected_row(qapp, tmp_path):
+def test_docs_right_click_opens_menu_on_unselected_row(qapp, tmp_path, wait_for_docs):
     """Right-click must select the hovered row and still open the menu."""
     from unittest.mock import patch
 
@@ -229,7 +230,7 @@ def test_docs_right_click_opens_menu_on_unselected_row(qapp, tmp_path):
     _write_doc(evidence_set.path, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
     window._sidebar.refresh()
     window._sidebar.select_first()
-    qapp.processEvents()
+    wait_for_docs(qapp, window._docs_tab)
 
     tab = window._docs_tab
     table = tab._table
@@ -249,7 +250,7 @@ def test_docs_right_click_opens_menu_on_unselected_row(qapp, tmp_path):
     window.close()
 
 
-def test_docs_right_click_keeps_filtered_selection(qapp, tmp_path):
+def test_docs_right_click_keeps_filtered_selection(qapp, tmp_path, wait_for_docs):
     """Right-click on a non-first filtered row must not jump to row 0.
 
     After the docs-tab filter rebuilds the table, Qt delivers the context-menu
@@ -288,7 +289,7 @@ def test_docs_right_click_keeps_filtered_selection(qapp, tmp_path):
     window._sidebar.select_first()
     window.resize(1400, 900)
     window.show()
-    qapp.processEvents()
+    wait_for_docs(qapp, window._docs_tab)
 
     tab = window._docs_tab
     table = tab._table
@@ -317,7 +318,7 @@ def test_docs_right_click_keeps_filtered_selection(qapp, tmp_path):
     window.close()
 
 
-def test_detail_pane_coerces_list_authors_and_tags(qapp, tmp_path):
+def test_detail_pane_coerces_list_authors_and_tags(qapp, tmp_path, wait_for_docs):
     """info.yml may store authors/tags/dates as YAML lists; the form is text."""
     from evid.config import EvidConfig
     from evid.gui.main_window import EvidMgrWindow
@@ -334,7 +335,7 @@ def test_detail_pane_coerces_list_authors_and_tags(qapp, tmp_path):
     )
     window._sidebar.refresh()
     window._sidebar.select_first()
-    qapp.processEvents()
+    wait_for_docs(qapp, window._docs_tab)
 
     tab = window._docs_tab
     tab._table.selectRow(0)

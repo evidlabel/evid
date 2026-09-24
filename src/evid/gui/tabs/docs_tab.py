@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
-from datetime import UTC
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -62,6 +62,68 @@ logger = logging.getLogger(__name__)
 
 _COLS = ["F", "J", "Label", "Added", "UUID"]
 _DOC_MIME_TYPE = "application/x-evid-doc"
+
+
+def collect_documents(set_manager, slug: str) -> list[Document]:
+    """Read every document's info.yml / evid_meta.yml for *slug* into Documents.
+
+    Sorted newest-first (added date, then dir mtime). Pure filesystem work with
+    no Qt, so it can run in a worker thread; ``load_yaml`` uses the libyaml
+    loader because this parses one YAML file per document.
+    """
+    from evid.core.evid_meta import read_meta
+    from evid.models import Document
+    from evid.utils.yaml_io import load_yaml
+
+    docs: list[Document] = []
+    mtime_by_uuid: dict[str, float] = {}
+    for doc_dir in set_manager.list_documents(slug):
+        try:
+            info_path = doc_dir / "info.yml"
+            try:
+                with info_path.open("r", encoding="utf-8") as f:
+                    info = load_yaml(f) or {}
+            except yaml.YAMLError as exc:
+                logger.warning("Skipping %s — bad info.yml: %s", doc_dir.name, exc)
+                continue
+            meta = read_meta(doc_dir)
+            tags_raw = info.get("tags", "")
+            if isinstance(tags_raw, list):
+                tags = [str(t).strip() for t in tags_raw if str(t).strip()]
+            elif tags_raw:
+                tags = [t.strip() for t in str(tags_raw).split(",") if t.strip()]
+            else:
+                tags = []
+            raw_added = info.get("time_added", "")
+            mtime = doc_dir.stat().st_mtime
+            mtime_by_uuid[doc_dir.name] = mtime
+            try:
+                if isinstance(raw_added, date):
+                    added = datetime(
+                        raw_added.year, raw_added.month, raw_added.day, tzinfo=UTC
+                    )
+                else:
+                    added = datetime.strptime(str(raw_added), "%Y-%m-%d").replace(
+                        tzinfo=UTC
+                    )
+            except (ValueError, TypeError):
+                added = datetime.fromtimestamp(mtime, tz=UTC)
+            docs.append(
+                Document(
+                    uuid=doc_dir.name,
+                    path=doc_dir,
+                    label=info.get("label", doc_dir.name),
+                    tags=tags,
+                    added=added,
+                    indexed=meta.get("indexed", False),
+                    notes=meta.get("notes", ""),
+                    source_url=info.get("url", ""),
+                )
+            )
+        except Exception:
+            logger.exception("Failed to load doc at %s", doc_dir)
+    docs.sort(key=lambda d: (d.added, mtime_by_uuid.get(d.uuid, 0.0)), reverse=True)
+    return docs
 
 
 # ── pre-ingest metadata dialog ────────────────────────────────────────────────
@@ -244,6 +306,98 @@ class AddDocDialog(QDialog):
         err = open_local_path(self._pdf_path)
         if err:
             logger.warning("%s", err)
+
+
+class BatchAddDialog(QDialog):
+    """One dialog for a batch of PDFs: shared tags, no per-file metadata form.
+
+    Selecting N files used to open N sequential ``AddDocDialog``s, each blocking
+    the GUI thread to read metadata. This replaces that with a single dialog;
+    every document is ingested with its own auto-extracted metadata.
+    """
+
+    def __init__(self, paths: list[str], parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Add documents")
+        self.setMinimumWidth(480)
+        self._temp_dir: object = None
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel(f"{len(paths)} document(s) selected:"))
+        listing = QListWidget()
+        for path in paths:
+            listing.addItem(Path(path).name)
+        listing.setMaximumHeight(140)
+        layout.addWidget(listing)
+
+        form = QFormLayout()
+        self._tags_edit = QLineEdit()
+        self._tags_edit.setPlaceholderText("comma-separated — applied to every file")
+        tags_widget = QWidget()
+        tags_layout = QVBoxLayout(tags_widget)
+        tags_layout.setContentsMargins(0, 0, 0, 0)
+        tags_layout.setSpacing(2)
+        tags_layout.addWidget(self._tags_edit)
+
+        picker_row = QHBoxLayout()
+        self._tag_picker = QComboBox()
+        self._tag_picker.setEditable(True)
+        self._tag_picker.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self._tag_picker.lineEdit().setPlaceholderText("pick or type tag…")
+        existing_tags: list[str] = []
+        if hasattr(parent, "_tag_service"):
+            existing_tags = [t.name for t in parent._tag_service.list_tags()]
+        self._tag_picker.addItems(existing_tags)
+        self._tag_picker.setCurrentText("")
+        add_tag_btn = QPushButton("Add")
+        add_tag_btn.setFixedWidth(40)
+        add_tag_btn.clicked.connect(self._on_add_tag)
+        self._tag_picker.lineEdit().returnPressed.connect(self._on_add_tag)
+        picker_row.addWidget(self._tag_picker, 1)
+        picker_row.addWidget(add_tag_btn)
+        tags_layout.addLayout(picker_row)
+
+        form.addRow("Tags:", tags_widget)
+        layout.addLayout(form)
+
+        self._open_in_labeller_cb = QCheckBox("Open in labeller after adding")
+        self._open_in_labeller_cb.setChecked(False)
+        layout.addWidget(self._open_in_labeller_cb)
+
+        btns = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+    # Metadata interface shared with AddDocDialog; blank values let the ingester
+    # auto-extract title/authors/date per document.
+    title = ""
+    authors = ""
+    dates = ""
+    label = ""
+    url = ""
+
+    @property
+    def tags(self) -> list[str]:
+        raw = self._tags_edit.text().strip()
+        return [t.strip() for t in raw.split(",") if t.strip()]
+
+    @property
+    def open_in_labeller(self) -> bool:
+        return self._open_in_labeller_cb.isChecked()
+
+    def _on_add_tag(self) -> None:
+        tag = self._tag_picker.currentText().strip()
+        if not tag:
+            return
+        current = self._tags_edit.text().strip()
+        existing = [t.strip() for t in current.split(",") if t.strip()]
+        if tag not in existing:
+            existing.append(tag)
+        self._tags_edit.setText(", ".join(existing))
+        self._tag_picker.setCurrentText("")
 
 
 # ── flow layout ───────────────────────────────────────────────────────────────
@@ -565,6 +719,7 @@ class DocsTab(QWidget):
         self._signals = signals
         self._tag_service = tag_service
         self._evidence_set: EvidenceSet | None = None
+        self._loading_slug: str | None = None
         self._docs: list[Document] = []
         self._workers: list = []
         # Long-lived serialized background vecdb index queue (created lazily).
@@ -783,9 +938,47 @@ class DocsTab(QWidget):
             self._reload_preserving_selection()
 
     def reload(self, evidence_set: EvidenceSet) -> None:
+        """Switch to *evidence_set*, loading its documents off the GUI thread.
+
+        Parsing thousands of info.yml files blocks the UI, so the read runs in a
+        ``SetLoadWorker``; ``_on_set_loaded`` populates the table when it returns.
+        Results from a superseded switch are dropped (slug check), and a repeat
+        request for the set already loading is ignored (startup emits
+        ``set_selected`` more than once).
+        """
+        if evidence_set.slug == self._loading_slug:
+            return
         self._evidence_set = evidence_set
+        self._loading_slug = evidence_set.slug
         self._active_tag_filter = set()
-        self._docs = self._load_documents()
+        self._docs = []
+        self._refresh_table([], message="Loading…")
+        self._pill_pool.rebuild([])
+        self._pill_pool.set_active_tags(set())
+        self._pill_pool.set_carried_tags(set())
+        self._status(f"Loading '{evidence_set.name}'…")
+
+        parent = self.window()
+        sm = getattr(parent, "_set_manager", None)
+        if sm is None:
+            # No manager (e.g. a bare tab in a test): load inline.
+            self._on_set_loaded(evidence_set.slug, self._load_documents())
+            return
+
+        from evid.gui.workers import SetLoadWorker, track_worker
+
+        worker = SetLoadWorker(sm, evidence_set.slug)
+        worker.loaded.connect(self._on_set_loaded)
+        worker.error.connect(self._on_set_load_error)
+        track_worker(self._workers, worker, worker.loaded, worker.error)
+        worker.start()
+
+    def _on_set_loaded(self, slug: str, docs: list[Document]) -> None:
+        # A newer set switch may have started while this worker ran.
+        if not self._evidence_set or self._evidence_set.slug != slug:
+            return
+        self._loading_slug = None
+        self._docs = docs
         self._refresh_table(self._docs)
         self._pill_pool.rebuild(self._docs)
         self._pill_pool.set_active_tags(set())
@@ -796,6 +989,12 @@ class DocsTab(QWidget):
 
         all_tags = sorted({tag for doc in self._docs for tag in doc.tags})
         self._tags_completer.setModel(QStringListModel(all_tags))
+        self._status("")
+
+    def _on_set_load_error(self, msg: str) -> None:
+        self._loading_slug = None
+        self._status(f"Failed to load set: {msg}", 6000)
+        logger.error("Failed to load set documents: %s", msg)
 
     # ── private ───────────────────────────────────────────────────────────
 
@@ -811,68 +1010,17 @@ class DocsTab(QWidget):
     def _load_documents(self) -> list[Document]:
         if self._evidence_set is None:
             return []
-        from datetime import date, datetime
-
-        from evid.models import Document
-
         parent = self.window()
         sm = getattr(parent, "_set_manager", None)
         if sm is None:
             return []
-        docs = []
-        for doc_dir in sm.list_documents(self._evidence_set.slug):
-            try:
-                info_path = doc_dir / "info.yml"
-                from evid.core.evid_meta import read_meta
+        return collect_documents(sm, self._evidence_set.slug)
 
-                try:
-                    with info_path.open("r", encoding="utf-8") as f:
-                        info = yaml.safe_load(f) or {}
-                except yaml.YAMLError as exc:
-                    logger.warning("Skipping %s — bad info.yml: %s", doc_dir.name, exc)
-                    continue
-                meta = read_meta(doc_dir)
-                tags_raw = info.get("tags", "")
-                if isinstance(tags_raw, list):
-                    tags = [str(t).strip() for t in tags_raw if str(t).strip()]
-                elif tags_raw:
-                    tags = [t.strip() for t in str(tags_raw).split(",") if t.strip()]
-                else:
-                    tags = []
-                raw_added = info.get("time_added", "")
-                try:
-                    if isinstance(raw_added, date):
-                        added = datetime(
-                            raw_added.year, raw_added.month, raw_added.day, tzinfo=UTC
-                        )
-                    else:
-                        added = datetime.strptime(str(raw_added), "%Y-%m-%d").replace(
-                            tzinfo=UTC
-                        )
-                except (ValueError, TypeError):
-                    added = datetime.fromtimestamp(doc_dir.stat().st_mtime, tz=UTC)
-                docs.append(
-                    Document(
-                        uuid=doc_dir.name,
-                        path=doc_dir,
-                        label=info.get("label", doc_dir.name),
-                        tags=tags,
-                        added=added,
-                        indexed=meta.get("indexed", False),
-                        notes=meta.get("notes", ""),
-                        source_url=info.get("url", ""),
-                    )
-                )
-            except Exception:
-                logger.exception("Failed to load doc at %s", doc_dir)
-        docs.sort(key=lambda d: (d.added, d.path.stat().st_mtime), reverse=True)
-        return docs
-
-    def _refresh_table(self, docs: list[Document]) -> None:
+    def _refresh_table(self, docs: list[Document], message: str | None = None) -> None:
         self._table.setRowCount(0)
         if not docs:
             self._table.insertRow(0)
-            empty = QTableWidgetItem("(No documents in this set)")
+            empty = QTableWidgetItem(message or "(No documents in this set)")
             empty.setFlags(Qt.ItemFlag.NoItemFlags)
             self._table.setItem(0, 2, empty)
             return
@@ -1220,11 +1368,20 @@ class DocsTab(QWidget):
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Select PDFs", "", "PDF files (*.pdf)"
         )
-        for path_str in paths:
-            pdf_path = Path(path_str)
+        if not paths:
+            return
+        if len(paths) == 1:
+            pdf_path = Path(paths[0])
             dlg = AddDocDialog(pdf_path, self)
             if dlg.exec() == QDialog.DialogCode.Accepted:
                 self._start_ingest(pdf_path, dlg)
+            return
+        # Batch: one dialog, then ingest every file with auto metadata.
+        dlg = BatchAddDialog(paths, self)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        for path_str in paths:
+            self._start_ingest(Path(path_str), dlg)
 
     def _on_add_from_url(self) -> None:
         if not self._evidence_set:
@@ -1289,35 +1446,18 @@ class DocsTab(QWidget):
         except Exception:
             logger.exception("Error handling URL fetch error")
 
-    def _start_ingest(self, pdf_path: Path, dlg: AddDocDialog) -> None:
+    def _start_ingest(self, pdf_path: Path, dlg: AddDocDialog | BatchAddDialog) -> None:
         self._open_in_labeller_after_ingest = dlg.open_in_labeller
         if not self._evidence_set:
             QMessageBox.warning(self, "No set", "Select an evidence set first.")
             return
-        # Detect duplicate before spawning a worker to avoid a cross-thread race
-        # on the fast "already ingested → return early" code path.
-        try:
-            import hashlib
-            import uuid as _uuid
-
-            with pdf_path.open("rb") as fh:
-                digest = hashlib.sha256(fh.read()).digest()[:16]
-            doc_uuid = _uuid.UUID(bytes=digest).hex
-            doc_dir = self._evidence_set.path / "docs" / doc_uuid
-            if doc_dir.exists():
-                QMessageBox.information(
-                    self,
-                    "Already exists",
-                    f"This document was already added to '{self._evidence_set.name}'.",
-                )
-                return
-        except Exception:
-            logger.exception("Duplicate check failed; proceeding with ingest")
         from evid.gui.workers import IngestWorker, track_worker
         from evid.services.doc_ingester import DocIngester
 
         # Fast add only — the slow vecdb step is deferred to the serialized
-        # background queue (see _on_ingest_done) so the GUI stays usable.
+        # background queue (see _on_ingest_done) so the GUI stays usable. The
+        # duplicate check (content hash) happens inside the worker, off the GUI
+        # thread; an already-present doc comes back via finished(..., True).
         worker_ingester = DocIngester(vec_service=None)
 
         worker = IngestWorker(
@@ -1373,7 +1513,7 @@ class DocsTab(QWidget):
     def _on_ingest_progress(self, step: int, total: int, msg: str) -> None:
         self._status(f"{msg}…")
 
-    def _on_ingest_done(self, doc_uuid: str) -> None:
+    def _on_ingest_done(self, doc_uuid: str, was_existing: bool = False) -> None:
         try:
             if self._evidence_set:
                 self._signals.doc_ingested.emit(self._evidence_set.slug, doc_uuid)
@@ -1381,6 +1521,10 @@ class DocsTab(QWidget):
             self._refresh_table(self._get_filtered_docs())
             self._pill_pool.rebuild(self._docs)
             self._pill_pool.set_active_tags(self._active_tag_filter)
+            if was_existing:
+                # Duplicate: nothing new to index or open — say so without a modal.
+                self._status(f"Already in set: {doc_uuid[:8]}", 4000)
+                return
             # Defer the slow vecdb index to the serialized background queue.
             if self._evidence_set:
                 doc_dir = self._evidence_set.path / "docs" / doc_uuid
@@ -1425,7 +1569,7 @@ class DocsTab(QWidget):
         self._status("Indexing complete", 4000)
 
     def shutdown(self) -> None:
-        """Stop the background index queue cleanly (called on app close)."""
+        """Stop the background index queue and wait out any in-flight workers."""
         q = self._index_queue
         if q is not None:
             try:
@@ -1433,6 +1577,13 @@ class DocsTab(QWidget):
                 q.wait(5000)
             except Exception:
                 logger.exception("Error stopping background index queue")
+        # Set-load / ingest / search workers must not outlive the window (a
+        # QThread destroyed while running is undefined behaviour).
+        for worker in list(self._workers):
+            try:
+                worker.wait(5000)
+            except Exception:
+                logger.exception("Error waiting for worker on shutdown")
 
     # ── indexing ──────────────────────────────────────────────────────────
 

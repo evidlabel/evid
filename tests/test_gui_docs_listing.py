@@ -40,7 +40,7 @@ def _write_doc(set_path, doc_uuid: str, label: str = "Test doc", **info_extra) -
         yaml.safe_dump({"notes": "", "indexed": False}, f)
 
 
-def test_docs_table_skips_dirs_without_info_yml(qapp, tmp_path):
+def test_docs_table_skips_dirs_without_info_yml(qapp, tmp_path, wait_for_docs):
     from evid.config import EvidConfig
     from evid.gui.main_window import EvidMgrWindow
 
@@ -55,7 +55,7 @@ def test_docs_table_skips_dirs_without_info_yml(qapp, tmp_path):
     (evidence_set.path / "docs" / "sets").mkdir()
     window._sidebar.refresh()
     window._sidebar.select_first()
-    qapp.processEvents()
+    wait_for_docs(qapp, window._docs_tab)
     table = window._docs_tab._table
     labels = [
         table.item(r, 2).text()

@@ -33,7 +33,7 @@ class IngestWorker(QThread):
     """Runs DocIngester.ingest() in a background thread."""
 
     progress = Signal(int, int, str)  # step, total, message
-    finished = Signal(str)  # doc_uuid
+    finished = Signal(str, bool)  # doc_uuid, was_already_present
     error = Signal(str)  # error message
 
     def __init__(
@@ -81,7 +81,7 @@ class IngestWorker(QThread):
                 temp_dir=self._temp_dir,
                 do_index=self._do_index,
             )
-            self.finished.emit(doc.uuid)
+            self.finished.emit(doc.uuid, self._ingester.last_was_existing)
         except Exception as exc:
             self.error.emit(str(exc))
 
@@ -130,27 +130,47 @@ class IndexQueueWorker(QThread):
         _log = logging.getLogger(__name__)
         vec = VecService() if extras.has_vec() else None
         ingester = DocIngester(vec_service=vec)
-        while True:
-            job = self._queue.get()
-            if job is None:
-                break
-            doc_dir, evidence_set = job
-            doc_uuid = doc_dir.name
-            ok = False
-            try:
-                _log.info(
-                    "Background indexing %s into '%s'", doc_uuid, evidence_set.slug
-                )
-                ok = bool(ingester.index_existing(doc_dir, evidence_set))
-            except Exception as exc:
-                _log.exception("Background index failed for %s: %s", doc_uuid, exc)
-            with self._lock:
-                self._pending = max(0, self._pending - 1)
-                pending = self._pending
-            self.item_done.emit(evidence_set.slug, doc_uuid, ok)
-            self.queue_changed.emit(pending)
-            if pending == 0:
-                self.idle.emit()
+        # One long-lived index child for the whole drain: the embedding model
+        # loads once, not once per queued document. Closed when the queue
+        # empties so the vecdb file lock is not held while idle.
+        pool = None
+        try:
+            while True:
+                job = self._queue.get()
+                if job is None:
+                    break
+                doc_dir, evidence_set = job
+                doc_uuid = doc_dir.name
+                ok = False
+                try:
+                    if vec is not None and pool is None:
+                        from evid.vec.safe_index import IndexWorkerPool
+
+                        pool = IndexWorkerPool()
+                    _log.info(
+                        "Background indexing %s into '%s'", doc_uuid, evidence_set.slug
+                    )
+                    if pool is not None:
+                        ok = bool(
+                            ingester.index_existing(doc_dir, evidence_set, pool=pool)
+                        )
+                    else:
+                        ok = bool(ingester.index_existing(doc_dir, evidence_set))
+                except Exception as exc:
+                    _log.exception("Background index failed for %s: %s", doc_uuid, exc)
+                with self._lock:
+                    self._pending = max(0, self._pending - 1)
+                    pending = self._pending
+                self.item_done.emit(evidence_set.slug, doc_uuid, ok)
+                self.queue_changed.emit(pending)
+                if pending == 0:
+                    if pool is not None:
+                        pool.close()
+                        pool = None
+                    self.idle.emit()
+        finally:
+            if pool is not None:
+                pool.close()
 
 
 class UrlFetchWorker(QThread):
@@ -310,6 +330,32 @@ class CopyDocWorker(QThread):
             self.finished.emit(doc_uuid, self._dest_set.slug)
         except Exception as exc:
             _log.exception("CopyDocWorker failed for %s", doc_uuid)
+            self.error.emit(str(exc))
+
+
+class SetLoadWorker(QThread):
+    """Load a set's document list off the GUI thread.
+
+    Switching sets parses one info.yml + evid_meta.yml per document; for a large
+    set that is a multi-second freeze if done on the GUI thread. This worker
+    emits the assembled list (or an error) and is discarded when done.
+    """
+
+    loaded = Signal(str, list)  # slug, list[Document]
+    error = Signal(str)
+
+    def __init__(self, set_manager, slug: str) -> None:
+        super().__init__()
+        self._set_manager = set_manager
+        self._slug = slug
+
+    def run(self) -> None:
+        try:
+            from evid.gui.tabs.docs_tab import collect_documents
+
+            docs = collect_documents(self._set_manager, self._slug)
+            self.loaded.emit(self._slug, docs)
+        except Exception as exc:
             self.error.emit(str(exc))
 
 

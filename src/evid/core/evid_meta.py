@@ -8,6 +8,8 @@ from typing import Any
 
 import yaml
 
+from evid.utils.yaml_io import load_yaml
+
 logger = logging.getLogger(__name__)
 
 META_LEGACY = "evidmgr_meta.yml"
@@ -42,7 +44,7 @@ def read_meta(doc_dir: Path) -> dict[str, Any]:
         return dict(_DEFAULT)
     try:
         with path.open(encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
+            data = load_yaml(f) or {}
         return {**_DEFAULT, **data}
     except Exception:
         logger.exception("Failed to read %s", path)

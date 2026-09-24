@@ -109,6 +109,7 @@ class VecService:
         typ_text: str,
         evidence_set: EvidenceSet,
         timeout: float = 600.0,
+        pool: object | None = None,
     ) -> tuple[bool, str]:
         """Index *doc* in a spawned subprocess.
 
@@ -116,18 +117,32 @@ class VecService:
         natively (SIGSEGV) on some Linux setups. Running indexing in a child
         process means such a crash kills the child, not the GUI. Returns
         ``(ok, message)``.
-        """
-        from evid.vec.safe_index import index_in_subprocess
 
+        When *pool* (an ``IndexWorkerPool``) is given, the job is sent to that
+        long-lived child instead — the embedding model is loaded once for the
+        whole batch rather than once per document.
+        """
         vecdb_dir = evidence_set.path / "vecdb"
-        ok, msg = index_in_subprocess(
-            vecdb_dir,
-            doc.uuid,
-            doc.label,
-            list(doc.tags),
-            typ_text,
-            timeout=timeout,
-        )
+        if pool is not None:
+            ok, msg = pool.index(  # type: ignore[attr-defined]
+                vecdb_dir,
+                doc.uuid,
+                doc.label,
+                list(doc.tags),
+                typ_text,
+                timeout=timeout,
+            )
+        else:
+            from evid.vec.safe_index import index_in_subprocess
+
+            ok, msg = index_in_subprocess(
+                vecdb_dir,
+                doc.uuid,
+                doc.label,
+                list(doc.tags),
+                typ_text,
+                timeout=timeout,
+            )
         if ok:
             logger.info("Indexed %s in '%s' (isolated)", doc.uuid, evidence_set.slug)
         else:

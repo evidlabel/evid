@@ -10,6 +10,21 @@ from evid.core.bibtex_utils import json_to_bib
 logger = logging.getLogger(__name__)
 
 
+def _has_lab_markers(typ_file: Path) -> bool:
+    """True if *typ_file* can yield any ``<lab>`` elements for ``typst query``.
+
+    A freshly ingested ``label.typ`` contains no ``#lab(...)`` calls, so querying
+    it always returns ``[]`` — a ~0.25 s subprocess per document for nothing. A
+    manually authored ``#metadata(...) <lab>`` also counts; on any read error we
+    return True so Typst reports the real problem.
+    """
+    try:
+        text = typ_file.read_text(encoding="utf-8")
+    except OSError:
+        return True
+    return "#lab(" in text or "<lab>" in text
+
+
 def generate_bib_from_typ(
     typ_file: Path, exclude_note: bool = True
 ) -> tuple[bool, str]:
@@ -20,6 +35,15 @@ def generate_bib_from_typ(
         return False, f"Skipped empty Typst file '{typ_file}'."
     json_file = typ_file.parent / "label.json"
     bib_file = typ_file.parent / "label.bib"
+
+    # No labels to extract: skip the typst subprocess but leave the same empty
+    # label.json a real query would have produced, so downstream consumers see
+    # identical on-disk state.
+    if not _has_lab_markers(typ_file):
+        json_file.write_text("[]", encoding="utf-8")
+        logger.debug("No #lab markers in %s — skipping typst query", typ_file)
+        return True, ""
+
     try:
         with open(json_file, "w", encoding="utf-8") as json_out:
             result = subprocess.run(

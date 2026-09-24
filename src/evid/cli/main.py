@@ -206,9 +206,9 @@ app.subgroups.append(doc_group)
 doc_group.commands.append(
     command(
         name="add",
-        help="Add a PDF or URL to a dataset",
+        help="Add one or more PDFs, a directory of PDFs, or a URL to a dataset",
         callback=add_callback,
-        arguments=[argument(name="source", arg_type=str)],
+        arguments=[argument(name="source", arg_type=str, nargs="+")],
         options=[
             _DATASET_OPTION,
             option(

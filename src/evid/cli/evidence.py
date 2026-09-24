@@ -31,19 +31,48 @@ def to_plain_dict(data):
     return str(data)
 
 
+def _expand_sources(sources: list[str]) -> list[str]:
+    """Expand directory arguments to their ``*.pdf`` files, keeping URLs and
+    file paths as given. Sorted within each directory for a stable order."""
+    expanded: list[str] = []
+    for source in sources:
+        if source.startswith(("http://", "https://")):
+            expanded.append(source)
+            continue
+        path = Path(source).expanduser()
+        if path.is_dir():
+            pdfs = sorted(path.glob("*.pdf"))
+            if not pdfs:
+                logger.warning("No PDFs found in directory %s", path)
+            expanded.extend(str(f) for f in pdfs)
+        else:
+            expanded.append(source)
+    return expanded
+
+
 def add_evidence(
     directory: Path,
     dataset: str,
-    source: str,
+    source: str | list[str],
     label: bool = False,
     autolabel: bool = False,
     no_index: bool = False,
 ) -> None:
-    """Add a PDF or URL to the specified dataset via DocIngester."""
+    """Add one or more PDFs/URLs (or a directory of PDFs) to the dataset.
+
+    A batch reuses a single ``IndexWorkerPool`` so the embedding model loads
+    once rather than once per document. Per-document failures are reported and
+    skipped in batch mode; a single source still exits on error.
+    """
     from evid import extras
     from evid.services.doc_ingester import DocIngester
     from evid.services.set_manager import SetManager
     from evid.services.vec_service import VecService
+
+    sources = source if isinstance(source, (list, tuple)) else [source]
+    sources = _expand_sources(list(sources))
+    if not sources:
+        sys.exit("No documents to add.")
 
     sm = SetManager(directory)
     try:
@@ -60,43 +89,74 @@ def add_evidence(
     vec_service = VecService() if do_index else None
     ingester = DocIngester(vec_service=vec_service)
 
+    # One long-lived index child for a batch: the embedding model loads once.
+    pool = None
+    if do_index and len(sources) > 1:
+        from evid.vec.safe_index import IndexWorkerPool
+
+        pool = IndexWorkerPool()
+
+    failures = 0
     try:
-        doc = ingester.ingest_source(
-            source,
-            evidence_set,
-            do_index=do_index,
-        )
-    except FileNotFoundError as e:
-        sys.exit(str(e))
-    except ValueError as e:
-        sys.exit(str(e))
-    except Exception as e:
-        # Network errors (requests) and other resolve/ingest failures.
-        if source.startswith(("http://", "https://")):
-            sys.exit(f"Failed to download content: {e!s}")
-        sys.exit(f"Failed to add document: {e!s}")
+        for src in sources:
+            try:
+                doc = ingester.ingest_source(
+                    src,
+                    evidence_set,
+                    do_index=do_index,
+                    pool=pool,
+                )
+            except (FileNotFoundError, ValueError) as e:
+                if len(sources) == 1:
+                    sys.exit(str(e))
+                print(f"Failed to add {src}: {e}", file=sys.stderr)
+                failures += 1
+                continue
+            except Exception as e:
+                # Network errors (requests) and other resolve/ingest failures.
+                msg = (
+                    f"Failed to download content: {e!s}"
+                    if src.startswith(("http://", "https://"))
+                    else f"Failed to add document: {e!s}"
+                )
+                if len(sources) == 1:
+                    sys.exit(msg)
+                print(msg, file=sys.stderr)
+                failures += 1
+                continue
 
-    if ingester.last_was_existing:
-        print(f"This document is already added in {dataset} at {doc.uuid}")
-        return
+            if ingester.last_was_existing:
+                print(f"This document is already added in {dataset} at {doc.uuid}")
+                continue
 
+            _print_info(doc)
+
+            if label:
+                pdf = resolve_doc_pdf(doc.path)
+                if pdf is None:
+                    sys.exit(f"No PDF found for document {doc.uuid}")
+                logger.debug("Opening label file for %s...", pdf.name)
+                create_label(pdf, dataset, doc.uuid, autolabel=autolabel)
+    finally:
+        if pool is not None:
+            pool.close()
+
+    if failures:
+        sys.exit(f"{failures} of {len(sources)} document(s) failed to add.")
+
+
+def _print_info(doc) -> None:
+    """Print the document's info.yml to stdout, as `doc add` always has."""
     info_path = doc.path / "info.yml"
-    if info_path.exists():
-        try:
-            with info_path.open(encoding="utf-8") as f:
-                info = yaml.safe_load(f) or {}
-            yaml.dump(info, sys.stdout, allow_unicode=True)
-        except Exception:
-            logger.exception("Could not print info.yml for %s", doc.uuid)
-
+    if not info_path.exists():
+        return
+    try:
+        with info_path.open(encoding="utf-8") as f:
+            info = yaml.safe_load(f) or {}
+        yaml.dump(info, sys.stdout, allow_unicode=True)
+    except Exception:
+        logger.exception("Could not print info.yml for %s", doc.uuid)
     logger.debug("Added document to %s", doc.path)
-
-    if label:
-        pdf = resolve_doc_pdf(doc.path)
-        if pdf is None:
-            sys.exit(f"No PDF found for document {doc.uuid}")
-        logger.debug("Opening label file for %s...", pdf.name)
-        create_label(pdf, dataset, doc.uuid, autolabel=autolabel)
 
 
 def get_evidence_list(directory: Path, dataset: str) -> list[dict]:

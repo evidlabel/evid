@@ -79,6 +79,50 @@ def test_generate_bib_from_typ_empty_labels_is_ok(tmp_path, monkeypatch):
     assert msg == ""
 
 
+def test_generate_bib_from_typ_skips_query_without_labs(tmp_path, monkeypatch):
+    """A fresh label.typ (no #lab calls) must not spawn typst at all."""
+    from evid.core.bibtex import generate_bib_from_typ
+
+    typ = tmp_path / "label.typ"
+    typ.write_text(
+        '#import "@preview/labtyp:0.1.0": lablist\n= Title\n\nbody\n#lablist()\n',
+        encoding="utf-8",
+    )
+    called: list[int] = []
+    monkeypatch.setattr(
+        "evid.core.bibtex.subprocess.run", lambda *_a, **_k: called.append(1)
+    )
+
+    ok, msg = generate_bib_from_typ(typ)
+    assert ok is True
+    assert msg == ""
+    assert called == []
+    assert (tmp_path / "label.json").read_text(encoding="utf-8") == "[]"
+    assert not (tmp_path / "label.bib").exists()
+
+
+def test_generate_bib_from_typ_queries_when_labs_present(tmp_path, monkeypatch):
+    """A labelled typ still runs typst query."""
+    from evid.core.bibtex import generate_bib_from_typ
+
+    typ = tmp_path / "label.typ"
+    typ.write_text('#lab("lab1", "a quote", "")\n', encoding="utf-8")
+    called: list[int] = []
+
+    def _run(*_args, **kwargs):
+        called.append(1)
+        kwargs["stdout"].write("[]")
+        return subprocess.CompletedProcess(
+            args=["typst", "query"], returncode=0, stderr=b""
+        )
+
+    monkeypatch.setattr("evid.core.bibtex.subprocess.run", _run)
+    ok, msg = generate_bib_from_typ(typ)
+    assert ok is True
+    assert msg == ""
+    assert called == [1]
+
+
 def test_json_to_bib_missing_key_raises(tmp_path):
     workdir = _doc(tmp_path)
     json_file = _write_json(workdir, [{"text": "no key here", "opage": 1}])
