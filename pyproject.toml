@@ -16,7 +16,6 @@ dependencies = [
     "rich",
     "requests",
     "beautifulsoup4",
-    "pypdf",
     "PyMuPDF",
     "treeparse>=0.2.8",
     "bibtexparser>=1.4,<2",
