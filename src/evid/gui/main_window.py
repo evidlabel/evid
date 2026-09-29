@@ -430,9 +430,9 @@ def _print_startup_banner(data_dir: Path) -> None:
 
 
 def _evid_icon() -> QIcon:
-    from evid.gui.logo import jura_icon
+    from evid.gui.logo import logo_icon
 
-    return jura_icon()
+    return logo_icon()
 
 
 def _install_tray(window: EvidWindow) -> None:

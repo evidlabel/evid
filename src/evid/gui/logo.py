@@ -1,4 +1,4 @@
-"""jura.sh mark for the window, tray, and corner hint."""
+"""evid mark for the window, tray, and corner hint."""
 
 from __future__ import annotations
 
@@ -13,14 +13,14 @@ _PKG = "evid.gui.assets"
 
 
 def logo_svg_path() -> Path:
-    return Path(str(files(_PKG).joinpath("jura.svg")))
+    return Path(str(files(_PKG).joinpath("evid.svg")))
 
 
 def logo_png_path() -> Path:
-    return Path(str(files(_PKG).joinpath("jura.png")))
+    return Path(str(files(_PKG).joinpath("evid.png")))
 
 
-def jura_pixmap(size: int) -> QPixmap:
+def logo_pixmap(size: int) -> QPixmap:
     svg = logo_svg_path()
     if svg.is_file():
         renderer = QSvgRenderer(str(svg))
@@ -42,13 +42,13 @@ def jura_pixmap(size: int) -> QPixmap:
     return QPixmap()
 
 
-def jura_icon() -> QIcon:
+def logo_icon() -> QIcon:
     icon = QIcon()
     png = logo_png_path()
     if png.is_file():
         icon.addFile(str(png))
     for size in (16, 24, 32, 48, 64, 128, 256):
-        pm = jura_pixmap(size)
+        pm = logo_pixmap(size)
         if not pm.isNull():
             icon.addPixmap(pm)
     return icon

@@ -54,9 +54,9 @@ class CornerHint(QWidget):
 
     def paintEvent(self, event: QEvent) -> None:
         if self._logo.isNull():
-            from evid.gui.logo import jura_pixmap
+            from evid.gui.logo import logo_pixmap
 
-            self._logo = jura_pixmap(_HINT_SIZE)
+            self._logo = logo_pixmap(_HINT_SIZE)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         if not self._logo.isNull():

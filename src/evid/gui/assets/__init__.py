@@ -1,1 +1,1 @@
-"""Packaged GUI assets (jura.sh logo)."""
+"""Packaged GUI assets (evid logo)."""

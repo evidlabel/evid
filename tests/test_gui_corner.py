@@ -315,16 +315,22 @@ def test_prefer_x11_syncs_cursor_when_xcb_already_chosen(monkeypatch):
     assert os.environ.get("XCURSOR_SIZE") == "24"
 
 
-def test_jura_logo_icon_uses_brand_blue(qapp):
-    from evid.gui.logo import jura_icon
+def test_logo_icon_uses_brand_blue(qapp):
+    from evid.gui.logo import logo_icon
 
-    pixmap = jura_icon().pixmap(64, 64)
+    pixmap = logo_icon().pixmap(64, 64)
     assert not pixmap.isNull()
-    color = pixmap.toImage().pixelColor(2, 2)
-    # jura.sh frame is #2f5691, not the old #0078d4 "e" tile
+    image = pixmap.toImage()
+    color = image.pixelColor(2, 2)
+    # evid frame is #2f5691, not the old #0078d4 "e" tile
     assert color.red() >= 30
     assert 70 <= color.green() <= 110
     assert 120 <= color.blue() <= 170
+    # Left stem of the E. The J is open here.
+    stem = image.pixelColor(18, 28)
+    assert stem.red() > 240
+    assert stem.green() > 240
+    assert stem.blue() > 240
 
 
 def test_x11_pointer_query_does_not_crash():
