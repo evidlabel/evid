@@ -702,6 +702,7 @@ class Handler(BaseHTTPRequestHandler):
                 "dates": res.dates or auto_dates,
                 "label": title,
                 "url": res.source_url or url,
+                "source_name": res.original_name or "",
                 "token": token,
             }
 
@@ -741,6 +742,7 @@ class Handler(BaseHTTPRequestHandler):
                 source_url=str(b.get("url", "")),
                 temp_dir=temp_dir,
                 do_index=False,
+                source_name=str(b.get("source_name", "")),
             )
             existing = bool(ing.last_was_existing)
             if not existing:

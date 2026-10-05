@@ -194,6 +194,7 @@ class DocIngester:
             temp_dir=resolved.temp_dir,
             do_index=do_index,
             pool=pool,
+            source_name=resolved.original_name,
         )
 
     def ingest(
@@ -209,6 +210,7 @@ class DocIngester:
         temp_dir: object = None,
         do_index: bool = True,
         pool: object | None = None,
+        source_name: str = "",
     ) -> Document:
         """Ingest a single PDF into *evidence_set*. Returns the new Document.
 
@@ -220,7 +222,9 @@ class DocIngester:
         is added but left ``indexed=False`` so it can be indexed later (e.g. via a
         background queue or ``index_existing``).
 
-        The PDF is always stored as ``original.pdf``.
+        The PDF is always stored as ``original.pdf``; the name it came in with
+        (*source_name*, default the file's own name — for a URL, the decoded
+        name from the URL) is kept in info.yml as ``source_name``.
         """
         tags = tags or []
         p = self.progress
@@ -288,6 +292,7 @@ class DocIngester:
 
         info = {
             "original_name": "original.pdf",
+            "source_name": source_name or pdf_path.name,
             "uuid": doc_uuid,
             "time_added": arrow.now().format("YYYY-MM-DD"),
             "dates": doc_dates,

@@ -525,3 +525,27 @@ def test_doc_rows_carry_author_and_date(server, doc):
     )
     row = call(server, "GET", "/api/sets/case/docs")[1][0]
     assert (row["authors"], row["dates"]) == ("Dr. A", "2024-03-12")
+
+
+def test_source_name_recorded_and_kept(server, doc, app):
+    info_path = app.data_dir / "sets" / "case" / "docs" / doc / "info.yml"
+    info = yaml.safe_load(info_path.read_text())
+    assert info["original_name"] == "original.pdf"  # where the PDF lives
+    assert info["source_name"] == "a.pdf"  # what it was called
+    assert (
+        call(server, "GET", f"/api/sets/case/docs/{doc}")[1]["source_name"] == "a.pdf"
+    )
+    call(server, "PUT", f"/api/sets/case/docs/{doc}", {"title": "Edited"})
+    assert (
+        yaml.safe_load(info_path.read_text())["source_name"] == "a.pdf"
+    )  # a detail save keeps it
+
+
+def test_ingest_uses_given_source_name(server, tmp_path):
+    call(server, "POST", "/api/sets", {"name": "Case"})
+    pdf = _make_pdf(tmp_path / "tmpabc.pdf", "fetched")
+    r = ingest(server, "case", pdf, source_name="Afgørelse 2024.pdf")
+    assert (
+        call(server, "GET", f"/api/sets/case/docs/{r['uuid']}")[1]["source_name"]
+        == "Afgørelse 2024.pdf"
+    )

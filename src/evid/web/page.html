@@ -140,7 +140,7 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 #edpath { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 100%; order: 9; }
 #edtitle { flex: 1; }
 #edbox { flex: 1; position: relative; min-height: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); overflow: hidden; }
-#ed, #edhl { position: absolute; inset: 0; margin: 0; border: 0; font: 13px/1.5 var(--mono); tab-size: 2; white-space: pre; padding: 8px; letter-spacing: 0; }
+#ed, #edhl { position: absolute; inset: 0; margin: 0; border: 0; font: var(--edfs, 13px)/1.5 var(--mono); tab-size: 2; white-space: pre; padding: 8px; letter-spacing: 0; }
 #edbox.wrap #ed, #edbox.wrap #edhl { white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
 #edbox.wrap #ed { overflow-x: hidden; }
 #ed-wrap.on { background: var(--sel); }
@@ -238,6 +238,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
         <div class="uuidrow"><span class="mono" id="d-uuid">—</span>
           <button id="d-view" title="Open the URL, or the folder if there is none">View</button>
           <button id="d-copy" title="Copy the UUID">Copy</button></div>
+        <div class="muted" id="d-source" hidden style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
         <div class="form">
           <label for="d-title">Title</label><input id="d-title">
           <label for="d-authors">Authors</label><input id="d-authors">
@@ -263,6 +264,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
         <div id="edempty" hidden></div>
         <div id="edhead"><span id="edtitle"></span>
           <button id="ed-lab" title="Wrap the selected text in a #lab label (Ctrl+L)">+ Label</button>
+          <button id="ed-zout" title="Smaller text (Ctrl+−)">A−</button><button id="ed-zin" title="Larger text (Ctrl++, Ctrl+0 resets, Ctrl+wheel)">A+</button>
           <button id="ed-wrap" title="Wrap long lines">Wrap</button>
           <button id="ed-reload" title="Reload from disk">↻</button>
           <button class="primary" id="ed-save" title="Save and rebuild the labels (Ctrl+S; also happens when you move to another doc)">Save</button>
@@ -1017,6 +1019,8 @@ $('#d-files-reload').onclick = renderFiles;
 function fillDetail(r) {
   $('#d-uuid').textContent = r ? (r.uuid.length > 16 ? r.uuid.slice(0, 16) + '…' : r.uuid) : '—';
   $('#d-uuid').title = r ? r.uuid : '';
+  const src = r && r.source_name && r.source_name !== 'original.pdf' ? r.source_name : '';
+  $('#d-source').hidden = !src; $('#d-source').textContent = src ? `Source file: ${src}` : ''; $('#d-source').title = src;
   for (const f of FIELDS) { const i = $('#d-' + f); i.value = r ? r[f] : ''; i.disabled = !r; }
   renderLabels(r ? r.labels : []);
   renderPills();
@@ -1147,7 +1151,7 @@ function addDocDialog(meta, title) {
   const file = el('div', { class: 'row' }, el('span', { class: 'mono', style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: meta.path, text: meta.path }),
     el('button', { text: 'View', onclick: () => api('POST', '/api/open-path', { path: meta.path }).catch(e => status(e.message, 5000, true)) }));
   return dialog(title || 'Add document', [file, form, el('label', { class: 'muted', text: 'Preview:' }), prev, el('label', {}, openLab, ' Open in labeller after adding')],
-    [{ label: 'Cancel', value: () => null }, { label: 'Add', primary: true, value: () => ({ ...Object.fromEntries(rows.map(([, k]) => [k, f[k].value.trim()])), tags: splitTags(f.tags.value), path: meta.path, token: meta.token, openLabel: openLab.checked }) }]);
+    [{ label: 'Cancel', value: () => null }, { label: 'Add', primary: true, value: () => ({ ...Object.fromEntries(rows.map(([, k]) => [k, f[k].value.trim()])), tags: splitTags(f.tags.value), path: meta.path, token: meta.token, source_name: meta.source_name || '', openLabel: openLab.checked }) }]);
 }
 
 async function ingestPdf() {
@@ -1370,6 +1374,23 @@ ed.addEventListener('input', edMark);
 ed.addEventListener('scroll', edSync);
 $('#ed-wrap').onclick = () => setWrap(!$('#edbox').classList.contains('wrap'));
 setWrap(load('wrap', true));
+// text zoom in the label editor (both layers share --edfs, so they stay aligned)
+const ZOOM = [10, 11, 12, 13, 14, 16, 18, 20, 22, 24, 28];
+function edZoom(step) {
+  const cur = load('edfs', 13), i = ZOOM.indexOf(cur);
+  const next = step === 0 ? 13 : ZOOM[Math.max(0, Math.min(ZOOM.length - 1, (i < 0 ? 3 : i) + step))];
+  const caret = ed.selectionStart, rel = ed.scrollHeight ? ed.scrollTop / ed.scrollHeight : 0;
+  $('#edbox').style.setProperty('--edfs', `${next}px`); store('edfs', next);
+  edFit(); ed.scrollTop = rel * ed.scrollHeight; edSync();
+  $('#ed-zout').disabled = next === ZOOM[0]; $('#ed-zin').disabled = next === ZOOM[ZOOM.length - 1];
+  edMsg(`Text size ${next}px`);
+  ed.setSelectionRange(caret, caret);
+}
+$('#ed-zin').onclick = () => edZoom(1);
+$('#ed-zout').onclick = () => edZoom(-1);
+$('#edbox').addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); edZoom(e.deltaY < 0 ? 1 : -1); } }, { passive: false });
+$('#edbox').style.setProperty('--edfs', `${load('edfs', 13)}px`);
+$('#ed-zout').disabled = load('edfs', 13) === ZOOM[0]; $('#ed-zin').disabled = load('edfs', 13) === ZOOM[ZOOM.length - 1];
 ed.addEventListener('keydown', e => {
   if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) { e.preventDefault(); const s = ed.selectionStart; ed.setRangeText('  ', s, ed.selectionEnd, 'end'); edMark(); }
 });
@@ -1490,6 +1511,7 @@ const HELP = `<p>Humans and agents share one legal document set. Cited wording i
 <tr><td><kbd>Delete</kbd></td><td>delete the selected documents</td></tr>
 <tr><td><kbd>Alt+↑</kbd> / <kbd>Alt+↓</kbd></td><td>previous / next document (also while labelling)</td></tr>
 <tr><td><kbd>Ctrl+L</kbd> (Label pane)</td><td>label the selected text</td></tr>
+<tr><td><kbd>Ctrl++</kbd> / <kbd>Ctrl+−</kbd> / <kbd>Ctrl+0</kbd>, Ctrl+wheel (Label pane)</td><td>text size</td></tr>
 <tr><td><kbd>Ctrl+S</kbd></td><td>save the detail pane / label.typ</td></tr>
 ${CFG.app ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr>' : ''}
 <tr><td><kbd>F1</kbd></td><td>help</td></tr>
@@ -1509,6 +1531,8 @@ document.addEventListener('keydown', e => {
     const tabs = $$('.tab').filter(t => !t.hidden).map(t => t.dataset.view);
     const i = tabs.indexOf(S.view);
     switchView(tabs[(i + (e.key === 'PageDown' ? 1 : -1) + tabs.length) % tabs.length]);
+  } else if ((e.ctrlKey || e.metaKey) && ['+', '=', '-', '0'].includes(e.key) && S.view === 'docs' && S.pane === 'label' && S.ed) {
+    e.preventDefault(); edZoom(e.key === '0' ? 0 : e.key === '-' ? -1 : 1);
   } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l' && S.view === 'docs' && S.pane === 'label' && S.ed) {
     e.preventDefault(); addLabel();
   } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {

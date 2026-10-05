@@ -126,6 +126,7 @@ def get_doc(doc_dir: Path) -> dict[str, Any]:
     out.update(
         uuid=doc_dir.name,
         path=str(doc_dir),
+        source_name=str(model.source_name or ""),
         notes=meta.get("notes", "") or "",
         indexed=bool(meta.get("indexed", False)),
         has_pdf=resolve_doc_pdf(doc_dir) is not None,

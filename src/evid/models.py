@@ -75,6 +75,9 @@ class InfoModel(BaseModel):
     model_config = {"populate_by_name": True}
 
     original_name: str = Field(default="", description="Original file name")
+    source_name: str = Field(
+        default="", description="Name of the file or URL the PDF was ingested from"
+    )
     uuid: str = Field(..., description="Unique identifier")
     time_added: str = Field(default="", description="Date added")
     dates: str | list = Field(default="", description="Document dates")
