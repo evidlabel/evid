@@ -24,6 +24,7 @@
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -68,7 +69,14 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 .toolbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .split-v { width: 5px; cursor: col-resize; background: transparent; flex: none; }
 .split-v:hover { background: var(--line); }
-#detail { width: 380px; flex: none; overflow: auto; padding: 8px 10px; border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; gap: 8px; }
+#rpane { width: 380px; flex: none; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
+.ptabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); background: var(--panel2); flex: none; }
+.ptabs button { border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; background: transparent; padding: 3px 12px; }
+.ptabs button.on { background: var(--panel); border-color: var(--line); margin-bottom: -1px; font-weight: 600; }
+.ptabs .hint { margin-left: auto; color: var(--muted); font-size: 11px; align-self: center; }
+.pview { display: none; flex: 1; min-height: 0; }
+.pview.on { display: flex; }
+#detail { overflow: auto; padding: 8px 10px; flex-direction: column; gap: 8px; }
 .tblwrap { flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); min-height: 0; }
 table.tbl { width: 100%; border-collapse: collapse; user-select: none; }
 .tbl th { position: sticky; top: 0; background: var(--panel2); text-align: left; font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); z-index: 1; }
@@ -78,6 +86,8 @@ table.tbl { width: 100%; border-collapse: collapse; user-select: none; }
 .tbl tr.droptag td { background: color-mix(in srgb, var(--pill-carried) 70%, transparent); }
 .tbl tbody tr:hover:not(.sel) td { background: var(--hover); }
 .tbl .c { text-align: center; width: 26px; }
+#docs.labelling #dtbl col.opt { width: 0 !important; }
+#docs.labelling #dtbl th:nth-child(n+4), #docs.labelling #dtbl td:nth-child(n+4) { display: none; }
 .tbl .uuid, .mono { font-family: var(--mono); font-size: 12px; }
 .tbl .empty td { color: var(--muted); text-align: center; padding: 18px; }
 .legend { color: var(--muted); font-size: 11px; }
@@ -124,11 +134,13 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 .kv span:nth-child(odd) { color: var(--muted); }
 .kv span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .foot { color: var(--muted); font-size: 12px; }
-#label { flex-direction: row; }
-#edwrap { flex: 1; display: flex; flex-direction: column; padding: 8px; gap: 6px; min-width: 0; }
-#edhead { display: flex; gap: 6px; align-items: center; }
+#label { flex-direction: column; padding: 8px; gap: 6px; min-width: 0; }
+#edhead { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+#edempty { color: var(--muted); padding: 20px 4px; }
+#edempty button { margin-top: 8px; }
 #edtitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#edpath { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+#edpath { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 100%; order: 9; }
+#edtitle { flex: 1; }
 #edbox { flex: 1; position: relative; min-height: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); overflow: hidden; }
 #ed, #edhl { position: absolute; inset: 0; margin: 0; border: 0; font: 13px/1.5 var(--mono); tab-size: 2; white-space: pre; padding: 8px; letter-spacing: 0; }
 #ed { resize: none; background: transparent; color: transparent; caret-color: var(--fg); z-index: 1; border-radius: 5px; overflow: auto; }
@@ -149,8 +161,9 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 #edbanner.on { display: flex; }
 #edmsg { font-size: 12px; color: var(--muted); }
 #edmsg.err { color: var(--err); }
-#edside { width: 300px; flex: none; border-left: 1px solid var(--line); background: var(--panel); padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow: auto; }
-#edside .list { max-height: none; flex: 1; }
+#edside { flex: none; display: flex; flex-direction: column; gap: 4px; }
+#edside .list { max-height: 110px; }
+#edside h4 { margin: 0; }
 #logwrap { border-top: 1px solid var(--line); background: var(--panel2); }
 #loghead { display: flex; align-items: center; gap: 6px; padding: 2px 8px; color: var(--muted); font-size: 12px; user-select: none; }
 #log { height: 110px; overflow: auto; margin: 0; padding: 4px 8px; font: 11px/1.4 var(--mono); white-space: pre-wrap; background: var(--panel); border-top: 1px solid var(--line); }
@@ -197,7 +210,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
     <div id="tabs">
       <button class="tab on" data-view="docs">Docs</button>
       <button class="tab" data-view="search">Search</button>
-      <button class="tab" data-view="label" id="tab-label" hidden>Label<span class="x" id="tab-label-x" title="Close the label editor">×</span></button>
       <span id="status"></span>
       <button id="b-help" title="Help (F1)">Help</button>
     </div>
@@ -214,14 +226,15 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
           <input id="filter" placeholder="Filter by title or UUID…  ( / )" style="flex:1; min-width:160px">
         </div>
         <div class="tblwrap"><table class="tbl" id="dtbl" tabindex="0">
-          <colgroup><col style="width:28px"><col style="width:28px"><col><col style="width:92px"><col style="width:230px"></colgroup>
+          <colgroup><col style="width:28px"><col style="width:28px"><col><col class="opt" style="width:92px"><col class="opt" style="width:230px"></colgroup>
           <thead><tr><th class="c" title="PDF fetched">F</th><th class="c" title="Labelled (label.json)">J</th><th>Label</th><th>Added</th><th>UUID</th></tr></thead>
           <tbody></tbody></table></div>
         <div class="legend">✓ F = Fetched &nbsp; ✓ J = Indexed (JSON) &nbsp;·&nbsp; <span id="count"></span></div>
       </div>
       <div class="split-v" id="split"></div>
-      <div id="detail">
-        <h4>Detail</h4>
+      <div id="rpane">
+      <div class="ptabs"><button data-p="detail">Detail</button><button data-p="label" id="ptab-label" title="Edit the selected document's label.typ here">Label</button><span class="hint" id="ptab-hint">Alt+↑/↓: next doc</span></div>
+      <div id="detail" class="pview">
         <div class="uuidrow"><span class="mono" id="d-uuid">—</span>
           <button id="d-view" title="Open the URL, or the folder if there is none">View</button>
           <button id="d-copy" title="Copy the UUID">Copy</button></div>
@@ -246,6 +259,24 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
         <div class="ftree" id="d-files" tabindex="0"></div>
         <div class="legend">Click a file to open it (text files in your editor; saving a .typ rebuilds the labels) · right-click for more</div>
       </div>
+      <div id="label" class="pview">
+        <div id="edempty" hidden></div>
+        <div id="edhead"><span id="edtitle"></span>
+          <button id="ed-lab" title="Wrap the selected text in a #lab label (Ctrl+L)">+ Label</button>
+          <button id="ed-ext" title="Open in your editor (saves there rebuild the labels too)">Editor</button>
+          <button id="ed-reload" title="Reload from disk">↻</button>
+          <button class="primary" id="ed-save" title="Save and rebuild the labels (Ctrl+S; also happens when you move to another doc)">Save</button>
+          <span id="edpath"></span></div>
+        <div id="edbanner"><span id="edbanner-msg">label.typ changed on disk.</span><span style="flex:1"></span><button id="ed-take">Load disk version</button><button id="ed-keep">Keep mine</button></div>
+        <div id="edbox"><pre id="edhl" aria-hidden="true"></pre><textarea id="ed" spellcheck="false"></textarea></div>
+        <div id="edmsg"></div>
+        <div id="edside">
+          <h4>Labels <span class="muted" id="ed-nlabels"></span></h4>
+          <div class="list" id="ed-labels"></div>
+          <div class="legend">Select a quote, <kbd>Ctrl+L</kbd> to label it · click a label to find it · <kbd>Alt+↑</kbd>/<kbd>Alt+↓</kbd> next doc (saves first)</div>
+        </div>
+      </div>
+      </div>
     </section>
 
     <section class="view" id="search">
@@ -268,23 +299,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
       </div>
     </section>
 
-    <section class="view" id="label">
-      <div id="edwrap">
-        <div id="edhead"><span id="edtitle"></span><span id="edpath"></span>
-          <button id="ed-ext" title="Open in your editor (saves there rebuild the labels too)">Open in editor</button>
-          <button id="ed-lab" title="Wrap the selected text in a #lab label (Ctrl+L)">+ Label</button>
-          <button id="ed-reload">Reload</button>
-          <button class="primary" id="ed-save" title="Ctrl+S">Save &amp; rebuild</button></div>
-        <div id="edbanner"><span id="edbanner-msg">label.typ changed on disk.</span><span style="flex:1"></span><button id="ed-take">Load disk version</button><button id="ed-keep">Keep mine (overwrite)</button></div>
-        <div id="edbox"><pre id="edhl" aria-hidden="true"></pre><textarea id="ed" spellcheck="false"></textarea></div>
-        <div id="edmsg"></div>
-      </div>
-      <div id="edside">
-        <h4>Labels <span class="muted" id="ed-nlabels"></span></h4>
-        <div class="list" id="ed-labels"></div>
-        <div class="legend">Click a label to find it in the text. Select a quote and press <kbd>Ctrl+L</kbd> to label it (<span class="mono">#lab</span>); save to rebuild.</div>
-      </div>
-    </section>
 
     <div id="logwrap" class="fold"><div id="loghead"><span id="logtw">▸</span> Log <span id="loglast" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span></div><pre id="log"></pre></div>
   </div>
@@ -401,6 +415,14 @@ function typHighlight(text) {
   return out + escHtml(text.slice(last));
 }
 
+// Re-order `docs` like `prevOrder` (uuids); docs that are new come first, in their own order.
+function keepOrder(prevOrder, docs) {
+  const pos = new Map(prevOrder.map((u, i) => [u, i]));
+  const fresh = docs.filter(d => !pos.has(d.uuid));
+  const known = docs.filter(d => pos.has(d.uuid)).sort((a, b) => pos.get(a.uuid) - pos.get(b.uuid));
+  return [...fresh, ...known];
+}
+
 function shortUuid(u) { return u.length > 16 ? u.slice(0, 8) + '…' + u.slice(-8) : u; }
 
 // ── plumbing ─────────────────────────────────────────────────────────────────
@@ -459,7 +481,7 @@ const S = {
   tagFilter: new Set(), registry: [], detail: null, detailDirty: false, loadSeq: 0,
   expanded: new Set(load('expanded', [])), setTags: new Map(),
   view: 'docs', skind: CFG.has_vec ? 'vec' : 'meta', sq: { busy: false, queued: null }, sres: [], ssel: new Set(), scur: -1, sanchor: null,
-  ed: null, evSince: 0, waiters: new Map(), finished: new Map(),
+  ed: null, pane: load('pane', 'detail'), evSince: 0, waiters: new Map(), finished: new Map(),
 };
 
 // ── dialogs ──────────────────────────────────────────────────────────────────
@@ -707,6 +729,7 @@ async function renderSets() {
 
 async function selectSet(slug) {
   if (S.detailDirty && !(await confirmDlg('Unsaved changes', 'Discard the unsaved changes in the detail pane?', 'Discard'))) return;
+  if (slug !== S.slug && !(await edLeave())) return;
   if (slug !== S.slug) { S.tagFilter = new Set(); S.sel = new Set(); S.cur = null; S.anchor = null; S.sres = []; renderSearch(); }
   S.slug = slug; store('slug', slug);
   renderSets();
@@ -743,6 +766,7 @@ async function loadDocs(keep) {
   try { docs = await api('GET', setUrl(slug, '/docs')); }
   catch (e) { if (seq === S.loadSeq) renderDocs(e.message); return; }
   if (seq !== S.loadSeq || slug !== S.slug) return;  // a newer set switch won
+  if (keep) docs = keepOrder(S.docs.map(d => d.uuid), docs);  // rows stay put while you work
   S.docs = docs; S.byUuid = new Map(docs.map(d => [d.uuid, d]));
   S.setTags.set(slug, tagCounts(docs));
   const cs = S.sets.find(s => s.slug === slug);
@@ -764,7 +788,7 @@ function renderDocs(msg) {
     tb.replaceChildren(el('tr', { class: 'empty' }, el('td', { colspan: 5, text: msg || (S.slug ? (S.docs.length ? '(No documents match the filter)' : '(No documents in this set)') : '(Create or pick a set)') })));
   } else {
     tb.replaceChildren(...docs.map(d => {
-      const tr = el('tr', { 'data-uuid': d.uuid, class: (S.sel.has(d.uuid) ? 'sel ' : '') + (S.cur === d.uuid ? 'cur' : ''), draggable: 'true', title: d.tags.length ? 'Tags: ' + d.tags.join(', ') : null },
+      const tr = el('tr', { 'data-uuid': d.uuid, class: (S.sel.has(d.uuid) ? 'sel ' : '') + (S.cur === d.uuid ? 'cur' : ''), draggable: 'true', title: `${d.label}\n${d.uuid}` + (d.tags.length ? '\nTags: ' + d.tags.join(', ') : '') },
         el('td', { class: 'c', text: d.has_pdf ? '✓' : '' }), el('td', { class: 'c', text: d.has_json ? '✓' : '' }),
         el('td', { text: d.label }), el('td', { text: d.added }), el('td', { class: 'uuid', text: d.uuid }));
       return tr;
@@ -794,6 +818,7 @@ function selectRow(uuid, ev) {
 
 async function setCur(uuid) {
   if (uuid !== S.cur && S.detailDirty && !(await confirmDlg('Unsaved changes', 'Discard the unsaved changes in the detail pane?', 'Discard'))) return;
+  if (uuid !== S.cur && !(await edLeave())) return;
   S.cur = uuid;
   for (const tr of $$('#dtbl tbody tr')) {
     tr.classList.toggle('sel', S.sel.has(tr.dataset.uuid));
@@ -802,6 +827,7 @@ async function setCur(uuid) {
   const tr = $(`#dtbl tr[data-uuid="${CSS.escape(uuid || '')}"]`);
   if (tr) tr.scrollIntoView({ block: 'nearest' });
   updateActions(); loadDetail();
+  if (S.pane === 'label') edLoad(S.slug, uuid, false);
 }
 
 const dtbody = $('#dtbl tbody');
@@ -1099,11 +1125,11 @@ async function newTag() {
   await afterTagChange();
 }
 
-function showInDocs(uuid) {
+async function showInDocs(uuid) {
   switchView('docs');
   if (!visibleDocs().some(d => d.uuid === uuid)) { $('#filter').value = ''; S.tagFilter = new Set(); renderPills(); renderSets(); }
   S.sel = new Set([uuid]); S.anchor = uuid;
-  renderDocs(); setCur(uuid);
+  renderDocs(); await setCur(uuid);
 }
 
 // ── ingest ───────────────────────────────────────────────────────────────────
@@ -1206,7 +1232,7 @@ async function labelDoc(slug, uuid) {
 const ed = $('#ed');
 function edMsg(m, err) { const e = $('#edmsg'); e.textContent = m || ''; e.className = err ? 'err' : ''; }
 const edDirty = () => !!S.ed && ed.value !== S.ed.orig;
-function edMark() { $('#tab-label').firstChild.textContent = edDirty() ? 'Label •' : 'Label'; edPaint(); }
+function edMark() { $('#ptab-label').textContent = edDirty() ? 'Label •' : 'Label'; edPaint(); }
 const edhl = $('#edhl');
 let edPaintReq = 0;
 function edPaint() {  // re-highlight on the next frame (coalesces fast typing)
@@ -1214,24 +1240,63 @@ function edPaint() {  // re-highlight on the next frame (coalesces fast typing)
   edPaintReq = requestAnimationFrame(() => { edPaintReq = 0; edhl.innerHTML = typHighlight(ed.value) + '\n '; edSync(); });
 }
 function edSync() { edhl.scrollTop = ed.scrollTop; edhl.scrollLeft = ed.scrollLeft; }
-async function openEditor(slug, uuid) {
-  if (S.ed && edDirty() && (S.ed.uuid !== uuid) && !(await confirmDlg('Unsaved label.typ', 'Discard your unsaved changes to the open label.typ?', 'Discard'))) return;
+// The label pane follows the selected doc. Leaving a doc with unsaved edits saves them.
+async function edLeave() {
+  if (!edDirty()) return true;
+  await edSave(false);
+  if (edDirty()) { status('label.typ not saved — resolve it before moving on', 6000, true); return false; }
+  return true;
+}
+function edShow(on, msg, gen) {
+  for (const id of ['#edhead', '#edbox', '#edmsg', '#edside']) $(id).hidden = !on;
+  if (!on) $('#edbanner').classList.remove('on');
+  const e = $('#edempty'); e.hidden = on;
+  if (!on) e.replaceChildren(el('div', { text: msg }), gen ? el('button', { class: 'primary', text: 'Generate label.typ from the PDF', onclick: gen }) : null);
+}
+let edSeq = 0;
+async function edLoad(slug, uuid, focus) {
+  const seq = ++edSeq;
+  if (!uuid) { S.ed = null; edShow(false, 'Select a document to label it.'); edMark(); return; }
+  if (S.ed && S.ed.uuid === uuid && S.ed.slug === slug) { if (focus) ed.focus(); return; }
+  let r;
+  try { r = await api('GET', docUrl(slug, uuid, '/typ')); } catch (e) { if (seq === edSeq) edShow(false, e.message); return; }
+  if (seq !== edSeq) return;  // moved on to another doc meanwhile
   const doc = S.byUuid.get(uuid) || { label: uuid };
-  let r = await api('GET', docUrl(slug, uuid, '/typ'));
   if (!r.exists) {
-    status('Generating label.typ…');
-    try { const { job } = await api('POST', docUrl(slug, uuid, '/label'), { editor: false }); await waitJob(job); }
-    catch (e) { status(e.message, 8000, true); return; }
-    status('', 0);
-    r = await api('GET', docUrl(slug, uuid, '/typ'));
+    S.ed = null; edMark();
+    edShow(false, `${doc.label} has no label.typ yet.`, async () => {
+      status('Generating label.typ…');
+      try { const { job } = await api('POST', docUrl(slug, uuid, '/label'), { editor: false }); await waitJob(job); status('', 0); }
+      catch (e) { status(e.message, 8000, true); return; }
+      edLoad(slug, uuid, true);
+    });
+    return;
   }
   S.ed = { slug, uuid, mtime: r.mtime, orig: r.content, path: r.path };
-  ed.value = r.content; ed.scrollTop = 0;
-  $('#edtitle').textContent = doc.label; $('#edpath').textContent = r.path; $('#edpath').title = r.path;
+  edShow(true);
+  ed.value = r.content; ed.scrollTop = 0; ed.setSelectionRange(0, 0);
+  $('#edtitle').textContent = doc.label; $('#edtitle').title = doc.label; $('#edpath').textContent = r.path; $('#edpath').title = r.path;
   $('#edbanner').classList.remove('on'); edMsg(''); edMark();
-  $('#tab-label').hidden = false; switchView('label'); ed.focus();
+  if (focus) ed.focus();
   edLabels();
 }
+// Open the label pane on a doc (from a menu, the toolbar or after ingest).
+async function openEditor(slug, uuid) {
+  if (S.view !== 'docs') switchView('docs');
+  if (S.cur !== uuid) await showInDocs(uuid);
+  switchPane('label');
+  await edLoad(slug, uuid, true);
+}
+function switchPane(p) {
+  S.pane = p; store('pane', p);
+  $$('.ptabs button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
+  $$('.pview').forEach(v => v.classList.toggle('on', v.id === p));
+  $('#rpane').style.width = paneWidth() + 'px';
+  $('#docs').classList.toggle('labelling', p === 'label');  // titles get the room; UUID is in the row tooltip
+  if (p === 'label') edLoad(S.slug, S.cur, false);
+}
+$$('.ptabs button').forEach(b => b.onclick = () => switchPane(b.dataset.p));
+const paneWidth = () => S.pane === 'label' ? load('labelw', Math.round(innerWidth * 0.5)) : load('detailw', 380);
 async function edLabels() {
   if (!S.ed) return;
   const r = await api('GET', docUrl(S.ed.slug, S.ed.uuid));
@@ -1292,18 +1357,13 @@ async function addLabel() {
   edMark(); edMsg(`Added '${res.key}' — save (Ctrl+S) to rebuild the labels`);
 }
 $('#ed-lab').onclick = addLabel;
-$('#ed-reload').onclick = async () => { if (edDirty() && !(await confirmDlg('Reload', 'Discard your unsaved changes?', 'Discard'))) return; const s = S.ed; S.ed.orig = ed.value; openEditor(s.slug, s.uuid); };
+$('#ed-reload').onclick = async () => { if (!S.ed) return; if (edDirty() && !(await confirmDlg('Reload', 'Discard your unsaved changes?', 'Discard'))) return; const s = S.ed; S.ed = null; edLoad(s.slug, s.uuid, true); };
 $('#ed-ext').onclick = () => S.ed && labelDoc(S.ed.slug, S.ed.uuid);
 ed.addEventListener('input', edMark);
 ed.addEventListener('scroll', edSync);
 ed.addEventListener('keydown', e => {
   if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) { e.preventDefault(); const s = ed.selectionStart; ed.setRangeText('  ', s, ed.selectionEnd, 'end'); edMark(); }
 });
-$('#tab-label-x').onclick = async e => {
-  e.stopPropagation();
-  if (edDirty() && !(await confirmDlg('Close label editor', 'Discard your unsaved changes to label.typ?', 'Discard'))) return;
-  S.ed = null; $('#tab-label').hidden = true; switchView('docs');
-};
 
 // ── search ───────────────────────────────────────────────────────────────────
 
@@ -1412,14 +1472,15 @@ function switchView(v) {
 $$('.tab').forEach(t => t.onclick = () => switchView(t.dataset.view));
 
 const HELP = `<p>Humans and agents share one legal document set. Cited wording is always verbatim.</p>
-<p><b>Tabs</b><br>Docs — ingest, label, tags<br>Search — vector, meta, full-text<br>Label — edit a document's label.typ here (opens from <i>Edit .typ</i>)</p>
+<p><b>Tabs</b><br>Docs — ingest, label, tags; the right pane has <i>Detail</i> and <i>Label</i> (edit the selected doc's label.typ; it follows the selection, so you can label doc after doc)<br>Search — vector, meta, full-text</p>
 <p><b>Keys</b></p><table>
 <tr><td><kbd>Ctrl+PgUp</kbd> / <kbd>Ctrl+PgDn</kbd></td><td>cycle tabs</td></tr>
 <tr><td><kbd>/</kbd></td><td>filter documents</td></tr>
 <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Shift</kbd> <kbd>Ctrl+A</kbd></td><td>move / extend the selection</td></tr>
 <tr><td><kbd>Enter</kbd> (table)</td><td>label in your editor</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>delete the selected documents</td></tr>
-<tr><td><kbd>Ctrl+L</kbd> (Label tab)</td><td>label the selected text</td></tr>
+<tr><td><kbd>Alt+↑</kbd> / <kbd>Alt+↓</kbd></td><td>previous / next document (also while labelling)</td></tr>
+<tr><td><kbd>Ctrl+L</kbd> (Label pane)</td><td>label the selected text</td></tr>
 <tr><td><kbd>Ctrl+S</kbd></td><td>save the detail pane / label.typ</td></tr>
 ${CFG.app ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr>' : ''}
 <tr><td><kbd>F1</kbd></td><td>help</td></tr>
@@ -1439,16 +1500,29 @@ document.addEventListener('keydown', e => {
     const tabs = $$('.tab').filter(t => !t.hidden).map(t => t.dataset.view);
     const i = tabs.indexOf(S.view);
     switchView(tabs[(i + (e.key === 'PageDown' ? 1 : -1) + tabs.length) % tabs.length]);
-  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l' && S.view === 'label' && S.ed) {
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l' && S.view === 'docs' && S.pane === 'label' && S.ed) {
     e.preventDefault(); addLabel();
   } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault();
-    if (S.view === 'label') edSave(false); else if (S.view === 'docs' && curDoc()) saveDetail();
+    if (S.view === 'docs' && S.pane === 'label') edSave(false); else if (S.view === 'docs' && curDoc()) saveDetail();
+  } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && S.view === 'docs') {
+    e.preventDefault(); stepDoc(e.key === 'ArrowDown' ? 1 : -1);
   } else if (CFG.app && e.ctrlKey && (e.key === 'w' || e.key === 'q')) {
     e.preventDefault(); quitApp();
   } else if (e.key === '/' && !typing && S.view === 'docs') { e.preventDefault(); $('#filter').focus(); $('#filter').select(); }
   else if (e.key === 'Escape') hideMenu();
 });
+// Alt+↑/↓: previous / next document, from anywhere in the Docs tab (keeps the focus where it is).
+async function stepDoc(d) {
+  const order = visibleDocs().map(x => x.uuid); if (!order.length) return;
+  const i = order.indexOf(S.cur), u = order[Math.max(0, Math.min(order.length - 1, i < 0 ? 0 : i + d))];
+  if (u === S.cur) return;
+  const keep = document.activeElement === ed;
+  S.sel = new Set([u]); S.anchor = u;
+  await setCur(u);
+  if (keep && S.ed) ed.focus();
+}
+
 async function quitApp() {
   const dirty = S.detailDirty || edDirty();
   if (dirty && !(await confirmDlg('Quit evid', 'There are unsaved changes. Quit anyway?', 'Quit'))) return;
@@ -1469,11 +1543,11 @@ if (load('logopen', false)) $('#loghead').click();
 
 // detail pane width
 (function () {
-  const det = $('#detail'), w = load('detailw', 380); det.style.width = w + 'px';
+  const det = $('#rpane');
   $('#split').addEventListener('mousedown', e => {
     e.preventDefault(); const x0 = e.clientX, w0 = det.offsetWidth;
-    const mv = ev => { det.style.width = Math.max(260, Math.min(innerWidth * 0.6, w0 - (ev.clientX - x0))) + 'px'; };
-    const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); store('detailw', det.offsetWidth); };
+    const mv = ev => { det.style.width = Math.max(260, Math.min(innerWidth * 0.8, w0 - (ev.clientX - x0))) + 'px'; };
+    const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); store(S.pane === 'label' ? 'labelw' : 'detailw', det.offsetWidth); };
     addEventListener('mousemove', mv); addEventListener('mouseup', up);
   });
 })();
@@ -1484,7 +1558,7 @@ if (load('logopen', false)) $('#loghead').click();
   $('#datadir').textContent = CFG.data_dir; $('#datadir').title = CFG.data_dir;
   $('#ver').textContent = CFG.version ? 'v' + CFG.version : '';
   setSkind(CFG.has_vec ? load('skind', 'vec') : 'meta');
-  updateActions(); renderSearch();
+  updateActions(); renderSearch(); switchPane(S.pane);
   try {
     const r = await api('GET', '/api/events?since=0');  // replay the log only
     for (const e of r.events) if (e.kind === 'log') addLog(e);

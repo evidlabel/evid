@@ -26,6 +26,7 @@ FUNCS = [
     "labCall",
     "escHtml",
     "typHighlight",
+    "keepOrder",
 ]
 
 
@@ -215,3 +216,10 @@ def test_typ_highlight_other_tokens(js):
         js("return typHighlight('plain <text> & more');")
         == "plain &lt;text&gt; &amp; more"
     )
+
+
+def test_keep_order_on_reload(js):
+    out = js(
+        """return keepOrder(['a', 'b', 'c'], [{uuid: 'c'}, {uuid: 'n'}, {uuid: 'a'}]).map(d => d.uuid);"""
+    )
+    assert out == ["n", "a", "c"]  # new first, known keep their places, gone dropped
