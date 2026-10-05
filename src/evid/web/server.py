@@ -510,7 +510,8 @@ class Handler(BaseHTTPRequestHandler):
         from evid.services.doc_tags import resolve_doc_pdf
 
         _, d = self.app.doc_dir(slug, uuid)
-        what = self.body().get("what", "dir")
+        b = self.body()
+        what = b.get("what", "dir")
         if what == "pdf":
             pdf = resolve_doc_pdf(d)
             if pdf is None:
@@ -521,11 +522,26 @@ class Handler(BaseHTTPRequestHandler):
             if not url:
                 raise HTTPError(404, "this document has no URL")
             err = open_url(url)
+        elif what == "file":
+            # a file from the detail pane's file list: text files go to the editor
+            f = doc_ops.doc_path(d, str(b.get("path", "")))
+            text = f.is_file() and f.suffix.lower() in doc_ops.TEXT_SUFFIXES
+            err = open_local_path(f, editor=self.app.config.editor if text else None)
+            if not err and f.suffix.lower() == ".typ":
+                self.app.watcher.watch(f, slug, uuid)  # saving it rebuilds the labels
         else:
             err = open_local_path(d)
         if err:
             raise HTTPError(500, err)
         self.send_json(200, {"ok": True})
+
+    @route("GET", "/api/sets/{slug}/docs/{uuid}/files")
+    def doc_files(self, slug: str, uuid: str):
+        _, d = self.app.doc_dir(slug, uuid)
+        sub = self.q.get("sub", "")
+        self.send_json(
+            200, {"dir": str(d), "sub": sub, "entries": doc_ops.list_doc_files(d, sub)}
+        )
 
     @route("POST", "/api/sets/{slug}/docs/{uuid}/label")
     def label_doc(self, slug: str, uuid: str):

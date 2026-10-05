@@ -123,6 +123,7 @@ def get_doc(doc_dir: Path) -> dict[str, Any]:
     out = {k: str(getattr(model, k) or "") for k in INFO_FIELDS}
     out.update(
         uuid=doc_dir.name,
+        path=str(doc_dir),
         notes=meta.get("notes", "") or "",
         indexed=bool(meta.get("indexed", False)),
         has_pdf=resolve_doc_pdf(doc_dir) is not None,
@@ -224,3 +225,50 @@ def ensure_label_typ(doc_dir: Path) -> Path:
     else:
         text_to_typst(source, typ_path)
     return typ_path
+
+
+TEXT_SUFFIXES = {
+    ".typ",
+    ".yml",
+    ".yaml",
+    ".json",
+    ".bib",
+    ".txt",
+    ".md",
+    ".hayagriva",
+    ".csv",
+}
+
+
+def doc_path(doc_dir: Path, rel: str) -> Path:
+    """*rel* inside *doc_dir*; refuses anything that escapes it."""
+    p = (doc_dir / (rel or "")).resolve()
+    root = doc_dir.resolve()
+    if p != root and root not in p.parents:
+        msg = f"path outside the document folder: {rel!r}"
+        raise ValueError(msg)
+    if not p.exists():
+        msg = f"no such file: {rel}"
+        raise FileNotFoundError(msg)
+    return p
+
+
+def list_doc_files(doc_dir: Path, sub: str = "") -> list[dict[str, Any]]:
+    """One level of the doc folder (or of *sub* inside it): folders first, then files."""
+    base = doc_path(doc_dir, sub)
+    if not base.is_dir():
+        msg = f"not a folder: {sub}"
+        raise ValueError(msg)
+    out = []
+    for child in sorted(base.iterdir(), key=lambda c: (not c.is_dir(), c.name.lower())):
+        st = child.stat()
+        out.append(
+            {
+                "name": child.name,
+                "path": str(child.relative_to(doc_dir.resolve())),
+                "dir": child.is_dir(),
+                "size": 0 if child.is_dir() else st.st_size,
+                "mtime": st.st_mtime,
+            }
+        )
+    return out

@@ -457,3 +457,59 @@ def test_serve_gui_headless_quits(tmp_path, monkeypatch):
     assert call(url, "POST", "/api/quit", {})[0] == 200
     t.join(10)
     assert not t.is_alive() and not lp.exists()
+
+
+def test_doc_files_list_and_open(server, doc, app, monkeypatch):
+    import evid.open_external as oe
+
+    d = app.data_dir / "sets" / "case" / "docs" / doc
+    (d / "extra").mkdir()
+    (d / "extra" / "note.txt").write_text("hi")
+    _, r = call(server, "GET", f"/api/sets/case/docs/{doc}/files")
+    names = [e["name"] for e in r["entries"]]
+    assert names[0] == "extra"  # folders first
+    assert "info.yml" in names and "original.pdf" in names
+    sub = call(server, "GET", f"/api/sets/case/docs/{doc}/files?sub=extra")[1][
+        "entries"
+    ]
+    assert [(e["name"], e["path"], e["size"]) for e in sub] == [
+        ("note.txt", "extra/note.txt", 2)
+    ]
+    assert call(server, "GET", f"/api/sets/case/docs/{doc}/files?sub=..")[0] == 400
+    assert call(server, "GET", f"/api/sets/case/docs/{doc}/files?sub=nope")[0] == 404
+
+    opened = []
+    monkeypatch.setattr(
+        oe, "open_local_path", lambda p, editor=None: opened.append((p.name, editor))
+    )
+    assert (
+        call(
+            server,
+            "POST",
+            f"/api/sets/case/docs/{doc}/open",
+            {"what": "file", "path": "info.yml"},
+        )[0]
+        == 200
+    )
+    assert (
+        call(
+            server,
+            "POST",
+            f"/api/sets/case/docs/{doc}/open",
+            {"what": "file", "path": "original.pdf"},
+        )[0]
+        == 200
+    )
+    assert opened == [
+        ("info.yml", "true"),
+        ("original.pdf", None),
+    ]  # text files go to the editor
+    assert (
+        call(
+            server,
+            "POST",
+            f"/api/sets/case/docs/{doc}/open",
+            {"what": "file", "path": "../../x"},
+        )[0]
+        == 400
+    )
