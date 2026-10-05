@@ -480,6 +480,114 @@ def list_docs_callback(
         console.print(table)
 
 
+def _doc_dir_or_exit(dataset: str, uuid: str) -> Path:
+    doc_dir = docs_dir(DIRECTORY, dataset) / uuid
+    if not uuid or not doc_dir.is_dir():
+        sys.exit(f"No document {uuid!r} in '{dataset}'.")
+    return doc_dir
+
+
+def note_callback(
+    db: str = None,
+    dataset: str = None,
+    uuid: str = None,
+    path: str = None,
+    text: str = None,
+    clear: bool = False,
+):
+    """Show or set the annotation on a document (-p .) or a file in its folder."""
+    from evid.core.annotations import read_annotations, write_annotation
+
+    dataset = _resolve_dataset(dataset, "Select dataset", allow_create=False)
+    if not uuid:
+        uuid = select_evidence(DIRECTORY, dataset)
+    doc_dir = _doc_dir_or_exit(dataset, uuid)
+    try:
+        if text is not None or clear:
+            write_annotation(doc_dir, path or ".", "" if clear else text)
+            print(
+                f"{'Removed' if clear or not text.strip() else 'Set'} the note on {path or '.'}"
+            )
+            return
+        notes = read_annotations(doc_dir)
+    except (ValueError, FileNotFoundError) as exc:
+        sys.exit(str(exc))
+    if path is not None:
+        note = notes.get(path.strip("/") or ".", notes.get(path))
+        if note is None:
+            sys.exit(1)
+        print(note)
+        return
+    for key, note in notes.items():
+        print(f"{key}:")
+        for line in note.splitlines() or [""]:
+            print(f"  {line}")
+
+
+def notes_callback(
+    db: str = None,
+    dataset: str = None,
+    uuid: str = None,
+    format: str = "table",
+):
+    """List annotations on the documents of a set (or of one document)."""
+    from evid.core.annotations import missing_targets, read_annotations
+
+    dataset = _resolve_dataset(dataset, "Select dataset", allow_create=False)
+    docs = get_evidence_list(DIRECTORY, dataset)
+    if uuid:
+        docs = [d for d in docs if d["uuid"] == uuid]
+        if not docs:
+            sys.exit(f"No document {uuid!r} in '{dataset}'.")
+    rows = []
+    for doc in docs:
+        doc_dir = docs_dir(DIRECTORY, dataset) / doc["uuid"]
+        notes = read_annotations(doc_dir)
+        gone = set(missing_targets(doc_dir, notes))
+        rows.extend(
+            {
+                "uuid": doc["uuid"],
+                "title": doc["title"],
+                "path": key,
+                "note": note,
+                "missing": key in gone,
+            }
+            for key, note in notes.items()
+        )
+    if format == "json":
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+        return
+    if not rows:
+        print("No annotations.")
+        return
+    if format == "md":
+        last = None
+        for r in rows:
+            if r["uuid"] != last:
+                print(f"\n## {r['title']} `{r['uuid']}`\n")
+                last = r["uuid"]
+            where = (
+                "document"
+                if r["path"] == "."
+                else f"`{r['path']}`" + (" (missing)" if r["missing"] else "")
+            )
+            print(f"- {where}: " + r["note"].replace("\n", "\n  "))
+        return
+    table = Table(title=f"Annotations in {dataset}")
+    table.add_column("UUID")
+    table.add_column("Title")
+    table.add_column("Path")
+    table.add_column("Note")
+    for r in rows:
+        table.add_row(
+            r["uuid"][:8],
+            r["title"],
+            r["path"] + (" (missing)" if r["missing"] else ""),
+            r["note"],
+        )
+    Console().print(table)
+
+
 # ── tag callbacks ──────────────────────────────────────────────────────────────
 
 

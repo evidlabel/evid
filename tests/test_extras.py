@@ -132,7 +132,13 @@ def test_mcp_omits_search_vec_without_extra(tmp_path, monkeypatch):
     m = build_server(tmp_path, "my-case")
     names = {t.name for t in asyncio.run(m.list_tools())}
     assert "search_vec" not in names
-    assert names == {"search_text", "search_meta", "list_docs", "doc_quotes"}
+    assert names == {
+        "search_text",
+        "search_meta",
+        "list_docs",
+        "doc_quotes",
+        "doc_notes",
+    }
 
 
 def test_search_vec_callback_exits_with_extra_hint(monkeypatch, capsys):

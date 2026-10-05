@@ -15,6 +15,14 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
+from evid.core.annotations import (
+    ANNOTATIONS_FILE,
+    DOC,
+    missing_targets,
+    read_annotations,
+    write_annotation,
+)
+
 if TYPE_CHECKING:
     from evid.models import Document, EvidenceSet
     from evid.services.set_manager import SetManager
@@ -75,7 +83,7 @@ def collect_documents(set_manager: SetManager, slug: str) -> list[Document]:
                     tags=tags,
                     added=added,
                     indexed=meta.get("indexed", False),
-                    notes=meta.get("notes", ""),
+                    notes=_doc_note(doc_dir, meta),
                     source_url=info.get("url", ""),
                     authors=_join_if_list(info.get("authors", info.get("author", ""))),
                     dates=_join_if_list(info.get("dates", "")),
@@ -85,6 +93,14 @@ def collect_documents(set_manager: SetManager, slug: str) -> list[Document]:
             logger.exception("Failed to load doc at %s", doc_dir)
     docs.sort(key=lambda d: (d.added, mtime_by_uuid.get(d.uuid, 0.0)), reverse=True)
     return docs
+
+
+def _doc_note(doc_dir: Path, meta: dict) -> str:
+    """The document note; cheap when there is no annotations.yml (the common case)."""
+    if (doc_dir / ANNOTATIONS_FILE).exists():
+        return read_annotations(doc_dir).get(DOC, "")
+    legacy = meta.get("notes", "")
+    return legacy if isinstance(legacy, str) else ""
 
 
 def doc_dir_of(evidence_set: EvidenceSet, uuid: str) -> Path:
@@ -108,7 +124,7 @@ def _read_info(doc_dir: Path) -> dict:
 
 
 def get_doc(doc_dir: Path) -> dict[str, Any]:
-    """The editable detail of one doc: info.yml fields (validated) plus notes."""
+    """The detail of one doc: info.yml fields (validated), its notes (annotations)."""
     from evid.core.evid_meta import read_meta
     from evid.models import InfoModel
     from evid.services.doc_tags import resolve_doc_pdf
@@ -122,12 +138,15 @@ def get_doc(doc_dir: Path) -> dict[str, Any]:
         logger.exception("Failed to parse info.yml for %s", doc_dir.name)
         model = InfoModel(uuid=doc_dir.name)
     meta = read_meta(doc_dir)
+    annotations = read_annotations(doc_dir)
     out = {k: str(getattr(model, k) or "") for k in INFO_FIELDS}
     out.update(
         uuid=doc_dir.name,
         path=str(doc_dir),
         source_name=str(model.source_name or ""),
-        notes=meta.get("notes", "") or "",
+        notes=annotations.get(DOC, ""),
+        annotations=annotations,
+        missing_annotated=missing_targets(doc_dir, annotations),
         indexed=bool(meta.get("indexed", False)),
         has_pdf=resolve_doc_pdf(doc_dir) is not None,
         has_json=(doc_dir / "label.json").exists(),
@@ -154,10 +173,8 @@ def update_doc(doc_dir: Path, fields: dict[str, Any]) -> dict[str, Any]:
         logger.exception("InfoModel validation failed on save for %s", doc_dir.name)
     with (doc_dir / "info.yml").open("w", encoding="utf-8") as f:
         yaml.safe_dump(info, f, allow_unicode=True)
-    if "notes" in fields:
-        meta = read_meta(doc_dir)
-        meta["notes"] = str(fields["notes"] or "")
-        write_meta(doc_dir, meta)
+    if "notes" in fields:  # the note on the document as a whole
+        write_annotation(doc_dir, DOC, str(fields["notes"] or ""))
     return get_doc(doc_dir)
 
 
@@ -173,7 +190,7 @@ def copy_doc(src_doc_dir: Path, dest_set: EvidenceSet) -> tuple[Path, bool]:
     Returns ``(dest_doc_dir, copied)``; ``copied`` is False when the doc was
     already in the destination set (nothing is overwritten).
     """
-    from evid.core.evid_meta import write_meta
+    from evid.core.evid_meta import read_meta, write_meta
 
     dest_doc_dir = dest_set.path / "docs" / src_doc_dir.name
     if dest_doc_dir.exists():
@@ -185,7 +202,11 @@ def copy_doc(src_doc_dir: Path, dest_set: EvidenceSet) -> tuple[Path, bool]:
         return dest_doc_dir, False
     dest_doc_dir.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(src_doc_dir, dest_doc_dir)
-    write_meta(dest_doc_dir, {"notes": "", "indexed": False})
+    meta = read_meta(
+        dest_doc_dir
+    )  # annotations travel with the doc; the index does not
+    meta["indexed"] = False
+    write_meta(dest_doc_dir, meta)
     return dest_doc_dir, True
 
 
@@ -262,8 +283,11 @@ def list_doc_files(doc_dir: Path, sub: str = "") -> list[dict[str, Any]]:
     if not base.is_dir():
         msg = f"not a folder: {sub}"
         raise ValueError(msg)
+    notes = read_annotations(doc_dir)
     out = []
     for child in sorted(base.iterdir(), key=lambda c: (not c.is_dir(), c.name.lower())):
+        if child.name == ANNOTATIONS_FILE and child.parent == doc_dir:
+            continue  # shown as the notes on the other rows
         st = child.stat()
         out.append(
             {
@@ -272,6 +296,7 @@ def list_doc_files(doc_dir: Path, sub: str = "") -> list[dict[str, Any]]:
                 "dir": child.is_dir(),
                 "size": 0 if child.is_dir() else st.st_size,
                 "mtime": st.st_mtime,
+                "note": notes.get(str(child.relative_to(doc_dir.resolve())), ""),
             }
         )
     return out

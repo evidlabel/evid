@@ -17,6 +17,8 @@ from evid.cli.callbacks import (
     list_datasets_callback,
     list_docs_callback,
     mcp_callback,
+    note_callback,
+    notes_callback,
     passes_callback,
     quote_callback,
     reindex_callback,
@@ -252,6 +254,40 @@ doc_group.commands.append(
         help="List documents in a dataset",
         callback=list_docs_callback,
         options=[_DATASET_OPTION, _FORMAT_OPTION],
+    )
+)
+
+doc_group.commands.append(
+    command(
+        name="note",
+        help="Show or set the annotation on a document or a file in its folder (notes for people and agents using the set)",
+        callback=note_callback,
+        options=[
+            _DATASET_OPTION,
+            option(flags=["-u", "--uuid"], arg_type=str, help="Document UUID"),
+            option(
+                flags=["-p", "--path"],
+                arg_type=str,
+                help="File in the document folder, e.g. original.pdf ('.' = the document); omit to show all notes of the document",
+            ),
+            option(
+                flags=["-t", "--text"], arg_type=str, help="Set the note to this text"
+            ),
+            option(flags=["--clear"], flag=True, help="Remove the note"),
+        ],
+    )
+)
+
+doc_group.commands.append(
+    command(
+        name="notes",
+        help="List annotations on a set's documents and their files",
+        callback=notes_callback,
+        options=[
+            _DATASET_OPTION,
+            option(flags=["-u", "--uuid"], arg_type=str, help="Only this document"),
+            _FORMAT_OPTION,
+        ],
     )
 )
 

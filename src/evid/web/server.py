@@ -141,6 +141,7 @@ def doc_row(doc) -> dict:
         "indexed": bool(doc.indexed),
         "url": str(doc.source_url or ""),
         "authors": str(doc.authors or ""),
+        "note": str(doc.notes or ""),
         "dates": str(doc.dates or ""),
         "has_pdf": resolve_doc_pdf(doc.path) is not None,
         "has_json": (doc.path / "label.json").exists(),
@@ -536,6 +537,17 @@ class Handler(BaseHTTPRequestHandler):
         if err:
             raise HTTPError(500, err)
         self.send_json(200, {"ok": True})
+
+    @route("PUT", "/api/sets/{slug}/docs/{uuid}/annotations")
+    def put_annotation(self, slug: str, uuid: str):
+        """Set or (empty text) remove the note on a file of the doc ("." = the doc)."""
+        from evid.core.annotations import write_annotation
+
+        _, d = self.app.doc_dir(slug, uuid)
+        b = self.body()
+        notes = write_annotation(d, str(b.get("path", ".")), str(b.get("text", "")))
+        self.app.events.emit("docs_changed", slug=slug)
+        self.send_json(200, {"annotations": notes})
 
     @route("GET", "/api/sets/{slug}/docs/{uuid}/files")
     def doc_files(self, slug: str, uuid: str):

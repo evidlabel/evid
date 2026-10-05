@@ -549,3 +549,36 @@ def test_ingest_uses_given_source_name(server, tmp_path):
         call(server, "GET", f"/api/sets/case/docs/{r['uuid']}")[1]["source_name"]
         == "Afgørelse 2024.pdf"
     )
+
+
+def test_annotations_api(server, doc, app):
+    status, r = call(
+        server,
+        "PUT",
+        f"/api/sets/case/docs/{doc}/annotations",
+        {"path": "original.pdf", "text": "Signed copy."},
+    )
+    assert status == 200 and r["annotations"] == {"original.pdf": "Signed copy."}
+    files = call(server, "GET", f"/api/sets/case/docs/{doc}/files")[1]["entries"]
+    by = {e["name"]: e for e in files}
+    assert by["original.pdf"]["note"] == "Signed copy." and "annotations.yml" not in by
+    call(server, "PUT", f"/api/sets/case/docs/{doc}", {"notes": "Key exhibit."})
+    det = call(server, "GET", f"/api/sets/case/docs/{doc}")[1]
+    assert det["notes"] == "Key exhibit." and det["annotations"]["."] == "Key exhibit."
+    assert call(server, "GET", "/api/sets/case/docs")[1][0]["note"] == "Key exhibit."
+    assert (
+        call(
+            server,
+            "PUT",
+            f"/api/sets/case/docs/{doc}/annotations",
+            {"path": "../x", "text": "y"},
+        )[0]
+        == 400
+    )
+    # annotations travel with a copy
+    call(server, "POST", "/api/sets", {"name": "Other"})
+    call(server, "POST", "/api/sets/case/copy", {"uuids": [doc], "dest": "other"})
+    assert call(server, "GET", f"/api/sets/other/docs/{doc}")[1]["annotations"] == {
+        ".": "Key exhibit.",
+        "original.pdf": "Signed copy.",
+    }

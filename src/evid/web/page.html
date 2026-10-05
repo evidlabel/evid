@@ -77,6 +77,7 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 .pview { display: none; flex: 1; min-height: 0; }
 .pview.on { display: flex; }
 #detail { overflow: auto; padding: 8px 10px; flex-direction: column; gap: 8px; }
+#detail > * { flex-shrink: 0; }  /* the pane scrolls; its sections keep their height */
 .tblwrap { flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); min-height: 0; }
 table.tbl { width: 100%; border-collapse: collapse; user-select: none; }
 .tbl th { position: sticky; top: 0; background: var(--panel2); text-align: left; font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); z-index: 1; }
@@ -112,6 +113,10 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 .ftree .fe .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .ftree .fe .sz { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
 .ftree .empty { color: var(--muted); padding: 4px 8px; }
+.ftree .fnote { color: var(--muted); font-style: italic; white-space: pre-wrap; word-break: break-word; padding: 0 8px 3px; font-size: 11.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ftree .fnote:hover { color: var(--fg); background: var(--hover); }
+.ftree .fe.missing .nm { text-decoration: line-through; color: var(--muted); }
+.ftree .an { flex: none; font-size: 11px; }
 .pill { border-radius: 999px; padding: 2px 10px; background: var(--pill); border: 1px solid transparent; white-space: nowrap; }
 .pill.carried { background: var(--pill-carried); }
 .pill.active { background: var(--pill-active); color: #fff; }
@@ -246,7 +251,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
           <label for="d-tags">Tags</label><input id="d-tags" data-tags="1" placeholder="comma, separated">
           <label for="d-label">Label</label><input id="d-label">
           <label for="d-url">URL</label><input id="d-url">
-          <label for="d-notes">Notes</label><textarea id="d-notes" rows="3"></textarea>
+          <label for="d-notes" title="Saved in annotations.yml; agents read it with evid doc notes / MCP doc_notes">Note</label><textarea id="d-notes" rows="3" placeholder="About this document, for the people and agents using the set"></textarea>
         </div>
         <div class="row"><span class="muted" id="d-dirty"></span><span style="flex:1"></span><button class="primary" id="d-save" title="Ctrl+S">Save changes</button></div>
         <h4>Labels <span class="muted" id="d-nlabels"></span></h4>
@@ -258,7 +263,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
         <div class="legend">Click: toggle on the selected doc (or filter when none is selected) · Alt/right-click: docs with the tag · drag onto a row</div>
         <h4 class="row">Files<span style="flex:1"></span><button class="mini" id="d-files-reload" title="Refresh" disabled>↻</button><button class="mini" id="d-files-open" title="Open the folder" disabled>Open folder</button></h4>
         <div class="ftree" id="d-files" tabindex="0"></div>
-        <div class="legend">Click a file to open it (text files in your editor; saving a .typ rebuilds the labels) · right-click for more</div>
+        <div class="legend">Click a file to open it (text files in your editor) · right-click → Annotate… to leave a note for people and agents</div>
       </div>
       <div id="label" class="pview">
         <div id="edempty" hidden></div>
@@ -790,8 +795,8 @@ function renderDocs(msg) {
     tb.replaceChildren(el('tr', { class: 'empty' }, el('td', { colspan: 3, text: msg || (S.slug ? (S.docs.length ? '(No documents match the filter)' : '(No documents in this set)') : '(Create or pick a set)') })));
   } else {
     tb.replaceChildren(...docs.map(d => {
-      const tr = el('tr', { 'data-uuid': d.uuid, class: (S.sel.has(d.uuid) ? 'sel ' : '') + (S.cur === d.uuid ? 'cur' : ''), draggable: 'true', title: `${d.label}\n${d.uuid}` + (d.tags.length ? '\nTags: ' + d.tags.join(', ') : '') },
-        el('td', { class: 'muted', text: d.authors }), el('td', { text: d.label }),
+      const tr = el('tr', { 'data-uuid': d.uuid, class: (S.sel.has(d.uuid) ? 'sel ' : '') + (S.cur === d.uuid ? 'cur' : ''), draggable: 'true', title: `${d.label}\n${d.uuid}` + (d.tags.length ? '\nTags: ' + d.tags.join(', ') : '') + (d.note ? `\n\nNote: ${d.note}` : '') },
+        el('td', { class: 'muted', text: d.authors }), el('td', { text: d.label + (d.note ? '  🗨' : '') }),
         d.dates ? el('td', { text: d.dates }) : el('td', { class: 'muted', style: 'font-style:italic', text: d.added }));
       return tr;
     }));
@@ -980,8 +985,11 @@ async function renderFiles() {
       const open = f.dir && fileOpen.has(f.path);
       const row = el('div', { class: 'fe', title: f.path + (f.dir ? '' : `  ·  ${fmtSize(f.size)}`), style: `padding-left:${6 + depth * 14}px`, 'data-path': f.path, 'data-dir': f.dir ? '1' : null },
         el('span', { class: 'tw', text: f.dir ? (open ? '▾' : '▸') : '' }), el('span', { class: 'ic', text: fileIcon(f.name, f.dir) }),
-        el('span', { class: 'nm', text: f.name }), el('span', { class: 'sz', text: f.dir ? '' : fmtSize(f.size) }));
+        el('span', { class: 'nm', text: f.name }), f.note ? el('span', { class: 'an', title: 'Has an annotation', text: '🗨' }) : null,
+        el('span', { class: 'sz', text: f.dir ? '' : fmtSize(f.size) }));
+      if (f.note) row.dataset.note = f.note;
       rows.push(row);
+      if (f.note) rows.push(el('div', { class: 'fnote', style: `padding-left:${40 + depth * 14}px`, 'data-path': f.path, title: 'Click to edit the annotation', text: f.note }));
       if (open) rows.push(...await level(f.path, depth + 1));
     }
     return rows;
@@ -989,6 +997,12 @@ async function renderFiles() {
   try {
     const rows = await level('', 0);
     if (seq !== filesSeq) return;
+    for (const p of d.missing_annotated || []) {  // notes on files that are gone: show them so they can be removed
+      const note = (d.annotations || {})[p] || '';
+      rows.push(el('div', { class: 'fe missing', 'data-path': p, 'data-missing': '1', 'data-note': note, title: `${p} no longer exists` },
+        el('span', { class: 'tw' }), el('span', { class: 'ic', text: '⚠' }), el('span', { class: 'nm', text: p }), el('span', { class: 'sz', text: 'missing' })),
+        el('div', { class: 'fnote', style: 'padding-left:40px', 'data-path': p, text: note }));
+    }
     box.replaceChildren(...(rows.length ? rows : [el('div', { class: 'empty', text: '(empty folder)' })]));
   } catch (e) { if (seq === filesSeq) box.replaceChildren(el('div', { class: 'empty', text: e.message })); }
 }
@@ -997,16 +1011,43 @@ async function openFile(path) {
   try { await api('POST', docUrl(S.slug, S.detail.uuid, '/open'), { what: 'file', path }); status(`Opened ${path}`, 2500); }
   catch (e) { status(e.message, 6000, true); }
 }
+async function setNote(path, text) {
+  const slug = S.slug, uuid = S.detail.uuid;
+  try {
+    const r = await api('PUT', docUrl(slug, uuid, '/annotations'), { path, text });
+    if (S.detail && S.detail.uuid === uuid) { S.detail.annotations = r.annotations; S.detail.missing_annotated = (S.detail.missing_annotated || []).filter(p => p in r.annotations); renderFiles(); }
+    status(text.trim() ? `Annotated ${path}` : `Removed the note on ${path}`, 2500);
+  } catch (e) { status(e.message, 6000, true); }
+}
+async function annotate(path, current) {
+  if (!S.detail) return;
+  const slug = S.slug, uuid = S.detail.uuid;
+  const ta = el('textarea', { rows: 6, style: 'width:100%;resize:vertical', placeholder: 'What this file is, what to watch out for, what is missing… (empty removes the note)' });
+  ta.value = current || '';
+  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('#dlg-foot [data-primary]').click(); } });
+  const text = await dialog(`Annotation: ${path}`, [el('div', { class: 'muted', text: 'Saved with the document in annotations.yml. Agents read it (evid doc notes, MCP doc_notes).' }), ta],
+    [{ label: 'Cancel', value: () => null }, current ? { label: 'Remove', value: () => '' } : null, { label: 'Save', primary: true, value: () => ta.value }].filter(Boolean));
+  if (text === null || text === undefined || !S.detail || S.detail.uuid !== uuid || S.slug !== slug) return;
+  await setNote(path, text);
+}
 $('#d-files').addEventListener('click', e => {
+  const n = e.target.closest('.fnote'); if (n) { annotate(n.dataset.path, n.textContent); return; }
   const row = e.target.closest('.fe'); if (!row) return;
+  if (row.dataset.missing) { annotate(row.dataset.path, row.dataset.note); return; }
   const p = row.dataset.path;
   if (row.dataset.dir) { fileOpen.has(p) ? fileOpen.delete(p) : fileOpen.add(p); renderFiles(); }
   else openFile(p);
 });
 $('#d-files').addEventListener('contextmenu', e => {
-  const row = e.target.closest('.fe'); if (!row || !S.detail) return; e.preventDefault();
+  const row = e.target.closest('.fe, .fnote'); if (!row || !S.detail) return; e.preventDefault();
   const p = row.dataset.path, full = S.detail.path ? `${S.detail.path}/${p}` : p, uuid = S.detail.uuid, slug = S.slug;
+  const note = (S.detail.annotations || {})[p] || '';
+  if (row.dataset.missing || row.classList.contains('fnote')) {
+    showMenu(e.clientX, e.clientY, [{ label: 'Edit annotation…', fn: () => annotate(p, note) }, { label: 'Remove annotation', fn: () => setNote(p, '') }]);
+    return;
+  }
   showMenu(e.clientX, e.clientY, [
+    { label: note ? 'Edit annotation…' : 'Annotate…', fn: () => annotate(p, note) }, '-',
     row.dataset.dir ? { label: fileOpen.has(p) ? 'Collapse' : 'Expand', fn: () => { fileOpen.has(p) ? fileOpen.delete(p) : fileOpen.add(p); renderFiles(); } }
       : { label: 'Open', fn: () => openFile(p) },
     !row.dataset.dir && p.endsWith('.typ') && { label: 'Open in the Label pane', fn: () => openEditor(slug, uuid) },

@@ -38,7 +38,7 @@ def test_tools_registered_no_list_sets(tmp_path):
     m = build_server(tmp_path, "my-case")
     names = {t.name for t in asyncio.run(m.list_tools())}
     # Scoped server: no list_sets discovery tool. search_vec needs evid[vec].
-    expected = {"search_text", "search_meta", "list_docs", "doc_quotes"}
+    expected = {"search_text", "search_meta", "list_docs", "doc_quotes", "doc_notes"}
     if extras.has_vec():
         expected.add("search_vec")
     assert names == expected
@@ -100,3 +100,25 @@ def test_unknown_dataset_errors_at_startup(tmp_path):
     _seed(tmp_path)
     with pytest.raises(ValueError, match="not found"):
         build_server(tmp_path, "nope")
+
+
+def test_doc_notes_and_list_docs_note(tmp_path):
+    from evid.core.annotations import write_annotation
+
+    sm = _seed(tmp_path)
+    doc_dir = sm.load_set("my-case").path / "docs" / "u1"
+    write_annotation(doc_dir, ".", "Translation, not the original judgment.")
+    write_annotation(doc_dir, "label.typ", "OCR'd; page 3 is unreadable.")
+    m = build_server(tmp_path, "my-case")
+    docs = json.loads(_text(asyncio.run(m.call_tool("list_docs", {}))))
+    assert docs[0]["note"] == "Translation, not the original judgment."
+    notes = json.loads(_text(asyncio.run(m.call_tool("doc_notes", {}))))
+    assert [(n["path"], n["missing"]) for n in notes] == [
+        (".", False),
+        ("label.typ", False),
+    ]
+    one = json.loads(_text(asyncio.run(m.call_tool("doc_notes", {"uuid": "u1"}))))
+    assert len(one) == 2
+    assert "error" in json.loads(
+        _text(asyncio.run(m.call_tool("doc_notes", {"uuid": "nope"})))
+    )

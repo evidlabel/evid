@@ -161,6 +161,7 @@ def _print_info(doc) -> None:
 
 def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
     """Return a list of document metadata in the dataset."""
+    from evid.core.annotations import doc_note
     from evid.services.set_manager import SetManager
 
     documents = []
@@ -184,6 +185,7 @@ def get_evidence_list(directory: Path, dataset: str) -> list[dict]:
                 "title": info.get("title", d.name),
                 "authors": info.get("authors", ""),
                 "date": info.get("time_added", ""),
+                "note": doc_note(d),
             }
         )
     return documents

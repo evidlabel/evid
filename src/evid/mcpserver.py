@@ -125,11 +125,42 @@ def build_server(data_dir: Path, dataset: str):
 
     @mcp.tool()
     def list_docs() -> str:
-        """List documents in this dataset as JSON: uuid, label, tags."""
+        """List documents in this dataset as JSON: uuid, label, tags, and note
+        (the annotation on the document — read it before relying on the doc)."""
         from evid.core.doc_loader import search_meta_documents
 
         docs = search_meta_documents(_SET.path, "")
-        out = [{"uuid": d.uuid, "label": d.label, "tags": d.tags} for d in docs]
+        out = [
+            {"uuid": d.uuid, "label": d.label, "tags": d.tags, "note": d.notes}
+            for d in docs
+        ]
+        return json.dumps(out, ensure_ascii=False)
+
+    @mcp.tool()
+    def doc_notes(uuid: str = "") -> str:
+        """Annotations left by the people handling this dataset, as JSON: for each
+        document, notes on the document itself (path ".") and on files in its
+        folder (e.g. "original.pdf"). Pass a uuid for one document, or nothing for
+        all. Read these before using a document: they say what a file is, what to
+        watch out for, and what is missing."""
+        from evid.core.annotations import missing_targets, read_annotations
+
+        docs_root = _SET.path / "docs"
+        dirs = (
+            [docs_root / uuid]
+            if uuid
+            else sorted(p for p in docs_root.iterdir() if p.is_dir())
+        )
+        out = []
+        for d in dirs:
+            if not d.is_dir():
+                return json.dumps({"error": f"no document {uuid} in this dataset"})
+            notes = read_annotations(d)
+            gone = set(missing_targets(d, notes))
+            out.extend(
+                {"uuid": d.name, "path": k, "note": v, "missing": k in gone}
+                for k, v in notes.items()
+            )
         return json.dumps(out, ensure_ascii=False)
 
     @mcp.tool()
