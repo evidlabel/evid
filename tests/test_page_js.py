@@ -22,6 +22,8 @@ FUNCS = [
     "searchDone",
     "shortUuid",
     "highlight",
+    "labKey",
+    "labCall",
 ]
 
 
@@ -160,3 +162,22 @@ def test_highlight(js):
     ]
     assert js("return highlight('abc', '(', true);") == [["abc", False]]
     assert js("return highlight('abc', '', false);") == [["abc", False]]
+
+
+def test_lab_key(js):
+    assert (
+        js("return labKey('The claimant\\'s working capacity', []);")
+        == "the-claimant-s"
+    )
+    assert (
+        js("return labKey('Kommunens afgørelse', ['kommunens-afgoerelse']);")
+        == "kommunens-afgoerelse-2"
+    )
+    assert js("return labKey('', []);") == "label"
+
+
+def test_lab_call_escapes(js):
+    assert (
+        js("""return labCall('k', 'He said "no"\\nback\\\\slash', '');""")
+        == '#lab("k", "He said \\"no\\" back\\\\slash", "")'
+    )

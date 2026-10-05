@@ -44,6 +44,7 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 .set.drop { outline: 2px dashed var(--accent); }
 .set .tw { width: 14px; color: var(--muted); text-align: center; flex: none; }
 .set .nm { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.set .n { color: var(--muted); font-size: 11px; font-weight: normal; font-variant-numeric: tabular-nums; flex: none; }
 .subtags { margin: 0 0 4px 22px; }
 .subtag { padding: 2px 6px; border-radius: 4px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .subtag:hover { background: var(--hover); color: var(--fg); }
@@ -240,6 +241,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
       <div id="edwrap">
         <div id="edhead"><span id="edtitle"></span><span id="edpath"></span>
           <button id="ed-ext" title="Open in your editor (saves there rebuild the labels too)">Open in editor</button>
+          <button id="ed-lab" title="Wrap the selected text in a #lab label (Ctrl+L)">+ Label</button>
           <button id="ed-reload">Reload</button>
           <button class="primary" id="ed-save" title="Ctrl+S">Save &amp; rebuild</button></div>
         <div id="edbanner"><span id="edbanner-msg">label.typ changed on disk.</span><span style="flex:1"></span><button id="ed-take">Load disk version</button><button id="ed-keep">Keep mine (overwrite)</button></div>
@@ -249,7 +251,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
       <div id="edside">
         <h4>Labels <span class="muted" id="ed-nlabels"></span></h4>
         <div class="list" id="ed-labels"></div>
-        <div class="legend">Click a label to find it in the text. Mark quotes with <span class="mono">#lab</span> in Typst.</div>
+        <div class="legend">Click a label to find it in the text. Select a quote and press <kbd>Ctrl+L</kbd> to label it (<span class="mono">#lab</span>); save to rebuild.</div>
       </div>
     </section>
 
@@ -327,6 +329,23 @@ function highlight(text, query, rx) {
   while ((m = re.exec(text)) && m[0].length) { if (m.index > last) out.push([text.slice(last, m.index), false]); out.push([m[0], true]); last = m.index + m[0].length; }
   if (last < text.length) out.push([text.slice(last), false]);
   return out;
+}
+
+// A label key from the quote's first words: lowercase ascii, unique among `taken`.
+function labKey(text, taken) {
+  const words = String(text || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/æ/g, 'ae').replace(/ø/g, 'oe').replace(/å/g, 'aa').match(/[a-z0-9]+/g) || [];
+  const base = words.slice(0, 3).join('-') || 'label';
+  const have = new Set(taken || []);
+  if (!have.has(base)) return base;
+  let i = 2; while (have.has(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
+}
+
+// The Typst call for one label. Line breaks in the selection become spaces.
+function labCall(key, text, note) {
+  const q = v => '"' + String(v || '').replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  return `#lab(${q(key)}, ${q(text)}, ${q(note)})`;
 }
 
 function shortUuid(u) { return u.length > 16 ? u.slice(0, 8) + '…' + u.slice(-8) : u; }
@@ -560,7 +579,7 @@ function onEvent(e) {
     case 'index_queue': if (e.pending > 0) status(`Indexing in background (${e.pending} queued)…`); break;
     case 'indexed': if (e.slug === S.slug) scheduleReload(); if (e.pending > 0) status(`Indexing in background (${e.pending} queued)…`); break;
     case 'index_idle': status('Indexing complete', 4000); break;
-    case 'docs_changed': if (e.slug === S.slug) scheduleReload(); S.setTags.delete(e.slug); break;
+    case 'docs_changed': if (e.slug === S.slug) scheduleReload(); else refreshSetCounts(); S.setTags.delete(e.slug); break;
     case 'labels_updated':
       if (e.slug === S.slug) { scheduleReload(); if (S.cur === e.uuid) refreshLabels(); }
       if (S.ed && S.ed.uuid === e.uuid && S.ed.slug === e.slug) edDiskChanged();
@@ -590,6 +609,14 @@ async function loadSets(select) {
   else if (!pick) { S.slug = null; S.docs = []; renderDocs(); }
 }
 
+// Re-read the per-set document counts (after a copy into another set).
+async function refreshSetCounts() {
+  const fresh = await api('GET', '/api/sets');
+  const by = new Map(fresh.map(s => [s.slug, s.docs]));
+  for (const s of S.sets) if (by.has(s.slug)) s.docs = by.get(s.slug);
+  renderSets();
+}
+
 async function setTagsOf(slug) {
   if (slug === S.slug) return tagCounts(S.docs);
   if (!S.setTags.has(slug)) S.setTags.set(slug, tagCounts(await api('GET', setUrl(slug, '/docs'))));
@@ -604,7 +631,7 @@ async function renderSets() {
     const open = S.expanded.has(s.slug);
     const tw = el('span', { class: 'tw', text: open ? '▾' : '▸', title: open ? 'Hide tags' : 'Show tags' });
     tw.onclick = e => { e.stopPropagation(); open ? S.expanded.delete(s.slug) : S.expanded.add(s.slug); store('expanded', [...S.expanded]); renderSets(); };
-    const row = el('div', { class: 'set' + (s.slug === S.slug ? ' cur' : ''), role: 'treeitem', title: s.description || s.slug, 'data-slug': s.slug }, tw, el('span', { class: 'nm', text: s.name }));
+    const row = el('div', { class: 'set' + (s.slug === S.slug ? ' cur' : ''), role: 'treeitem', title: s.description || s.slug, 'data-slug': s.slug }, tw, el('span', { class: 'nm', text: s.name }), el('span', { class: 'n', title: `${s.docs} document(s)`, text: s.docs }));
     row.onclick = () => selectSet(s.slug);
     row.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('application/x-evid-doc') && s.slug !== S.slug) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; row.classList.add('drop'); } });
     row.addEventListener('dragleave', () => row.classList.remove('drop'));
@@ -665,6 +692,8 @@ async function loadDocs(keep) {
   if (seq !== S.loadSeq || slug !== S.slug) return;  // a newer set switch won
   S.docs = docs; S.byUuid = new Map(docs.map(d => [d.uuid, d]));
   S.setTags.set(slug, tagCounts(docs));
+  const cs = S.sets.find(s => s.slug === slug);
+  if (cs && cs.docs !== docs.length) { cs.docs = docs.length; renderSets(); }
   for (const u of [...S.sel]) if (!S.byUuid.has(u)) S.sel.delete(u);
   if (S.cur && !S.byUuid.has(S.cur)) S.cur = null;
   renderDocs(); renderPills();
@@ -1116,6 +1145,29 @@ async function edDiskChanged() {
 $('#ed-save').onclick = () => edSave(false);
 $('#ed-keep').onclick = () => edSave(true);
 $('#ed-take').onclick = () => { const d = S.ed.disk; if (!d) return; S.ed.mtime = d.mtime; S.ed.orig = d.content; ed.value = d.content; edMark(); $('#edbanner').classList.remove('on'); edLabels(); };
+// Ctrl+L: wrap the selection in #lab("key", "text", "note"); with no selection, insert an empty one.
+async function addLabel() {
+  const a = ed.selectionStart, b = ed.selectionEnd, text = ed.value.slice(a, b);
+  const taken = [...ed.value.matchAll(/#lab\(\s*"((?:[^"\\]|\\.)*)"/g)].map(m => m[1]);
+  const key = el('input', { value: labKey(text, taken), style: 'width:100%' });
+  const note = el('input', { style: 'width:100%', placeholder: 'optional' });
+  const res = await dialog('Add label', [
+    el('pre', { class: 'box', text: text || '(no text selected — an empty label is inserted)' }),
+    el('label', { text: 'Key:' }), key, el('label', { text: 'Note:' }), note],
+    [{ label: 'Cancel', value: () => null }, { label: 'Add label', primary: true, value: () => {
+      const k = key.value.trim();
+      if (!k) return undefined;
+      if (taken.includes(k)) { key.setCustomValidity('key already used'); key.reportValidity(); return undefined; }
+      return { key: k, note: note.value.trim() };
+    } }]);
+  ed.focus();
+  if (!res) { ed.setSelectionRange(a, b); return; }
+  const call = labCall(res.key, text, res.note);
+  ed.setRangeText(call, a, b, 'end');
+  if (!text) { const i = a + call.indexOf('", "') + 4; ed.setSelectionRange(i, i); }
+  edMark(); edMsg(`Added '${res.key}' — save (Ctrl+S) to rebuild the labels`);
+}
+$('#ed-lab').onclick = addLabel;
 $('#ed-reload').onclick = async () => { if (edDirty() && !(await confirmDlg('Reload', 'Discard your unsaved changes?', 'Discard'))) return; const s = S.ed; S.ed.orig = ed.value; openEditor(s.slug, s.uuid); };
 $('#ed-ext').onclick = () => S.ed && labelDoc(S.ed.slug, S.ed.uuid);
 ed.addEventListener('input', edMark);
@@ -1242,6 +1294,7 @@ const HELP = `<p>Humans and agents share one legal document set. Cited wording i
 <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Shift</kbd> <kbd>Ctrl+A</kbd></td><td>move / extend the selection</td></tr>
 <tr><td><kbd>Enter</kbd> (table)</td><td>label in your editor</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>delete the selected documents</td></tr>
+<tr><td><kbd>Ctrl+L</kbd> (Label tab)</td><td>label the selected text</td></tr>
 <tr><td><kbd>Ctrl+S</kbd></td><td>save the detail pane / label.typ</td></tr>
 ${CFG.app ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr>' : ''}
 <tr><td><kbd>F1</kbd></td><td>help</td></tr>
@@ -1261,6 +1314,8 @@ document.addEventListener('keydown', e => {
     const tabs = $$('.tab').filter(t => !t.hidden).map(t => t.dataset.view);
     const i = tabs.indexOf(S.view);
     switchView(tabs[(i + (e.key === 'PageDown' ? 1 : -1) + tabs.length) % tabs.length]);
+  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l' && S.view === 'label' && S.ed) {
+    e.preventDefault(); addLabel();
   } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault();
     if (S.view === 'label') edSave(false); else if (S.view === 'docs' && curDoc()) saveDetail();

@@ -368,7 +368,14 @@ class Handler(BaseHTTPRequestHandler):
     def list_sets(self):
         out = []
         for s in self.app.sets.list_sets():
-            out.append({"slug": s.slug, "name": s.name, "description": s.description})
+            out.append(
+                {
+                    "slug": s.slug,
+                    "name": s.name,
+                    "description": s.description,
+                    "docs": len(self.app.sets.list_documents(s.slug)),
+                }
+            )
         self.send_json(200, out)
 
     @route("POST", "/api/sets")

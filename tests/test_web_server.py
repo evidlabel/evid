@@ -117,6 +117,7 @@ def test_guards(server):
 def test_sets_and_docs(server, doc):
     sets = call(server, "GET", "/api/sets")[1]
     assert [s["slug"] for s in sets] == ["case"]
+    assert sets[0]["docs"] == 1
     rows = call(server, "GET", "/api/sets/case/docs")[1]
     assert len(rows) == 1 and rows[0]["uuid"] == doc
     assert rows[0]["has_pdf"] and rows[0]["tags"] == ["case.x"]
