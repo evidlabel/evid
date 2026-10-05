@@ -221,8 +221,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
           <button id="b-ingest" title="Add PDFs from disk">Ingest PDF</button>
           <button id="b-url" title="Download a web page or PDF">Add from URL</button>
           <button id="b-index" title="Vector-index every unindexed document">Index docs</button>
-          <button id="b-label" title="Open label.typ in your editor; saving rebuilds the labels">Label</button>
-          <button id="b-edit" title="Edit label.typ here">Edit .typ</button>
+          <button id="b-label" title="Label the selected document (the Label pane; Enter or double-click a row)">Label</button>
           <button id="b-opendir" title="Open the document folder">Open dir</button>
           <input id="filter" placeholder="Filter by title or UUID…  ( / )" style="flex:1; min-width:160px">
         </div>
@@ -264,7 +263,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
         <div id="edempty" hidden></div>
         <div id="edhead"><span id="edtitle"></span>
           <button id="ed-lab" title="Wrap the selected text in a #lab label (Ctrl+L)">+ Label</button>
-          <button id="ed-ext" title="Open in your editor (saves there rebuild the labels too)">Editor</button>
           <button id="ed-wrap" title="Wrap long lines">Wrap</button>
           <button id="ed-reload" title="Reload from disk">↻</button>
           <button class="primary" id="ed-save" title="Save and rebuild the labels (Ctrl+S; also happens when you move to another doc)">Save</button>
@@ -804,7 +802,7 @@ const curDoc = () => S.cur ? S.byUuid.get(S.cur) : null;
 
 function updateActions() {
   const one = !!curDoc();
-  for (const id of ['#b-label', '#b-edit', '#b-opendir', '#d-save', '#d-view', '#d-copy']) $(id).disabled = !one;
+  for (const id of ['#b-label', '#b-opendir', '#d-save', '#d-view', '#d-copy']) $(id).disabled = !one;
   $('#b-index').disabled = !S.slug;
   $('#b-index').title = CFG.has_vec ? 'Vector-index every unindexed document' : CFG.vec_install;
   for (const id of ['#b-ingest', '#b-url']) $(id).disabled = !S.slug;
@@ -834,7 +832,7 @@ async function setCur(uuid) {
 
 const dtbody = $('#dtbl tbody');
 dtbody.addEventListener('click', e => { const tr = e.target.closest('tr[data-uuid]'); if (tr) { selectRow(tr.dataset.uuid, e); $('#dtbl').focus({ preventScroll: true }); } });
-dtbody.addEventListener('dblclick', e => { const tr = e.target.closest('tr[data-uuid]'); if (tr) labelDoc(S.slug, tr.dataset.uuid); });
+dtbody.addEventListener('dblclick', e => { const tr = e.target.closest('tr[data-uuid]'); if (tr) openEditor(S.slug, tr.dataset.uuid); });
 dtbody.addEventListener('contextmenu', e => {
   const tr = e.target.closest('tr[data-uuid]'); if (!tr) return;
   e.preventDefault();
@@ -874,7 +872,7 @@ $('#dtbl').addEventListener('keydown', e => {
   else if (e.key === 'PageDown') move(i + 15);
   else if (e.key === 'PageUp') move(i - 15);
   else if (e.key === 'a' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); S.sel = new Set(order); renderDocs(); }
-  else if (e.key === 'Enter' && S.cur) labelDoc(S.slug, S.cur);
+  else if (e.key === 'Enter' && S.cur) openEditor(S.slug, S.cur);
   else if (e.key === 'Delete' && S.sel.size) deleteDocs(S.slug, selectedUuids());
   else if (e.key === 'ContextMenu' && S.cur) { e.preventDefault(); const r = $('#dtbl tr.cur').getBoundingClientRect(); showMenu(r.left + 40, r.bottom, docMenu(S.slug, selectedUuids(), true)); }
 });
@@ -887,8 +885,7 @@ function docMenu(slug, uuids, canDelete) {
   const n = uuids.length, one = n === 1 ? (S.byUuid.get(uuids[0]) || {}) : null;
   const carried = [...new Set(uuids.flatMap(u => (S.byUuid.get(u) || { tags: [] }).tags))].sort();
   return [
-    one && { label: 'Label (open in editor)', fn: () => labelDoc(slug, uuids[0]) },
-    one && { label: 'Edit label.typ here', fn: () => openEditor(slug, uuids[0]) },
+    one && { label: 'Label', fn: () => openEditor(slug, uuids[0]) },
     one && { label: 'Open folder', fn: () => openDoc(slug, uuids[0], 'dir') },
     one && { label: 'Open PDF', off: !one.has_pdf, fn: () => openDoc(slug, uuids[0], 'pdf') },
     one && { label: 'Open URL', off: !one.url, fn: () => openDoc(slug, uuids[0], 'url') },
@@ -1010,7 +1007,7 @@ $('#d-files').addEventListener('contextmenu', e => {
   showMenu(e.clientX, e.clientY, [
     row.dataset.dir ? { label: fileOpen.has(p) ? 'Collapse' : 'Expand', fn: () => { fileOpen.has(p) ? fileOpen.delete(p) : fileOpen.add(p); renderFiles(); } }
       : { label: 'Open', fn: () => openFile(p) },
-    !row.dataset.dir && p.endsWith('.typ') && { label: 'Edit here (Label tab)', fn: () => openEditor(slug, uuid) },
+    !row.dataset.dir && p.endsWith('.typ') && { label: 'Open in the Label pane', fn: () => openEditor(slug, uuid) },
     row.dataset.dir && { label: 'Open folder', fn: () => openFile(p) },
     '-', { label: 'Copy path', fn: () => copyText(full, 'path') }]);
 });
@@ -1189,7 +1186,7 @@ async function startIngest(v) {
     await loadDocs(true);
     if (r.existing) { status(`Already in set: ${r.uuid.slice(0, 8)}`, 4000); return; }
     status(`Added ${r.uuid.slice(0, 8)}`, 3000);
-    if (v.openLabel && S.slug === slug) { showInDocs(r.uuid); labelDoc(slug, r.uuid); }
+    if (v.openLabel && S.slug === slug) openEditor(slug, r.uuid);
   } catch (e) { status(''); await alertDlg('Ingest failed', e.message); }
 }
 
@@ -1218,15 +1215,6 @@ async function indexDocs() {
     if (!r.queued) return alertDlg('All indexed', 'All documents are already indexed.');
     status(`Indexing ${r.queued} document(s) in background…`);
   } catch (e) { alertDlg('Index failed', e.message); }
-}
-
-async function labelDoc(slug, uuid) {
-  status('Opening label.typ…');
-  try {
-    const { job } = await api('POST', docUrl(slug, uuid, '/label'), { editor: true });
-    await waitJob(job);
-    status(`Editing label.typ in ${CFG.editor} — every save rebuilds the labels`, 6000);
-  } catch (e) { status(e.message, 8000, true); }
 }
 
 // ── in-page label.typ editor ─────────────────────────────────────────────────
@@ -1378,7 +1366,6 @@ async function addLabel() {
 }
 $('#ed-lab').onclick = addLabel;
 $('#ed-reload').onclick = async () => { if (!S.ed) return; if (edDirty() && !(await confirmDlg('Reload', 'Discard your unsaved changes?', 'Discard'))) return; const s = S.ed; S.ed = null; edLoad(s.slug, s.uuid, true); };
-$('#ed-ext').onclick = () => S.ed && labelDoc(S.ed.slug, S.ed.uuid);
 ed.addEventListener('input', edMark);
 ed.addEventListener('scroll', edSync);
 $('#ed-wrap').onclick = () => setWrap(!$('#edbox').classList.contains('wrap'));
@@ -1499,7 +1486,7 @@ const HELP = `<p>Humans and agents share one legal document set. Cited wording i
 <tr><td><kbd>Ctrl+PgUp</kbd> / <kbd>Ctrl+PgDn</kbd></td><td>cycle tabs</td></tr>
 <tr><td><kbd>/</kbd></td><td>filter documents</td></tr>
 <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Shift</kbd> <kbd>Ctrl+A</kbd></td><td>move / extend the selection</td></tr>
-<tr><td><kbd>Enter</kbd> (table)</td><td>label in your editor</td></tr>
+<tr><td><kbd>Enter</kbd> / double-click (table)</td><td>label the document</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>delete the selected documents</td></tr>
 <tr><td><kbd>Alt+↑</kbd> / <kbd>Alt+↓</kbd></td><td>previous / next document (also while labelling)</td></tr>
 <tr><td><kbd>Ctrl+L</kbd> (Label pane)</td><td>label the selected text</td></tr>
@@ -1508,7 +1495,7 @@ ${CFG.app ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr
 <tr><td><kbd>F1</kbd></td><td>help</td></tr>
 <tr><td>drag rows onto a set</td><td>copy the documents there</td></tr>
 <tr><td>drag a tag pill onto a row</td><td>tag that document</td></tr></table>
-<p><b>Docs</b> — Ingest PDF · Add from URL · Index · Label (<span class="mono">#lab</span>) · Open dir</p>
+<p><b>Docs</b> — Ingest PDF · Add from URL · Index · Label (<span class="mono">#lab</span>, in the Label pane) · Open dir</p>
 <p class="muted">Data: ${CFG.data_dir.replace(/&/g, '&amp;').replace(/</g, '&lt;')}<br>Editor: ${String(CFG.editor).replace(/</g, '&lt;')} (set <span class="mono">editor:</span> in evid.yml)</p>`;
 function help() { const d = el('div', { class: 'help' }); d.innerHTML = HELP; dialog('evid help', d, [{ label: 'Close', primary: true }]); }
 $('#b-help').onclick = help;
@@ -1557,8 +1544,7 @@ $('#b-import').onclick = importDir;
 $('#b-ingest').onclick = ingestPdf;
 $('#b-url').onclick = addFromUrl;
 $('#b-index').onclick = indexDocs;
-$('#b-label').onclick = () => curDoc() && labelDoc(S.slug, S.cur);
-$('#b-edit').onclick = () => curDoc() && openEditor(S.slug, S.cur);
+$('#b-label').onclick = () => curDoc() && openEditor(S.slug, S.cur);
 $('#b-opendir').onclick = () => curDoc() && openDoc(S.slug, S.cur, 'dir');
 $('#loghead').onclick = () => { const w = $('#logwrap'); w.classList.toggle('fold'); $('#logtw').textContent = w.classList.contains('fold') ? '▸' : '▾'; store('logopen', !w.classList.contains('fold')); };
 if (load('logopen', false)) $('#loghead').click();
