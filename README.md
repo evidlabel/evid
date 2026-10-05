@@ -29,13 +29,13 @@ License: [MIT](LICENSE). CLI: `evid -h`. Agents: [`SKILL.md`](SKILL.md).
 
 Python 3.12+, [uv](https://docs.astral.sh/uv/), [`typst`](https://typst.app) on PATH.
 
-Default is a light CLI + MCP install (no Qt, no embedding model):
+The default install is the CLI, the MCP server and the GUI (no embedding model):
 
 ```bash
 uv tool install "evid @ git+https://github.com/evidlabel/evid.git"
 ```
 
-Extras: `evid[gui]` (Qt), `evid[vec]` (ChromaDB + sentence-transformers), `evid[all]` (both). For `evid[vec]` / `evid[all]` as a tool, pin a non-CUDA torch:
+Extras: `evid[vec]` (ChromaDB + sentence-transformers) for vector search; `evid[all]` is the same. For `evid[vec]` / `evid[all]` as a tool, pin a non-CUDA torch:
 
 ```bash
 UV_TORCH_BACKEND=auto uv tool install "evid[vec] @ git+https://github.com/evidlabel/evid.git"
@@ -49,12 +49,26 @@ evid -d ./evid set create my-case
 evid -d ./evid doc add paper.pdf -s my-case
 ```
 
+### GUI
+
+`evid gui` serves the GUI on `127.0.0.1` (loopback only) and shows it in the `evid-app` window, or in your web browser when `evid-app` is not installed (`--browser` forces the browser). Closing the window quits. A second `evid gui` for the same data dir brings the running one forward.
+
+`evid-app` is a small [Tauri](https://tauri.app) window in `app/`. To build it you need Rust and the WebKitGTK libraries (Debian/Ubuntu: `libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev`):
+
+```bash
+cargo build --release --manifest-path app/Cargo.toml
+install -m755 app/target/release/evid-app ~/.local/bin/   # or set EVID_APP=/path/to/evid-app
+```
+
+An editable checkout also finds `app/target/{release,debug}/evid-app` without installing it.
+
 ## Development
 
 ```bash
 uv sync --all-extras
-HEADLESS=1 uv run pytest -v
-QT_QPA_PLATFORM=offscreen HEADLESS=1 uv run python scripts/gui_readme_shots.py
+uv run pytest -v
 ```
 
-`pre-commit install` runs the headless pytest suite on each commit (`HEADLESS=1`, offscreen Qt, `uv run --no-sync`), and a **pre-push** hook that regenerates `assets/gui-docs.png` and `assets/gui-search.png` and fails if they differ from git.
+The GUI is `src/evid/web/`: `server.py` (standard-library HTTP + JSON API), `jobs.py` (background work and the event stream the page polls) and `page.html` (the whole frontend, vanilla JS). The page's pure helpers are tested in node (`tests/test_page_js.py`; skipped without `node`).
+
+`pre-commit install` runs the pytest suite on each commit (`uv run --no-sync`).

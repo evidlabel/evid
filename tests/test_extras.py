@@ -1,4 +1,4 @@
-"""Optional extras: gui (PySide6) and vec (chromadb + sentence-transformers)."""
+"""Optional extra: vec (chromadb + sentence-transformers)."""
 
 from __future__ import annotations
 
@@ -16,14 +16,6 @@ def test_require_vec_names_the_extra_when_missing(monkeypatch):
     monkeypatch.setattr(extras, "has_vec", lambda: False)
     with pytest.raises(ImportError, match=r"evid\[vec\]"):
         extras.require_vec()
-
-
-def test_require_gui_names_the_extra_when_missing(monkeypatch):
-    from evid import extras
-
-    monkeypatch.setattr(extras, "has_gui", lambda: False)
-    with pytest.raises(ImportError, match=r"evid\[gui\]"):
-        extras.require_gui()
 
 
 def test_vec_service_refuses_construct_without_extra(monkeypatch):
@@ -141,17 +133,6 @@ def test_mcp_omits_search_vec_without_extra(tmp_path, monkeypatch):
     names = {t.name for t in asyncio.run(m.list_tools())}
     assert "search_vec" not in names
     assert names == {"search_text", "search_meta", "list_docs", "doc_quotes"}
-
-
-def test_gui_callback_exits_with_extra_hint(monkeypatch, capsys):
-    import evid.cli.callbacks as cb
-    from evid import extras
-
-    monkeypatch.setattr(extras, "has_gui", lambda: False)
-    with pytest.raises(SystemExit) as ei:
-        cb.gui_callback()
-    assert ei.value.code == 1
-    assert "evid[gui]" in capsys.readouterr().out
 
 
 def test_search_vec_callback_exits_with_extra_hint(monkeypatch, capsys):

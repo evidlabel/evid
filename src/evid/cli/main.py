@@ -101,7 +101,7 @@ app = cli(
 app.commands.append(
     command(
         name="gui",
-        help="Launch the GUI (close hides to a bottom-right corner hint; a second launch raises the running instance). Pass -d/--db PATH to open a project-local data directory (the directory that contains sets/). Requires extra evid[gui].",
+        help="Launch the GUI: the evid-app window, or your browser when evid-app is not installed. Closing the window quits; a second launch raises the running one. Pass -d/--db PATH to open a project-local data directory (the directory that contains sets/).",
         callback=gui_callback,
         arguments=[
             argument(
@@ -109,7 +109,25 @@ app.commands.append(
                 arg_type=str,
                 nargs="?",
                 default=None,
-                help="chdir before launch so file dialogs start here; does not select the data dir (use -d)",
+                help="chdir before launch so the file picker starts here; does not select the data dir (use -d)",
+            ),
+        ],
+        options=[
+            option(
+                flags=["-p", "--port"],
+                arg_type=int,
+                default=8790,
+                help="First port to try on 127.0.0.1 (the next free one of 20 is used)",
+            ),
+            option(
+                flags=["--browser"],
+                flag=True,
+                help="Open in the web browser even if evid-app is installed",
+            ),
+            option(
+                flags=["--headless"],
+                flag=True,
+                help="Serve only; open nothing (stop with Ctrl+C)",
             ),
         ],
     )

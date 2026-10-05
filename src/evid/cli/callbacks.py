@@ -714,26 +714,29 @@ def mcp_callback(db: str = None, dataset: str = None):
 # ── other callbacks ────────────────────────────────────────────────────────────
 
 
-def gui_callback(db: str = None, workdir: str = None):
-    """Launch the GUI.
+def gui_callback(
+    db: str = None,
+    workdir: str = None,
+    port: int = 8790,
+    browser: bool = False,
+    headless: bool = False,
+):
+    """Launch the GUI (evid-app window, else the browser).
 
-    Optional *workdir* chdirs the process before the GUI starts, so file dialogs
-    and relative paths resolve from that directory.
+    Optional *workdir* chdirs the process before the GUI starts, so the file
+    picker and relative paths resolve from that directory.
     """
     if workdir is not None:
         path = Path(workdir).expanduser().resolve()
         if not path.is_dir():
             sys.exit(f"workdir is not a directory: {path}")
         os.chdir(path)
-    if not extras.has_gui():
-        print(extras.GUI_INSTALL)
-        sys.exit(1)
-    try:
-        from evid.gui.main_window import main as gui_main
-    except ImportError:
-        print(extras.GUI_INSTALL)
-        sys.exit(1)
-    gui_main(DIRECTORY if DIRECTORY_EXPLICIT else None)
+    from evid.config import EvidConfig
+    from evid.web.server import serve_gui
+
+    config = EvidConfig.load()
+    config.data_dir = Path(DIRECTORY)
+    serve_gui(config, port=port or 8790, browser=browser, headless=headless)
 
 
 def update_callback(db: str = None):

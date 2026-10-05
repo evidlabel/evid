@@ -1,0 +1,1320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evidence Manager</title>
+<link rel="icon" href="/assets/evid.svg" type="image/svg+xml">
+<style>
+:root {
+  --bg: #f6f6f4; --panel: #ffffff; --panel2: #efefec; --fg: #1d1d1b; --muted: #6b6b66;
+  --line: #d9d9d4; --accent: #2f6fb3; --accent-fg: #ffffff; --sel: #d6e4f5; --hover: #ececea;
+  --pill: #e7e7e3; --pill-active: #2f6fb3; --pill-carried: #c8e2c4; --mark: #ffe08a; --err: #b3261e; --ok: #2e7d32;
+  --mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1c1e; --panel: #232427; --panel2: #2b2c30; --fg: #e4e4e1; --muted: #9a9a95;
+    --line: #3a3b3f; --accent: #6aa4e0; --accent-fg: #0e1115; --sel: #2d4462; --hover: #2f3034;
+    --pill: #34353a; --pill-active: #4d86c4; --pill-carried: #35553a; --mark: #8a6d1d; --err: #ff8a80; --ok: #81c784;
+  }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 3px 10px; cursor: default; }
+button:hover:not(:disabled) { background: var(--hover); }
+button:disabled { opacity: .45; }
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+input[type=text], input[type=number], input:not([type]), textarea, select {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; min-width: 0;
+}
+input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+#app { display: grid; grid-template-columns: 230px 1fr; height: 100vh; }
+#side { background: var(--panel2); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+#brand { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
+#brand img { width: 22px; height: 22px; }
+#brand b { font-size: 15px; }
+#datadir { color: var(--muted); font-size: 11px; padding: 0 12px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+#sets { flex: 1; overflow: auto; padding: 2px 6px; }
+.set { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-radius: 5px; white-space: nowrap; }
+.set:hover { background: var(--hover); }
+.set.cur { background: var(--sel); font-weight: 600; }
+.set.drop { outline: 2px dashed var(--accent); }
+.set .tw { width: 14px; color: var(--muted); text-align: center; flex: none; }
+.set .nm { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.subtags { margin: 0 0 4px 22px; }
+.subtag { padding: 2px 6px; border-radius: 4px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.subtag:hover { background: var(--hover); color: var(--fg); }
+.subtag.on { color: var(--accent); font-weight: 600; }
+#sidebtns { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
+#main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#tabs { display: flex; align-items: center; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); background: var(--panel2); }
+.tab { border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; background: transparent; padding: 5px 14px; }
+.tab.on { background: var(--bg); border-color: var(--line); margin-bottom: -1px; font-weight: 600; }
+.tab .x { margin-left: 6px; color: var(--muted); }
+#status { margin-left: auto; color: var(--muted); padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; }
+#status.err { color: var(--err); }
+.view { flex: 1; min-height: 0; display: none; }
+.view.on { display: flex; }
+#docs { flex-direction: row; }
+#docsleft { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 8px; gap: 6px; }
+.toolbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.split-v { width: 5px; cursor: col-resize; background: transparent; flex: none; }
+.split-v:hover { background: var(--line); }
+#detail { width: 380px; flex: none; overflow: auto; padding: 8px 10px; border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; gap: 8px; }
+.tblwrap { flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); min-height: 0; }
+table.tbl { width: 100%; border-collapse: collapse; user-select: none; }
+.tbl th { position: sticky; top: 0; background: var(--panel2); text-align: left; font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); z-index: 1; }
+.tbl td { padding: 3px 6px; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 0; }
+.tbl tr.sel td { background: var(--sel); }
+.tbl tr.cur td:first-child { box-shadow: inset 3px 0 var(--accent); }
+.tbl tr.droptag td { background: color-mix(in srgb, var(--pill-carried) 70%, transparent); }
+.tbl tbody tr:hover:not(.sel) td { background: var(--hover); }
+.tbl .c { text-align: center; width: 26px; }
+.tbl .uuid, .mono { font-family: var(--mono); font-size: 12px; }
+.tbl .empty td { color: var(--muted); text-align: center; padding: 18px; }
+.legend { color: var(--muted); font-size: 11px; }
+.form { display: grid; grid-template-columns: auto 1fr; gap: 5px 8px; align-items: center; }
+.form label { color: var(--muted); text-align: right; }
+.form textarea { resize: vertical; min-height: 54px; }
+.row { display: flex; gap: 6px; align-items: center; }
+.row > input { flex: 1; }
+.uuidrow { display: flex; gap: 6px; align-items: center; }
+.uuidrow .mono { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+h4 { margin: 4px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.list { border: 1px solid var(--line); border-radius: 5px; max-height: 160px; overflow: auto; background: var(--panel); user-select: none; }
+.list div { padding: 2px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list div.sel { background: var(--sel); }
+.list .empty { color: var(--muted); }
+pre.box { margin: 0; white-space: pre-wrap; word-break: break-word; border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; background: var(--panel2); max-height: 180px; overflow: auto; font: 12px/1.45 var(--mono); }
+.pills { display: flex; flex-wrap: wrap; gap: 5px; }
+.pill { border-radius: 999px; padding: 2px 10px; background: var(--pill); border: 1px solid transparent; white-space: nowrap; }
+.pill.carried { background: var(--pill-carried); }
+.pill.active { background: var(--pill-active); color: #fff; }
+.pill.new { border: 1px dashed var(--line); background: transparent; color: var(--muted); }
+#search { flex-direction: column; padding: 8px; gap: 6px; }
+.subtabs { display: flex; gap: 4px; }
+.subtabs button.on { background: var(--sel); font-weight: 600; }
+.sform { display: none; gap: 6px; align-items: center; }
+.sform.on { display: flex; }
+.sform input.q { flex: 1; }
+.sform input[type=number] { width: 64px; }
+#sbody { flex: 1; display: flex; gap: 8px; min-height: 0; }
+#sbody .tblwrap { flex: 3; }
+#sprev { flex: 2; display: flex; flex-direction: column; gap: 6px; min-width: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); padding: 8px; }
+#sprev .text { flex: 1; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 12px/1.5 var(--mono); border-top: 1px solid var(--line); padding-top: 6px; }
+#sprev mark { background: var(--mark); color: inherit; font-weight: 700; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; }
+.kv span:nth-child(odd) { color: var(--muted); }
+.kv span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.foot { color: var(--muted); font-size: 12px; }
+#label { flex-direction: row; }
+#edwrap { flex: 1; display: flex; flex-direction: column; padding: 8px; gap: 6px; min-width: 0; }
+#edhead { display: flex; gap: 6px; align-items: center; }
+#edtitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#edpath { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+#ed { flex: 1; resize: none; font: 13px/1.5 var(--mono); tab-size: 2; white-space: pre; padding: 8px; }
+#edbanner { display: none; padding: 6px 8px; border-radius: 5px; background: color-mix(in srgb, var(--mark) 60%, transparent); align-items: center; gap: 8px; }
+#edbanner.on { display: flex; }
+#edmsg { font-size: 12px; color: var(--muted); }
+#edmsg.err { color: var(--err); }
+#edside { width: 300px; flex: none; border-left: 1px solid var(--line); background: var(--panel); padding: 8px; display: flex; flex-direction: column; gap: 6px; overflow: auto; }
+#edside .list { max-height: none; flex: 1; }
+#logwrap { border-top: 1px solid var(--line); background: var(--panel2); }
+#loghead { display: flex; align-items: center; gap: 6px; padding: 2px 8px; color: var(--muted); font-size: 12px; user-select: none; }
+#log { height: 110px; overflow: auto; margin: 0; padding: 4px 8px; font: 11px/1.4 var(--mono); white-space: pre-wrap; background: var(--panel); border-top: 1px solid var(--line); }
+#log .WARNING { color: #b57900; } #log .ERROR, #log .CRITICAL { color: var(--err); }
+#logwrap.fold #log { display: none; }
+.menu { position: fixed; z-index: 50; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.18); padding: 4px; min-width: 190px; max-height: 70vh; overflow: auto; }
+.menu div { padding: 4px 12px; border-radius: 4px; white-space: nowrap; }
+.menu div:hover:not(.off):not(.sep) { background: var(--sel); }
+.menu div.off { opacity: .45; }
+.menu div.sep { height: 1px; background: var(--line); padding: 0; margin: 4px 2px; }
+dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); padding: 0; min-width: 380px; max-width: min(720px, 94vw); box-shadow: 0 12px 40px rgba(0,0,0,.25); }
+dialog::backdrop { background: rgba(0,0,0,.28); }
+.dhead { padding: 10px 14px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.dbody { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow: auto; }
+.dfoot { padding: 8px 14px; display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid var(--line); align-items: center; }
+.dfoot .left { margin-right: auto; }
+.files { border: 1px solid var(--line); border-radius: 5px; height: 300px; overflow: auto; user-select: none; }
+.files div { padding: 3px 8px; white-space: nowrap; display: flex; gap: 6px; }
+.files div:hover { background: var(--hover); }
+.files div.sel { background: var(--sel); }
+.files .ic { width: 16px; color: var(--muted); }
+.sugg { position: fixed; z-index: 60; background: var(--panel); border: 1px solid var(--line); border-radius: 5px; box-shadow: 0 6px 18px rgba(0,0,0,.15); max-height: 200px; overflow: auto; }
+.sugg div { padding: 3px 8px; white-space: nowrap; }
+.sugg div.on { background: var(--sel); }
+.spinner { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.muted { color: var(--muted); }
+.help table td { padding: 1px 16px 1px 0; }
+.help kbd { font: 11px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div id="brand"><img src="/assets/evid.svg" alt=""><b>evid</b><span class="muted" id="ver"></span></div>
+    <div id="datadir"></div>
+    <div id="sets" role="tree"></div>
+    <div id="sidebtns">
+      <button id="b-newset">+ New set</button>
+      <button id="b-import">Import evid dir…</button>
+    </div>
+  </aside>
+  <div id="main">
+    <div id="tabs">
+      <button class="tab on" data-view="docs">Docs</button>
+      <button class="tab" data-view="search">Search</button>
+      <button class="tab" data-view="label" id="tab-label" hidden>Label<span class="x" id="tab-label-x" title="Close the label editor">×</span></button>
+      <span id="status"></span>
+      <button id="b-help" title="Help (F1)">Help</button>
+    </div>
+
+    <section class="view on" id="docs">
+      <div id="docsleft">
+        <div class="toolbar">
+          <button id="b-ingest" title="Add PDFs from disk">Ingest PDF</button>
+          <button id="b-url" title="Download a web page or PDF">Add from URL</button>
+          <button id="b-index" title="Vector-index every unindexed document">Index docs</button>
+          <button id="b-label" title="Open label.typ in your editor; saving rebuilds the labels">Label</button>
+          <button id="b-edit" title="Edit label.typ here">Edit .typ</button>
+          <button id="b-opendir" title="Open the document folder">Open dir</button>
+          <input id="filter" placeholder="Filter by title or UUID…  ( / )" style="flex:1; min-width:160px">
+        </div>
+        <div class="tblwrap"><table class="tbl" id="dtbl" tabindex="0">
+          <colgroup><col style="width:28px"><col style="width:28px"><col><col style="width:92px"><col style="width:230px"></colgroup>
+          <thead><tr><th class="c" title="PDF fetched">F</th><th class="c" title="Labelled (label.json)">J</th><th>Label</th><th>Added</th><th>UUID</th></tr></thead>
+          <tbody></tbody></table></div>
+        <div class="legend">✓ F = Fetched &nbsp; ✓ J = Indexed (JSON) &nbsp;·&nbsp; <span id="count"></span></div>
+      </div>
+      <div class="split-v" id="split"></div>
+      <div id="detail">
+        <h4>Detail</h4>
+        <div class="uuidrow"><span class="mono" id="d-uuid">—</span>
+          <button id="d-view" title="Open the URL, or the folder if there is none">View</button>
+          <button id="d-copy" title="Copy the UUID">Copy</button></div>
+        <div class="form">
+          <label for="d-title">Title</label><input id="d-title">
+          <label for="d-authors">Authors</label><input id="d-authors">
+          <label for="d-dates">Dates</label><input id="d-dates">
+          <label for="d-tags">Tags</label><input id="d-tags" data-tags="1" placeholder="comma, separated">
+          <label for="d-label">Label</label><input id="d-label">
+          <label for="d-url">URL</label><input id="d-url">
+          <label for="d-notes">Notes</label><textarea id="d-notes" rows="3"></textarea>
+        </div>
+        <div class="row"><span class="muted" id="d-dirty"></span><span style="flex:1"></span><button class="primary" id="d-save" title="Ctrl+S">Save changes</button></div>
+        <h4>Labels <span class="muted" id="d-nlabels"></span></h4>
+        <div class="list" id="d-labels" tabindex="0"></div>
+        <div class="row"><span style="flex:1"></span><button id="d-copylabels" disabled>Copy label(s)</button></div>
+        <pre class="box" id="d-labeltext" hidden></pre>
+        <h4>Tags</h4>
+        <div class="pills" id="pills"></div>
+        <div class="legend">Click: toggle on the selected doc (or filter when none is selected) · Alt/right-click: docs with the tag · drag onto a row</div>
+      </div>
+    </section>
+
+    <section class="view" id="search">
+      <div class="subtabs">
+        <button data-k="meta">Meta</button><button data-k="vec" id="st-vec">Vector</button><button data-k="text">Full-text</button>
+      </div>
+      <div class="sform" data-k="meta"><input class="q" id="q-meta" placeholder="Regex over info.yml (empty lists all)"><button class="go">Search</button></div>
+      <div class="sform" data-k="vec"><input class="q" id="q-vec" placeholder="Semantic query"><label>n <input type="number" id="n-vec" value="10" min="1" max="100"></label><button class="go">Search</button></div>
+      <div class="sform" data-k="text"><input class="q" id="q-text" placeholder="Text in document bodies"><label><input type="checkbox" id="rx-text"> Regex</label><label>n <input type="number" id="n-text" value="10" min="1" max="100"></label><button class="go">Search</button></div>
+      <div id="sbody">
+        <div class="tblwrap"><table class="tbl" id="stbl" tabindex="0">
+          <colgroup><col style="width:80px"><col style="width:30%"><col><col style="width:120px"></colgroup>
+          <thead><tr><th>Similarity</th><th>Label</th><th>Preview</th><th>UUID</th></tr></thead><tbody></tbody></table></div>
+        <div id="sprev">
+          <div class="kv"><span>Tags</span><span id="p-tags">—</span><span>Label</span><span id="p-label">—</span><span>Similarity</span><span id="p-score"></span><span>UUID</span><span class="mono" id="p-uuid">—</span></div>
+          <div class="row"><button id="p-view" disabled>View</button><button id="p-copy" disabled>Copy UUID</button><button id="p-show" disabled>Show in Docs</button><span style="flex:1"></span><span class="muted" id="s-count"></span></div>
+          <div class="text" id="p-text"></div>
+          <div class="foot" id="p-foot"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="label">
+      <div id="edwrap">
+        <div id="edhead"><span id="edtitle"></span><span id="edpath"></span>
+          <button id="ed-ext" title="Open in your editor (saves there rebuild the labels too)">Open in editor</button>
+          <button id="ed-reload">Reload</button>
+          <button class="primary" id="ed-save" title="Ctrl+S">Save &amp; rebuild</button></div>
+        <div id="edbanner"><span id="edbanner-msg">label.typ changed on disk.</span><span style="flex:1"></span><button id="ed-take">Load disk version</button><button id="ed-keep">Keep mine (overwrite)</button></div>
+        <textarea id="ed" spellcheck="false"></textarea>
+        <div id="edmsg"></div>
+      </div>
+      <div id="edside">
+        <h4>Labels <span class="muted" id="ed-nlabels"></span></h4>
+        <div class="list" id="ed-labels"></div>
+        <div class="legend">Click a label to find it in the text. Mark quotes with <span class="mono">#lab</span> in Typst.</div>
+      </div>
+    </section>
+
+    <div id="logwrap" class="fold"><div id="loghead"><span id="logtw">▸</span> Log <span id="loglast" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span></div><pre id="log"></pre></div>
+  </div>
+</div>
+<dialog id="dlg"><div class="dhead" id="dlg-title"></div><div class="dbody" id="dlg-body"></div><div class="dfoot" id="dlg-foot"></div></dialog>
+<div class="menu" id="menu" hidden></div>
+<div class="sugg" id="sugg" hidden></div>
+<script>
+"use strict";
+const CFG = /*EVID_CONFIG*/{};
+
+// ── pure helpers (tested from pytest through node) ───────────────────────────
+
+function splitTags(raw) { return String(raw || '').split(',').map(t => t.trim()).filter(Boolean); }
+
+function filterDocs(docs, text, active) {
+  const q = String(text || '').trim().toLowerCase();
+  const need = [...(active || [])];
+  return docs.filter(d => (!q || d.label.toLowerCase().includes(q) || d.uuid.toLowerCase().includes(q))
+    && need.every(t => d.tags.includes(t)));
+}
+
+function tagCounts(docs, extra) {
+  const m = new Map();
+  for (const t of extra || []) m.set(t, 0);
+  for (const d of docs) for (const t of d.tags) m.set(t, (m.get(t) || 0) + 1);
+  return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+// Complete the last comma-separated token of `text` from `all`.
+function completeTags(text, all) {
+  const i = text.lastIndexOf(',');
+  const head = i < 0 ? '' : text.slice(0, i + 1) + ' ';
+  const tok = (i < 0 ? text : text.slice(i + 1)).trim().toLowerCase();
+  const have = new Set(splitTags(text.slice(0, Math.max(i, 0))));
+  const options = all.filter(t => !have.has(t) && (!tok || t.toLowerCase().includes(tok)))
+    .sort((a, b) => (b.toLowerCase().startsWith(tok)) - (a.toLowerCase().startsWith(tok)) || a.localeCompare(b));
+  return { head: head.replace(/^ /, ''), token: tok, options };
+}
+
+function rangeSelect(order, anchor, target) {
+  const a = order.indexOf(anchor), b = order.indexOf(target);
+  if (a < 0 || b < 0) return [target];
+  return order.slice(Math.min(a, b), Math.max(a, b) + 1);
+}
+
+function labelPreview(l) {
+  const parts = [];
+  if (l.section) parts.push(`§ ${l.section}`);
+  if (l.page) parts.push(`p. ${l.page}`);
+  if (l.text) parts.push(l.text);
+  if (l.note) parts.push(`\n[note] ${l.note}`);
+  return parts.join('\n');
+}
+
+// One search at a time; a search asked for while one runs replaces any queued one.
+function searchSubmit(q, req) {
+  if (q.busy) { q.queued = req; return null; }
+  q.busy = true; return req;
+}
+function searchDone(q) {
+  const next = q.queued; q.queued = null;
+  if (next) return next;
+  q.busy = false; return null;
+}
+
+// Split `text` into [piece, isMatch] runs for `query` (case-insensitive; a regex when `rx`).
+function highlight(text, query, rx) {
+  if (!query) return [[text, false]];
+  let re;
+  try { re = new RegExp(rx ? query : query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'); } catch { return [[text, false]]; }
+  const out = []; let last = 0, m;
+  while ((m = re.exec(text)) && m[0].length) { if (m.index > last) out.push([text.slice(last, m.index), false]); out.push([m[0], true]); last = m.index + m[0].length; }
+  if (last < text.length) out.push([text.slice(last), false]);
+  return out;
+}
+
+function shortUuid(u) { return u.length > 16 ? u.slice(0, 8) + '…' + u.slice(-8) : u; }
+
+// ── plumbing ─────────────────────────────────────────────────────────────────
+
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => [...(r || document).querySelectorAll(s)];
+function el(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat()) if (c != null) e.append(c);
+  return e;
+}
+const plog = msg => fetch('/api/log', { method: 'POST', headers: { 'X-Evid': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ msg }) }).catch(() => {});
+window.addEventListener('error', e => plog(`${e.message} @ ${e.filename}:${e.lineno}`));
+window.addEventListener('unhandledrejection', e => { plog('unhandled: ' + (e.reason && (e.reason.stack || e.reason))); status(String(e.reason && e.reason.message || e.reason), 6000, true); });
+
+async function api(method, url, body) {
+  const opt = { method, headers: { 'X-Evid': '1' } };
+  if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  const r = await fetch(url, opt);
+  const ct = r.headers.get('Content-Type') || '';
+  const data = ct.includes('json') ? await r.json() : await r.text();
+  if (!r.ok) { const e = new Error((data && data.error) || r.statusText); e.status = r.status; e.data = data; throw e; }
+  return data;
+}
+const enc = encodeURIComponent;
+const setUrl = (slug, rest) => `/api/sets/${enc(slug)}${rest || ''}`;
+const docUrl = (slug, uuid, rest) => setUrl(slug, `/docs/${enc(uuid)}${rest || ''}`);
+
+let statusT;
+function status(msg, ms, err) {
+  const s = $('#status'); s.textContent = msg || ''; s.title = msg || ''; s.className = err ? 'err' : '';
+  clearTimeout(statusT); if (msg && ms) statusT = setTimeout(() => { s.textContent = ''; s.className = ''; }, ms);
+}
+
+async function copyText(text, what) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const t = el('textarea', { style: 'position:fixed;opacity:0' }); t.value = text; document.body.append(t); t.select();
+    document.execCommand('copy'); t.remove();
+  }
+  status(`Copied ${what || 'to clipboard'}`, 3000);
+}
+
+const store = (k, v) => { try { localStorage.setItem('evid:' + k, JSON.stringify(v)); } catch {} };
+const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem('evid:' + k)); return v ?? d; } catch { return d; } };
+
+// ── state ────────────────────────────────────────────────────────────────────
+
+const S = {
+  sets: [], slug: null, docs: [], byUuid: new Map(), sel: new Set(), cur: null, anchor: null,
+  tagFilter: new Set(), registry: [], detail: null, detailDirty: false, loadSeq: 0,
+  expanded: new Set(load('expanded', [])), setTags: new Map(),
+  view: 'docs', skind: CFG.has_vec ? 'vec' : 'meta', sq: { busy: false, queued: null }, sres: [], ssel: new Set(), scur: -1, sanchor: null,
+  ed: null, evSince: 0, waiters: new Map(), finished: new Map(),
+};
+
+// ── dialogs ──────────────────────────────────────────────────────────────────
+
+const dlg = $('#dlg');
+let dlgResolve = null;
+function dialog(title, body, buttons, opts) {
+  if (dlg.open) closeDialog(undefined);
+  $('#dlg-title').textContent = title;
+  const b = $('#dlg-body'); b.replaceChildren(...[].concat(body));
+  const f = $('#dlg-foot'); f.replaceChildren();
+  if (opts && opts.left) f.append(el('span', { class: 'left' }, opts.left));
+  return new Promise(res => {
+    dlgResolve = res;
+    for (const btn of buttons) {
+      const e = el('button', { class: btn.primary ? 'primary' : '', text: btn.label, onclick: () => {
+        const v = btn.value ? btn.value() : btn.label;
+        if (v === undefined && btn.value) return;  // validation failed: keep the dialog open
+        closeDialog(v);
+      } });
+      if (btn.primary) e.dataset.primary = '1';
+      f.append(e);
+    }
+    dlg.showModal();
+    const first = b.querySelector('input,textarea,select') || f.querySelector('[data-primary]');
+    if (first) { first.focus(); if (first.select) first.select(); }
+  });
+}
+function closeDialog(v) { const r = dlgResolve; dlgResolve = null; if (dlg.open) dlg.close(); if (r) r(v); }
+dlg.addEventListener('cancel', e => { e.preventDefault(); closeDialog(null); });
+dlg.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && e.target.tagName === 'INPUT' && sugg.hidden) {
+    const p = $('#dlg-foot [data-primary]'); if (p) { e.preventDefault(); p.click(); }
+  }
+});
+const alertDlg = (title, msg) => dialog(title, el('div', { style: 'white-space:pre-wrap', text: msg }), [{ label: 'OK', primary: true }]);
+const confirmDlg = (title, msg, ok) => dialog(title, el('div', { style: 'white-space:pre-wrap', text: msg }),
+  [{ label: 'Cancel', value: () => false }, { label: ok || 'OK', primary: true, value: () => true }]);
+function promptDlg(title, label, value) {
+  const inp = el('input', { value: value || '', style: 'width:100%' });
+  return dialog(title, [el('label', { text: label }), inp], [{ label: 'Cancel', value: () => null }, { label: 'OK', primary: true, value: () => inp.value.trim() }]);
+}
+function tagDlg(title, label) {
+  const inp = el('input', { 'data-tags': '1', 'data-single': '1', style: 'width:100%', placeholder: 'pick or type a tag' });
+  return dialog(title, [el('label', { text: label }), inp], [{ label: 'Cancel', value: () => null }, { label: 'OK', primary: true, value: () => inp.value.trim() }]);
+}
+
+// file / folder picker served by /api/files (works in the window and a browser)
+async function pickPaths(opts) {
+  const { pdf, multi, dir: wantDir, title } = opts;
+  let cur = load(pdf ? 'pdfdir' : 'importdir', CFG.cwd);
+  const chosen = new Set();
+  const pathIn = el('input', { style: 'flex:1' });
+  const list = el('div', { class: 'files', tabindex: '0' });
+  const info = el('span', { class: 'muted' });
+  async function go(d) {
+    let r;
+    try { r = await api('GET', `/api/files?dir=${enc(d)}${pdf ? '&pdf=1' : ''}`); } catch (e) { info.textContent = e.message; return; }
+    cur = r.dir; pathIn.value = r.dir; chosen.clear(); upd();
+    list.replaceChildren(...(r.parent ? [el('div', { ondblclick: () => go(r.parent), onclick: () => go(r.parent) }, el('span', { class: 'ic', text: '↰' }), '..')] : []),
+      ...r.entries.map(en => {
+        const full = r.dir.replace(/\/$/, '') + '/' + en.name;
+        const row = el('div', { 'data-full': en.dir ? null : full }, el('span', { class: 'ic', text: en.dir ? '📁' : '📄' }), en.name);
+        if (en.dir) row.onclick = () => go(full);
+        else row.onclick = ev => {
+          if (!multi || !(ev.ctrlKey || ev.metaKey || ev.shiftKey)) { chosen.clear(); $$('.sel', list).forEach(x => x.classList.remove('sel')); }
+          if (chosen.has(full)) { chosen.delete(full); row.classList.remove('sel'); } else { chosen.add(full); row.classList.add('sel'); }
+          upd();
+        };
+        if (!en.dir) row.ondblclick = () => { chosen.clear(); chosen.add(full); $('#dlg-foot [data-primary]').click(); };
+        return row;
+      }));
+    if (!r.entries.length) list.append(el('div', { class: 'muted', text: pdf ? '(no PDFs or folders here)' : '(empty)' }));
+  }
+  function upd() { info.textContent = wantDir ? cur : chosen.size ? `${chosen.size} selected` : (multi ? 'Ctrl/Shift+click to pick several' : ''); }
+  pathIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); go(pathIn.value); } });
+  const all = multi ? el('button', { text: 'Select all PDFs', onclick: () => { $$('.files div[data-full]', $('#dlg-body')).forEach(r => { chosen.add(r.dataset.full); r.classList.add('sel'); }); upd(); } }) : null;
+  go(cur);
+  const res = await dialog(title, [el('div', { class: 'row' }, pathIn, el('button', { text: 'Go', onclick: () => go(pathIn.value) })), list],
+    [{ label: 'Cancel', value: () => null }, { label: wantDir ? 'Choose this folder' : 'Open', primary: true, value: () => wantDir ? cur : (chosen.size ? [...chosen] : undefined) }],
+    { left: el('span', {}, all, ' ', info) });
+  if (res) store(pdf ? 'pdfdir' : 'importdir', cur);
+  return res;
+}
+
+// ── tag suggestions on inputs with data-tags ─────────────────────────────────
+
+const sugg = $('#sugg');
+let suggFor = null, suggIdx = 0, suggOpts = [];
+function allTagNames() { return [...new Set([...S.registry, ...S.docs.flatMap(d => d.tags)])].sort(); }
+function showSugg(inp) {
+  const single = inp.dataset.single;
+  const c = single ? { head: '', token: inp.value.trim().toLowerCase(), options: allTagNames().filter(t => t.toLowerCase().includes(inp.value.trim().toLowerCase())) } : completeTags(inp.value, allTagNames());
+  suggOpts = c.options.slice(0, 12);
+  if (!suggOpts.length || document.activeElement !== inp) { hideSugg(); return; }
+  suggFor = inp; suggIdx = 0;
+  sugg.replaceChildren(...suggOpts.map((t, i) => el('div', { class: i === 0 ? 'on' : '', text: t, onmousedown: e => { e.preventDefault(); pickSugg(i); } })));
+  const r = inp.getBoundingClientRect();
+  Object.assign(sugg.style, { left: r.left + 'px', top: r.bottom + 2 + 'px', minWidth: r.width + 'px' });
+  sugg.hidden = false;
+}
+function hideSugg() { sugg.hidden = true; suggFor = null; }
+function pickSugg(i) {
+  const inp = suggFor; if (!inp) return;
+  const t = suggOpts[i];
+  if (inp.dataset.single) inp.value = t;
+  else { const c = completeTags(inp.value, []); inp.value = (c.head ? c.head : '') + t + ', '; }
+  hideSugg(); inp.dispatchEvent(new Event('input')); inp.focus();
+}
+document.addEventListener('input', e => { if (e.target.dataset && e.target.dataset.tags) showSugg(e.target); }, true);
+document.addEventListener('focusin', e => { if (e.target.dataset && e.target.dataset.tags) showSugg(e.target); else if (e.target !== suggFor) hideSugg(); });
+document.addEventListener('focusout', e => { if (e.target === suggFor) setTimeout(hideSugg, 100); });
+document.addEventListener('keydown', e => {
+  if (sugg.hidden || e.target !== suggFor) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault(); suggIdx = (suggIdx + (e.key === 'ArrowDown' ? 1 : -1) + suggOpts.length) % suggOpts.length;
+    $$('div', sugg).forEach((d, i) => d.classList.toggle('on', i === suggIdx));
+  } else if (e.key === 'Tab' || (e.key === 'Enter' && suggOpts.length)) { e.preventDefault(); e.stopPropagation(); pickSugg(suggIdx); }
+  else if (e.key === 'Escape') { e.stopPropagation(); hideSugg(); }
+}, true);
+
+// ── context menu ─────────────────────────────────────────────────────────────
+
+const menu = $('#menu');
+function showMenu(x, y, items) {
+  menu.replaceChildren(...items.filter(Boolean).map(it => {
+    if (it === '-') return el('div', { class: 'sep' });
+    const d = el('div', { class: it.off ? 'off' : '', text: it.label + (it.sub ? ' ▸' : '') });
+    if (!it.off) d.onclick = e => { e.stopPropagation(); if (it.sub) showMenu(x, y, it.sub); else { hideMenu(); it.fn(); } };
+    return d;
+  }));
+  menu.hidden = false;
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.min(x, innerWidth - r.width - 4) + 'px';
+  menu.style.top = Math.min(y, innerHeight - r.height - 4) + 'px';
+}
+function hideMenu() { menu.hidden = true; }
+document.addEventListener('mousedown', e => { if (!menu.hidden && !menu.contains(e.target)) hideMenu(); });
+
+// ── events (polling) and jobs ────────────────────────────────────────────────
+
+function waitJob(id) {
+  return new Promise((res, rej) => {
+    const ev = S.finished.get(id);
+    const settle = e => e.state === 'error' ? rej(new Error(e.error)) : res(e.state === 'cancelled' ? null : e.result);
+    if (ev) { S.finished.delete(id); settle(ev); } else S.waiters.set(id, settle);
+  });
+}
+
+const LOGMAX = 200;
+function addLog(e) {
+  const log = $('#log');
+  log.append(el('div', { class: e.level, text: e.msg }));
+  while (log.childElementCount > LOGMAX) log.firstElementChild.remove();
+  log.scrollTop = log.scrollHeight;
+  $('#loglast').textContent = '— ' + e.msg;
+}
+
+let reloadT = null;
+function scheduleReload() { clearTimeout(reloadT); reloadT = setTimeout(() => loadDocs(true), 250); }
+
+function onEvent(e) {
+  switch (e.kind) {
+    case 'log': addLog(e); break;
+    case 'job':
+      if (e.state === 'running') { if (e.msg) status(e.msg); break; }
+      { const w = S.waiters.get(e.job_id); if (w) { S.waiters.delete(e.job_id); w(e); } else S.finished.set(e.job_id, e); }
+      if (e.state === 'error') status('', 0);
+      break;
+    case 'index_queue': if (e.pending > 0) status(`Indexing in background (${e.pending} queued)…`); break;
+    case 'indexed': if (e.slug === S.slug) scheduleReload(); if (e.pending > 0) status(`Indexing in background (${e.pending} queued)…`); break;
+    case 'index_idle': status('Indexing complete', 4000); break;
+    case 'docs_changed': if (e.slug === S.slug) scheduleReload(); S.setTags.delete(e.slug); break;
+    case 'labels_updated':
+      if (e.slug === S.slug) { scheduleReload(); if (S.cur === e.uuid) refreshLabels(); }
+      if (S.ed && S.ed.uuid === e.uuid && S.ed.slug === e.slug) edDiskChanged();
+      status('Labels updated', 3000); break;
+    case 'label_error': status(`Labels: ${e.error}`, 8000, true);
+      if (S.ed && S.ed.uuid === e.uuid) edMsg(e.error, true); break;
+  }
+}
+
+async function poll() {
+  try {
+    const r = await api('GET', `/api/events?since=${S.evSince}`);
+    for (const e of r.events) onEvent(e);
+    S.evSince = r.last;
+  } catch (e) { status('Server not reachable — is `evid gui` still running?', 0, true); }
+  setTimeout(poll, S.waiters.size ? 400 : 1000);
+}
+
+// ── sidebar: sets (foldable: a set opens to its tags) ────────────────────────
+
+async function loadSets(select) {
+  S.sets = await api('GET', '/api/sets');
+  const want = select || S.slug || load('slug', null);
+  renderSets();
+  const pick = S.sets.find(s => s.slug === want) || S.sets[0];
+  if (pick && pick.slug !== S.slug) selectSet(pick.slug);
+  else if (!pick) { S.slug = null; S.docs = []; renderDocs(); }
+}
+
+async function setTagsOf(slug) {
+  if (slug === S.slug) return tagCounts(S.docs);
+  if (!S.setTags.has(slug)) S.setTags.set(slug, tagCounts(await api('GET', setUrl(slug, '/docs'))));
+  return S.setTags.get(slug);
+}
+
+async function renderSets() {
+  const box = $('#sets');
+  if (!S.sets.length) { box.replaceChildren(el('div', { class: 'muted', style: 'padding:8px', text: 'No sets yet — + New set' })); return; }
+  const rows = [];
+  for (const s of S.sets) {
+    const open = S.expanded.has(s.slug);
+    const tw = el('span', { class: 'tw', text: open ? '▾' : '▸', title: open ? 'Hide tags' : 'Show tags' });
+    tw.onclick = e => { e.stopPropagation(); open ? S.expanded.delete(s.slug) : S.expanded.add(s.slug); store('expanded', [...S.expanded]); renderSets(); };
+    const row = el('div', { class: 'set' + (s.slug === S.slug ? ' cur' : ''), role: 'treeitem', title: s.description || s.slug, 'data-slug': s.slug }, tw, el('span', { class: 'nm', text: s.name }));
+    row.onclick = () => selectSet(s.slug);
+    row.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('application/x-evid-doc') && s.slug !== S.slug) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; row.classList.add('drop'); } });
+    row.addEventListener('dragleave', () => row.classList.remove('drop'));
+    row.addEventListener('drop', e => { row.classList.remove('drop'); const d = e.dataTransfer.getData('application/x-evid-doc'); if (d) { e.preventDefault(); const p = JSON.parse(d); copyDocs(p.src, p.uuids, s.slug); } });
+    rows.push(row);
+    if (open) {
+      const sub = el('div', { class: 'subtags' }, el('div', { class: 'subtag', text: '…' }));
+      rows.push(sub);
+      setTagsOf(s.slug).then(tags => {
+        sub.replaceChildren(...(tags.length ? tags.map(([t, n]) => {
+          const on = s.slug === S.slug && S.tagFilter.has(t);
+          return el('div', { class: 'subtag' + (on ? ' on' : ''), title: `Filter ${s.name} by ${t}`, text: `${t.startsWith(s.slug + '.') ? t.slice(s.slug.length + 1) : t}  × ${n}`,
+            onclick: async () => { if (s.slug !== S.slug) { S.tagFilter = new Set(); await selectSet(s.slug); } toggleFilter(t); } });
+        }) : [el('div', { class: 'subtag', text: '(no tags)' })]));
+      }).catch(e => sub.replaceChildren(el('div', { class: 'subtag', text: e.message })));
+    }
+  }
+  box.replaceChildren(...rows);
+}
+
+async function selectSet(slug) {
+  if (S.detailDirty && !(await confirmDlg('Unsaved changes', 'Discard the unsaved changes in the detail pane?', 'Discard'))) return;
+  if (slug !== S.slug) { S.tagFilter = new Set(); S.sel = new Set(); S.cur = null; S.anchor = null; S.sres = []; renderSearch(); }
+  S.slug = slug; store('slug', slug);
+  renderSets();
+  await loadDocs(false);
+}
+
+async function newSet() {
+  const name = await promptDlg('New evidence set', 'Name:');
+  if (!name) return;
+  const r = await api('POST', '/api/sets', { name });
+  await loadSets(r.slug);
+  status(`Created set '${r.name}'`, 3000);
+}
+
+async function importDir() {
+  const dir = await pickPaths({ dir: true, title: 'Select evid directory' });
+  if (!dir) return;
+  const name = await promptDlg('Import evid directory', 'Set name:', dir.split('/').filter(Boolean).pop());
+  if (name === null) return;
+  try {
+    const r = await api('POST', '/api/sets/import', { path: dir, name });
+    await loadSets();
+    await alertDlg('Import complete', `Imported ${r.count} set(s) from\n${dir}`);
+  } catch (e) { await alertDlg('Import failed', e.message); }
+}
+
+// ── docs table ───────────────────────────────────────────────────────────────
+
+async function loadDocs(keep) {
+  const seq = ++S.loadSeq, slug = S.slug;
+  if (!slug) return;
+  if (!keep) { S.docs = []; renderDocs('Loading…'); }
+  let docs;
+  try { docs = await api('GET', setUrl(slug, '/docs')); }
+  catch (e) { if (seq === S.loadSeq) renderDocs(e.message); return; }
+  if (seq !== S.loadSeq || slug !== S.slug) return;  // a newer set switch won
+  S.docs = docs; S.byUuid = new Map(docs.map(d => [d.uuid, d]));
+  S.setTags.set(slug, tagCounts(docs));
+  for (const u of [...S.sel]) if (!S.byUuid.has(u)) S.sel.delete(u);
+  if (S.cur && !S.byUuid.has(S.cur)) S.cur = null;
+  renderDocs(); renderPills();
+  if (S.expanded.has(slug)) renderSets();
+  if (!keep || (S.cur && !S.detailDirty)) loadDetail();
+}
+
+const visibleDocs = () => filterDocs(S.docs, $('#filter').value, S.tagFilter);
+
+function renderDocs(msg) {
+  const tb = $('#dtbl tbody');
+  const docs = msg ? [] : visibleDocs();
+  $('#count').textContent = S.slug ? `${docs.length} of ${S.docs.length} document(s)` : '';
+  if (!docs.length) {
+    tb.replaceChildren(el('tr', { class: 'empty' }, el('td', { colspan: 5, text: msg || (S.slug ? (S.docs.length ? '(No documents match the filter)' : '(No documents in this set)') : '(Create or pick a set)') })));
+  } else {
+    tb.replaceChildren(...docs.map(d => {
+      const tr = el('tr', { 'data-uuid': d.uuid, class: (S.sel.has(d.uuid) ? 'sel ' : '') + (S.cur === d.uuid ? 'cur' : ''), draggable: 'true', title: d.tags.length ? 'Tags: ' + d.tags.join(', ') : null },
+        el('td', { class: 'c', text: d.has_pdf ? '✓' : '' }), el('td', { class: 'c', text: d.has_json ? '✓' : '' }),
+        el('td', { text: d.label }), el('td', { text: d.added }), el('td', { class: 'uuid', text: d.uuid }));
+      return tr;
+    }));
+  }
+  updateActions();
+}
+
+const selectedUuids = () => { const vis = visibleDocs().map(d => d.uuid); const s = vis.filter(u => S.sel.has(u)); return s.length ? s : (S.cur ? [S.cur] : []); };
+const curDoc = () => S.cur ? S.byUuid.get(S.cur) : null;
+
+function updateActions() {
+  const one = !!curDoc();
+  for (const id of ['#b-label', '#b-edit', '#b-opendir', '#d-save', '#d-view', '#d-copy']) $(id).disabled = !one;
+  $('#b-index').disabled = !S.slug;
+  $('#b-index').title = CFG.has_vec ? 'Vector-index every unindexed document' : CFG.vec_install;
+  for (const id of ['#b-ingest', '#b-url']) $(id).disabled = !S.slug;
+}
+
+function selectRow(uuid, ev) {
+  const order = visibleDocs().map(d => d.uuid);
+  if (ev && ev.shiftKey && S.anchor) S.sel = new Set(rangeSelect(order, S.anchor, uuid));
+  else if (ev && (ev.ctrlKey || ev.metaKey)) { S.sel.has(uuid) ? S.sel.delete(uuid) : S.sel.add(uuid); S.anchor = uuid; }
+  else { S.sel = new Set([uuid]); S.anchor = uuid; }
+  setCur(uuid);
+}
+
+async function setCur(uuid) {
+  if (uuid !== S.cur && S.detailDirty && !(await confirmDlg('Unsaved changes', 'Discard the unsaved changes in the detail pane?', 'Discard'))) return;
+  S.cur = uuid;
+  for (const tr of $$('#dtbl tbody tr')) {
+    tr.classList.toggle('sel', S.sel.has(tr.dataset.uuid));
+    tr.classList.toggle('cur', tr.dataset.uuid === uuid);
+  }
+  const tr = $(`#dtbl tr[data-uuid="${CSS.escape(uuid || '')}"]`);
+  if (tr) tr.scrollIntoView({ block: 'nearest' });
+  updateActions(); loadDetail();
+}
+
+const dtbody = $('#dtbl tbody');
+dtbody.addEventListener('click', e => { const tr = e.target.closest('tr[data-uuid]'); if (tr) { selectRow(tr.dataset.uuid, e); $('#dtbl').focus({ preventScroll: true }); } });
+dtbody.addEventListener('dblclick', e => { const tr = e.target.closest('tr[data-uuid]'); if (tr) labelDoc(S.slug, tr.dataset.uuid); });
+dtbody.addEventListener('contextmenu', e => {
+  const tr = e.target.closest('tr[data-uuid]'); if (!tr) return;
+  e.preventDefault();
+  if (!S.sel.has(tr.dataset.uuid)) selectRow(tr.dataset.uuid);
+  showMenu(e.clientX, e.clientY, docMenu(S.slug, selectedUuids(), true));
+});
+dtbody.addEventListener('dragstart', e => {
+  const tr = e.target.closest('tr[data-uuid]'); if (!tr) return;
+  if (!S.sel.has(tr.dataset.uuid)) selectRow(tr.dataset.uuid);
+  const uuids = selectedUuids();
+  e.dataTransfer.setData('application/x-evid-doc', JSON.stringify({ src: S.slug, uuids }));
+  e.dataTransfer.setData('text/plain', uuids.join(','));
+  e.dataTransfer.effectAllowed = 'copy';
+});
+dtbody.addEventListener('dragover', e => {
+  if (!e.dataTransfer.types.includes('application/x-evid-tag')) return;
+  const tr = e.target.closest('tr[data-uuid]'); if (!tr) return;
+  e.preventDefault(); $$('#dtbl tr.droptag').forEach(r => r !== tr && r.classList.remove('droptag')); tr.classList.add('droptag');
+});
+dtbody.addEventListener('dragleave', e => { const tr = e.target.closest('tr'); if (tr) tr.classList.remove('droptag'); });
+dtbody.addEventListener('drop', async e => {
+  const tag = e.dataTransfer.getData('application/x-evid-tag'); const tr = e.target.closest('tr[data-uuid]');
+  $$('#dtbl tr.droptag').forEach(r => r.classList.remove('droptag'));
+  if (!tag || !tr) return;
+  e.preventDefault();
+  const r = await api('POST', setUrl(S.slug, '/tag'), { uuids: [tr.dataset.uuid], tag });
+  status(`Tagged '${S.byUuid.get(tr.dataset.uuid).label}' with ${r.tag}`, 3000); await afterTagChange();
+});
+$('#dtbl').addEventListener('keydown', e => {
+  const order = visibleDocs().map(d => d.uuid); if (!order.length) return;
+  const i = order.indexOf(S.cur);
+  const move = k => { e.preventDefault(); const u = order[Math.max(0, Math.min(order.length - 1, k))]; if (e.shiftKey) { S.sel = new Set(rangeSelect(order, S.anchor || u, u)); } else { S.sel = new Set([u]); S.anchor = u; } setCur(u); };
+  if (e.key === 'ArrowDown') move(i < 0 ? 0 : i + 1);
+  else if (e.key === 'ArrowUp') move(i < 0 ? 0 : i - 1);
+  else if (e.key === 'Home') move(0);
+  else if (e.key === 'End') move(order.length - 1);
+  else if (e.key === 'PageDown') move(i + 15);
+  else if (e.key === 'PageUp') move(i - 15);
+  else if (e.key === 'a' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); S.sel = new Set(order); renderDocs(); }
+  else if (e.key === 'Enter' && S.cur) labelDoc(S.slug, S.cur);
+  else if (e.key === 'Delete' && S.sel.size) deleteDocs(S.slug, selectedUuids());
+  else if (e.key === 'ContextMenu' && S.cur) { e.preventDefault(); const r = $('#dtbl tr.cur').getBoundingClientRect(); showMenu(r.left + 40, r.bottom, docMenu(S.slug, selectedUuids(), true)); }
+});
+$('#filter').addEventListener('input', () => renderDocs());
+$('#filter').addEventListener('keydown', e => { if (e.key === 'ArrowDown') { e.preventDefault(); $('#dtbl').focus(); } if (e.key === 'Escape') { $('#filter').value = ''; renderDocs(); } });
+
+// shared row menu (Docs and Search tabs)
+function docMenu(slug, uuids, canDelete) {
+  if (!uuids.length) return [];
+  const n = uuids.length, one = n === 1 ? (S.byUuid.get(uuids[0]) || {}) : null;
+  const carried = [...new Set(uuids.flatMap(u => (S.byUuid.get(u) || { tags: [] }).tags))].sort();
+  return [
+    one && { label: 'Label (open in editor)', fn: () => labelDoc(slug, uuids[0]) },
+    one && { label: 'Edit label.typ here', fn: () => openEditor(slug, uuids[0]) },
+    one && { label: 'Open folder', fn: () => openDoc(slug, uuids[0], 'dir') },
+    one && { label: 'Open PDF', off: !one.has_pdf, fn: () => openDoc(slug, uuids[0], 'pdf') },
+    one && { label: 'Open URL', off: !one.url, fn: () => openDoc(slug, uuids[0], 'url') },
+    one && '-',
+    { label: `Tag ${n} selected…`, fn: () => tagSelected(slug, uuids) },
+    carried.length && { label: 'Remove tag', sub: carried.map(t => ({ label: t, fn: () => untag(slug, uuids, t) })) },
+    '-',
+    { label: n === 1 ? 'Copy UUID' : `Copy UUIDs (${n})`, fn: () => copyText(uuids.join(','), n === 1 ? 'UUID' : `${n} UUIDs`) },
+    { label: 'Copy quotes to clipboard', fn: () => copyQuotes(slug, uuids) },
+    canDelete && '-',
+    canDelete && { label: `Delete ${n} document(s)…`, fn: () => deleteDocs(slug, uuids) },
+  ];
+}
+
+async function openDoc(slug, uuid, what) {
+  try { await api('POST', docUrl(slug, uuid, '/open'), { what }); }
+  catch (e) { status(e.message, 6000, true); }
+}
+async function tagSelected(slug, uuids) {
+  const tag = await tagDlg('Tag selected', `Tag for ${uuids.length} document(s):`);
+  if (!tag) return;
+  const r = await api('POST', setUrl(slug, '/tag'), { uuids, tag });
+  status(`${uuids.length} docs tagged '${r.tag}'`, 3000); await afterTagChange();
+}
+async function untag(slug, uuids, tag) {
+  await api('POST', setUrl(slug, '/tag'), { uuids, tag, remove: true });
+  status(`Removed '${tag}'`, 3000); await afterTagChange();
+}
+async function afterTagChange() { S.registry = await api('GET', '/api/tags'); await loadDocs(true); }
+async function copyQuotes(slug, uuids) {
+  const r = await api('POST', setUrl(slug, '/quotes'), { uuids, format: 'yaml' });
+  if (!r.text) { status('No labelled quotes in the selection', 4000); return; }
+  copyText(r.text, 'quotes');
+}
+async function deleteDocs(slug, uuids) {
+  if (!(await confirmDlg('Delete documents', `Delete ${uuids.length} document(s)? This removes their folders.`, 'Delete'))) return;
+  try {
+    await api('POST', setUrl(slug, '/delete'), { uuids });
+    S.detailDirty = false; S.sel = new Set(); if (uuids.includes(S.cur)) S.cur = null;
+    status(`Deleted ${uuids.length} document(s)`, 3000); await loadDocs(true); loadDetail();
+  } catch (e) { await alertDlg('Delete failed', e.message); }
+}
+async function copyDocs(src, uuids, dest) {
+  status(`Copying ${uuids.length} doc(s) to '${dest}'…`);
+  try {
+    const r = await api('POST', setUrl(src, '/copy'), { uuids, dest });
+    status(r.copied ? `Copied ${r.copied} doc(s) to '${dest}'` : `Already in '${dest}'`, 4000);
+    S.setTags.delete(dest); renderSets();
+  } catch (e) { await alertDlg('Copy failed', e.message); status(''); }
+}
+
+// ── detail pane ──────────────────────────────────────────────────────────────
+
+const FIELDS = ['title', 'authors', 'dates', 'tags', 'label', 'url', 'notes'];
+let detailSeq = 0;
+async function loadDetail() {
+  const seq = ++detailSeq, d = curDoc();
+  S.detailDirty = false; $('#d-dirty').textContent = '';
+  if (!d) { S.detail = null; fillDetail(null); return; }
+  try {
+    const r = await api('GET', docUrl(S.slug, d.uuid));
+    if (seq !== detailSeq) return;
+    S.detail = r; fillDetail(r);
+  } catch (e) { status(e.message, 6000, true); }
+}
+function fillDetail(r) {
+  $('#d-uuid').textContent = r ? (r.uuid.length > 16 ? r.uuid.slice(0, 16) + '…' : r.uuid) : '—';
+  $('#d-uuid').title = r ? r.uuid : '';
+  for (const f of FIELDS) { const i = $('#d-' + f); i.value = r ? r[f] : ''; i.disabled = !r; }
+  renderLabels(r ? r.labels : []);
+  renderPills();
+}
+for (const f of FIELDS) $('#d-' + f).addEventListener('input', () => { S.detailDirty = true; $('#d-dirty').textContent = 'unsaved'; if (f === 'tags') renderPills(); });
+async function saveDetail() {
+  const d = curDoc(); if (!d) return;
+  const body = Object.fromEntries(FIELDS.map(f => [f, $('#d-' + f).value]));
+  try {
+    S.detail = await api('PUT', docUrl(S.slug, d.uuid), body);
+    S.detailDirty = false; $('#d-dirty').textContent = '';
+    status('Saved', 2500); await afterTagChange();
+  } catch (e) { await alertDlg('Save failed', e.message); }
+}
+$('#d-save').onclick = saveDetail;
+$('#d-copy').onclick = () => S.detail && copyText(S.detail.uuid, 'UUID');
+$('#d-view').onclick = () => { const d = curDoc(); if (!d) return; openDoc(S.slug, d.uuid, $('#d-url').value.trim() ? 'url' : 'dir'); };
+
+let labelSel = new Set(), labelAnchor = null;
+function renderLabels(labels) {
+  S.labels = labels || []; labelSel = new Set(); labelAnchor = null;
+  $('#d-nlabels').textContent = S.labels.length ? `(${S.labels.length})` : '';
+  const box = $('#d-labels');
+  box.replaceChildren(...(S.labels.length ? S.labels.map(l => el('div', { 'data-key': l.key, title: l.text, text: l.key })) : [el('div', { class: 'empty', text: S.detail ? '(no labels — Label to add #lab marks)' : '' })]));
+  showLabelText();
+}
+function showLabelText() {
+  const keys = [...labelSel];
+  $$('#d-labels div[data-key]').forEach(d => d.classList.toggle('sel', labelSel.has(d.dataset.key)));
+  $('#d-copylabels').disabled = !keys.length;
+  $('#d-copylabels').textContent = keys.length > 1 ? `Copy ${keys.length} labels` : 'Copy label';
+  const l = keys.length ? S.labels.find(x => x.key === keys[keys.length - 1]) : null;
+  $('#d-labeltext').hidden = !l; $('#d-labeltext').textContent = l ? labelPreview(l) : '';
+}
+$('#d-labels').addEventListener('click', e => {
+  const d = e.target.closest('[data-key]'); if (!d) return;
+  const k = d.dataset.key, order = S.labels.map(l => l.key);
+  if (e.shiftKey && labelAnchor) labelSel = new Set(rangeSelect(order, labelAnchor, k));
+  else if (e.ctrlKey || e.metaKey) { labelSel.has(k) ? labelSel.delete(k) : labelSel.add(k); labelAnchor = k; }
+  else { labelSel = new Set([k]); labelAnchor = k; }
+  showLabelText();
+});
+$('#d-labels').addEventListener('contextmenu', e => {
+  const d = e.target.closest('[data-key]'); if (!d) return; e.preventDefault();
+  if (!labelSel.has(d.dataset.key)) { labelSel = new Set([d.dataset.key]); showLabelText(); }
+  showMenu(e.clientX, e.clientY, [{ label: labelSel.size > 1 ? `Copy ${labelSel.size} labels` : 'Copy label', fn: copyLabels }]);
+});
+async function copyLabels() {
+  const d = curDoc(); if (!d || !labelSel.size) return;
+  const r = await api('POST', docUrl(S.slug, d.uuid, '/labels-yaml'), { keys: [...labelSel] });
+  copyText(r.text, `${labelSel.size} label(s) as YAML`);
+}
+$('#d-copylabels').onclick = copyLabels;
+async function refreshLabels() {
+  if (!S.cur) return;
+  const r = await api('GET', docUrl(S.slug, S.cur));
+  if (S.detail && S.detail.uuid === r.uuid) { S.detail.labels = r.labels; renderLabels(r.labels); }
+}
+
+// ── tag pills ────────────────────────────────────────────────────────────────
+
+function renderPills() {
+  const box = $('#pills');
+  if (!S.slug) { box.replaceChildren(); return; }
+  const own = S.registry.filter(t => t.startsWith(S.slug + '.'));
+  const carried = new Set(S.detail ? splitTags($('#d-tags').value) : []);
+  const pills = tagCounts(S.docs, own).map(([t, n]) => {
+    const short = t.startsWith(S.slug + '.') ? t.slice(S.slug.length + 1) : t;
+    const b = el('button', { class: 'pill' + (S.tagFilter.has(t) ? ' active' : '') + (carried.has(t) ? ' carried' : ''), draggable: 'true', text: `${short} × ${n}`,
+      title: `${t}\n` + (curDoc() ? `Click: ${carried.has(t) ? 'remove from' : 'add to'} the selected doc · Alt/right-click: docs with this tag` : 'Click: filter · Alt/right-click: docs with this tag') });
+    b.onclick = e => { if (e.altKey) return pillDocs(t, e); pillClick(t); };
+    b.oncontextmenu = e => { e.preventDefault(); pillDocs(t, e); };
+    b.ondragstart = e => { e.dataTransfer.setData('application/x-evid-tag', t); e.dataTransfer.effectAllowed = 'copy'; };
+    return b;
+  });
+  const nb = el('button', { class: 'pill new', text: '+ new tag', title: 'New tag (on the selected doc, if any)' });
+  nb.onclick = newTag;
+  box.replaceChildren(...pills, nb);
+}
+async function pillClick(t) {
+  const d = curDoc();
+  if (!d) return toggleFilter(t);
+  const has = d.tags.includes(t);
+  await api('POST', setUrl(S.slug, '/tag'), { uuids: [d.uuid], tag: t, remove: has });
+  status(has ? `Removed '${t}'` : `Tagged with '${t}'`, 2500); await afterTagChange();
+}
+function toggleFilter(t) {
+  S.tagFilter.has(t) ? S.tagFilter.delete(t) : S.tagFilter.add(t);
+  renderDocs(); renderPills(); renderSets();
+  status(S.tagFilter.size ? `Filter: ${[...S.tagFilter].join(' + ')}` : 'Filter cleared', 2500);
+}
+function pillDocs(t, e) {
+  const docs = S.docs.filter(d => d.tags.includes(t));
+  showMenu(e.clientX, e.clientY, [
+    { label: S.tagFilter.has(t) ? `Stop filtering by ${t}` : `Filter by ${t}`, fn: () => toggleFilter(t) }, '-',
+    ...(docs.length ? docs.map(d => ({ label: d.label, fn: () => showInDocs(d.uuid) })) : [{ label: '(no documents)', off: true }])]);
+}
+async function newTag() {
+  const name = await promptDlg('New tag', curDoc() ? 'Tag name (added to the selected doc):' : 'Tag name:');
+  if (!name) return;
+  const d = curDoc();
+  if (d) { const r = await api('POST', setUrl(S.slug, '/tag'), { uuids: [d.uuid], tag: name }); status(`Tagged with '${r.tag}'`, 2500); }
+  else { const r = await api('POST', '/api/tags', { slug: S.slug, name }); status(`Created tag '${r.tag}'`, 2500); }
+  await afterTagChange();
+}
+
+function showInDocs(uuid) {
+  switchView('docs');
+  if (!visibleDocs().some(d => d.uuid === uuid)) { $('#filter').value = ''; S.tagFilter = new Set(); renderPills(); renderSets(); }
+  S.sel = new Set([uuid]); S.anchor = uuid;
+  renderDocs(); setCur(uuid);
+}
+
+// ── ingest ───────────────────────────────────────────────────────────────────
+
+function needSet() { if (!S.slug) { alertDlg('No set', 'Select an evidence set first.'); return false; } return true; }
+
+function addDocDialog(meta, title) {
+  const f = {};
+  const mk = (k, v) => (f[k] = el('input', { value: v || '', style: 'width:100%', 'data-tags': k === 'tags' ? '1' : null }));
+  const rows = [['Title', 'title'], ['Authors', 'authors'], ['Dates', 'dates'], ['Tags', 'tags'], ['Label', 'label'], ['URL', 'url']];
+  const form = el('div', { class: 'form' }, ...rows.flatMap(([l, k]) => [el('label', { text: l }), mk(k, meta[k])]));
+  const prev = el('pre', { class: 'box' });
+  const upd = () => { prev.textContent = rows.map(([, k]) => `${(k + ':').padEnd(9)}${f[k].value}`).join('\n'); };
+  form.addEventListener('input', upd); upd();
+  const openLab = el('input', { type: 'checkbox', checked: true });
+  const file = el('div', { class: 'row' }, el('span', { class: 'mono', style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: meta.path, text: meta.path }),
+    el('button', { text: 'View', onclick: () => api('POST', '/api/open-path', { path: meta.path }).catch(e => status(e.message, 5000, true)) }));
+  return dialog(title || 'Add document', [file, form, el('label', { class: 'muted', text: 'Preview:' }), prev, el('label', {}, openLab, ' Open in labeller after adding')],
+    [{ label: 'Cancel', value: () => null }, { label: 'Add', primary: true, value: () => ({ ...Object.fromEntries(rows.map(([, k]) => [k, f[k].value.trim()])), tags: splitTags(f.tags.value), path: meta.path, token: meta.token, openLabel: openLab.checked }) }]);
+}
+
+async function ingestPdf() {
+  if (!needSet()) return;
+  const paths = await pickPaths({ pdf: true, multi: true, title: 'Select PDFs' });
+  if (!paths || !paths.length) return;
+  if (paths.length === 1) {
+    let meta;
+    try { meta = await api('POST', '/api/ingest/meta', { path: paths[0] }); } catch (e) { return alertDlg('Cannot read PDF', e.message); }
+    const v = await addDocDialog(meta);
+    if (v) startIngest(v);
+    return;
+  }
+  const tags = el('input', { 'data-tags': '1', style: 'width:100%', placeholder: 'tags for every file' });
+  const openLab = el('input', { type: 'checkbox' });
+  const res = await dialog(`Add ${paths.length} PDFs`, [
+    el('div', { class: 'list', style: 'max-height:180px' }, ...paths.map(p => el('div', { class: 'mono', title: p, text: p.split('/').pop() }))),
+    el('div', { class: 'muted', text: 'Title, authors and date are read from each PDF.' }), el('label', { text: 'Tags:' }), tags,
+    el('label', {}, openLab, ' Open each in the labeller after adding')],
+    [{ label: 'Cancel', value: () => null }, { label: 'Add all', primary: true, value: () => ({ tags: splitTags(tags.value), openLabel: openLab.checked }) }]);
+  if (!res) return;
+  for (const p of paths) {
+    try {
+      const meta = await api('POST', '/api/ingest/meta', { path: p });
+      startIngest({ ...meta, tags: res.tags, url: '', openLabel: res.openLabel });
+    } catch (e) { status(`${p}: ${e.message}`, 6000, true); }
+  }
+}
+
+async function startIngest(v) {
+  const slug = S.slug;
+  status(`Adding ${v.path.split('/').pop()}…`);
+  try {
+    const { job } = await api('POST', '/api/ingest', { slug, ...v });
+    const r = await waitJob(job);
+    await loadDocs(true);
+    if (r.existing) { status(`Already in set: ${r.uuid.slice(0, 8)}`, 4000); return; }
+    status(`Added ${r.uuid.slice(0, 8)}`, 3000);
+    if (v.openLabel && S.slug === slug) { showInDocs(r.uuid); labelDoc(slug, r.uuid); }
+  } catch (e) { status(''); await alertDlg('Ingest failed', e.message); }
+}
+
+async function addFromUrl() {
+  if (!needSet()) return;
+  const url = await promptDlg('Add from URL', 'URL:');
+  if (!url) return;
+  let job;
+  try { ({ job } = await api('POST', '/api/fetch', { url })); } catch (e) { return alertDlg('URL fetch failed', e.message); }
+  let cancelled = false;
+  dialog('Downloading', el('div', { class: 'row' }, el('span', { class: 'spinner' }), ' Fetching URL…'), [{ label: 'Cancel', value: () => { cancelled = true; api('POST', `/api/jobs/${job}/cancel`, {}); return null; } }]);
+  try {
+    const r = await waitJob(job);
+    if (!cancelled) closeDialog(null);
+    if (!r || cancelled) return;
+    const v = await addDocDialog(r, 'Add document from URL');
+    if (v) startIngest(v);
+  } catch (e) { if (!cancelled) { closeDialog(null); await alertDlg('URL fetch failed', e.message); } }
+}
+
+async function indexDocs() {
+  if (!CFG.has_vec) return alertDlg('Vector index', CFG.vec_install);
+  if (!needSet()) return;
+  try {
+    const r = await api('POST', setUrl(S.slug, '/index'), {});
+    if (!r.queued) return alertDlg('All indexed', 'All documents are already indexed.');
+    status(`Indexing ${r.queued} document(s) in background…`);
+  } catch (e) { alertDlg('Index failed', e.message); }
+}
+
+async function labelDoc(slug, uuid) {
+  status('Opening label.typ…');
+  try {
+    const { job } = await api('POST', docUrl(slug, uuid, '/label'), { editor: true });
+    await waitJob(job);
+    status(`Editing label.typ in ${CFG.editor} — every save rebuilds the labels`, 6000);
+  } catch (e) { status(e.message, 8000, true); }
+}
+
+// ── in-page label.typ editor ─────────────────────────────────────────────────
+
+const ed = $('#ed');
+function edMsg(m, err) { const e = $('#edmsg'); e.textContent = m || ''; e.className = err ? 'err' : ''; }
+const edDirty = () => !!S.ed && ed.value !== S.ed.orig;
+function edMark() { $('#tab-label').firstChild.textContent = edDirty() ? 'Label •' : 'Label'; }
+async function openEditor(slug, uuid) {
+  if (S.ed && edDirty() && (S.ed.uuid !== uuid) && !(await confirmDlg('Unsaved label.typ', 'Discard your unsaved changes to the open label.typ?', 'Discard'))) return;
+  const doc = S.byUuid.get(uuid) || { label: uuid };
+  let r = await api('GET', docUrl(slug, uuid, '/typ'));
+  if (!r.exists) {
+    status('Generating label.typ…');
+    try { const { job } = await api('POST', docUrl(slug, uuid, '/label'), { editor: false }); await waitJob(job); }
+    catch (e) { status(e.message, 8000, true); return; }
+    status('', 0);
+    r = await api('GET', docUrl(slug, uuid, '/typ'));
+  }
+  S.ed = { slug, uuid, mtime: r.mtime, orig: r.content, path: r.path };
+  ed.value = r.content; ed.scrollTop = 0;
+  $('#edtitle').textContent = doc.label; $('#edpath').textContent = r.path; $('#edpath').title = r.path;
+  $('#edbanner').classList.remove('on'); edMsg(''); edMark();
+  $('#tab-label').hidden = false; switchView('label'); ed.focus();
+  edLabels();
+}
+async function edLabels() {
+  if (!S.ed) return;
+  const r = await api('GET', docUrl(S.ed.slug, S.ed.uuid));
+  const box = $('#ed-labels');
+  $('#ed-nlabels').textContent = r.labels.length ? `(${r.labels.length})` : '';
+  box.replaceChildren(...(r.labels.length ? r.labels.map(l => el('div', { title: labelPreview(l), text: l.key, onclick: () => edFind(l) })) : [el('div', { class: 'empty', text: '(none yet)' })]));
+}
+function edFind(l) {
+  const v = ed.value; let i = v.indexOf(l.key);
+  if (i < 0 && l.text) i = v.indexOf(l.text.slice(0, 40));
+  if (i < 0) { edMsg(`'${l.key}' not found in the text`, true); return; }
+  ed.focus(); ed.setSelectionRange(i, i + l.key.length);
+  const line = v.slice(0, i).split('\n').length; ed.scrollTop = Math.max(0, (line - 5) * parseFloat(getComputedStyle(ed).lineHeight));
+}
+async function edSave(force) {
+  if (!S.ed) return;
+  edMsg('Saving…');
+  try {
+    const r = await api('PUT', docUrl(S.ed.slug, S.ed.uuid, '/typ'), { content: ed.value, mtime: S.ed.mtime, force: !!force });
+    S.ed.mtime = r.mtime; S.ed.orig = ed.value; edMark(); $('#edbanner').classList.remove('on');
+    edMsg(r.ok ? `Saved — ${r.labels.length} label(s)` : `Saved, but the labels did not rebuild: ${r.msg}`, !r.ok);
+    edLabels(); if (S.ed.slug === S.slug) { scheduleReload(); if (S.cur === S.ed.uuid) refreshLabels(); }
+  } catch (e) {
+    if (e.status === 409) { S.ed.disk = e.data; $('#edbanner-msg').textContent = 'label.typ changed on disk since you opened it.'; $('#edbanner').classList.add('on'); edMsg(''); }
+    else edMsg(e.message, true);
+  }
+}
+async function edDiskChanged() {
+  const r = await api('GET', docUrl(S.ed.slug, S.ed.uuid, '/typ'));
+  if (!r.exists || r.mtime === S.ed.mtime) return;
+  if (r.content === S.ed.orig) { S.ed.mtime = r.mtime; return; }  // touched, not changed
+  if (!edDirty()) { const pos = ed.selectionStart, top = ed.scrollTop; S.ed.mtime = r.mtime; S.ed.orig = r.content; ed.value = r.content; ed.setSelectionRange(pos, pos); ed.scrollTop = top; edMark(); edLabels(); edMsg('Reloaded (saved in your editor)'); return; }
+  S.ed.disk = r; $('#edbanner-msg').textContent = 'label.typ was saved elsewhere while you have unsaved changes here.'; $('#edbanner').classList.add('on');
+}
+$('#ed-save').onclick = () => edSave(false);
+$('#ed-keep').onclick = () => edSave(true);
+$('#ed-take').onclick = () => { const d = S.ed.disk; if (!d) return; S.ed.mtime = d.mtime; S.ed.orig = d.content; ed.value = d.content; edMark(); $('#edbanner').classList.remove('on'); edLabels(); };
+$('#ed-reload').onclick = async () => { if (edDirty() && !(await confirmDlg('Reload', 'Discard your unsaved changes?', 'Discard'))) return; const s = S.ed; S.ed.orig = ed.value; openEditor(s.slug, s.uuid); };
+$('#ed-ext').onclick = () => S.ed && labelDoc(S.ed.slug, S.ed.uuid);
+ed.addEventListener('input', edMark);
+ed.addEventListener('keydown', e => {
+  if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) { e.preventDefault(); const s = ed.selectionStart; ed.setRangeText('  ', s, ed.selectionEnd, 'end'); edMark(); }
+});
+$('#tab-label-x').onclick = async e => {
+  e.stopPropagation();
+  if (edDirty() && !(await confirmDlg('Close label editor', 'Discard your unsaved changes to label.typ?', 'Discard'))) return;
+  S.ed = null; $('#tab-label').hidden = true; switchView('docs');
+};
+
+// ── search ───────────────────────────────────────────────────────────────────
+
+function setSkind(k) {
+  if (k === 'vec' && !CFG.has_vec) return;
+  S.skind = k; store('skind', k);
+  $$('.subtabs button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
+  $$('.sform').forEach(f => f.classList.toggle('on', f.dataset.k === k));
+  const q = $(`#q-${k}`); if (S.view === 'search') q.focus();
+}
+$$('.subtabs button').forEach(b => b.onclick = () => setSkind(b.dataset.k));
+if (!CFG.has_vec) { $('#st-vec').disabled = true; $('#st-vec').title = CFG.vec_install; }
+$$('.sform').forEach(f => {
+  $('.go', f).onclick = () => runSearch(f.dataset.k);
+  $$('input', f).forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runSearch(f.dataset.k); } }));
+});
+
+function searchReq(kind) {
+  const n = k => Math.max(1, Math.min(100, parseInt($(`#n-${k}`).value, 10) || 10));
+  if (kind === 'meta') return { kind, slug: S.slug, pattern: $('#q-meta').value };
+  if (kind === 'vec') return { kind, slug: S.slug, query: $('#q-vec').value, n: n('vec') };
+  return { kind, slug: S.slug, query: $('#q-text').value, regex: $('#rx-text').checked, n: n('text') };
+}
+function runSearch(kind) {
+  if (!needSet()) return;
+  const req = searchReq(kind);
+  if (kind !== 'meta' && !req.query.trim()) { status('Type a query first', 3000); return; }
+  const go = searchSubmit(S.sq, req);
+  if (!go) { status('Search queued (replaces any earlier queued search)', 3000); return; }
+  execSearch(go);
+}
+async function execSearch(req) {
+  $$('.sform .go').forEach(b => b.disabled = true);
+  status(req.kind === 'vec' ? 'Searching (the first vector search loads the model)…' : 'Searching…');
+  try {
+    const res = await api('POST', `/api/search/${req.kind}`, req);
+    if (req.slug === S.slug) { S.sres = res.map(r => ({ ...r, kind: req.kind, q: req.query, rx: req.regex })); S.ssel = new Set(); S.scur = -1; renderSearch(); }
+    status(`${res.length} result(s)`, 3000);
+  } catch (e) { status(e.message, 8000, true); }
+  const next = searchDone(S.sq);
+  if (next) execSearch(next); else $$('.sform .go').forEach(b => b.disabled = false);
+}
+
+function renderSearch() {
+  const tb = $('#stbl tbody');
+  if (!S.sres.length) tb.replaceChildren(el('tr', { class: 'empty' }, el('td', { colspan: 4, text: '(No results)' })));
+  else tb.replaceChildren(...S.sres.map((r, i) => el('tr', { 'data-i': i, class: (S.ssel.has(i) ? 'sel ' : '') + (S.scur === i ? 'cur' : '') },
+    el('td', { text: r.score == null ? '—' : Number(r.score).toFixed(3) }), el('td', { text: r.label }),
+    el('td', { text: (r.chunk || r.snippet || '').slice(0, 120).replace(/\n/g, ' ') }), el('td', { class: 'uuid', text: r.uuid }))));
+  $('#s-count').textContent = S.ssel.size ? `${S.ssel.size} selected` : '';
+  renderPreview();
+}
+function renderPreview() {
+  const r = S.sres[S.scur];
+  for (const id of ['#p-view', '#p-copy', '#p-show']) $(id).disabled = !r;
+  const doc = r ? (S.byUuid.get(r.uuid) || r) : null;
+  $('#p-tags').textContent = doc && doc.tags && doc.tags.length ? doc.tags.join(', ') : '—';
+  $('#p-label').textContent = r ? r.label : '—'; $('#p-label').title = r ? r.label : '';
+  $('#p-score').textContent = r && r.score != null ? Number(r.score).toFixed(3) : '';
+  $('#p-uuid').textContent = r ? shortUuid(r.uuid) : '—'; $('#p-uuid').title = r ? r.uuid : '';
+  const t = $('#p-text'); t.replaceChildren(); $('#p-foot').textContent = '';
+  if (!r) return;
+  if (r.kind === 'vec') {
+    if (r.preview) t.append(r.preview.before, el('mark', { text: r.preview.match }), r.preview.after); else t.textContent = r.chunk;
+    $('#p-foot').textContent = `Source: ${r.label.slice(0, 60)}    Chunk ${r.chunk_idx}`;
+  } else if (r.kind === 'text') { t.append(...highlight(r.snippet, r.q, r.rx).map(([txt, hit]) => hit ? el('mark', { text: txt }) : txt)); $('#p-foot').textContent = `Page ${r.page}`; }
+  else {
+    t.textContent = 'Loading quotes…';
+    api('POST', setUrl(S.slug, '/quotes'), { uuids: [r.uuid], format: 'markdown' }).then(q => { if (S.sres[S.scur] === r) t.textContent = q.text || '(no citations — document not yet labelled)'; });
+  }
+}
+const stbody = $('#stbl tbody');
+function sSelect(i, ev) {
+  if (ev && ev.shiftKey && S.sanchor != null) { const [a, b] = [Math.min(S.sanchor, i), Math.max(S.sanchor, i)]; S.ssel = new Set(Array.from({ length: b - a + 1 }, (_, k) => a + k)); }
+  else if (ev && (ev.ctrlKey || ev.metaKey)) { S.ssel.has(i) ? S.ssel.delete(i) : S.ssel.add(i); S.sanchor = i; }
+  else { S.ssel = new Set([i]); S.sanchor = i; }
+  S.scur = i; renderSearch();
+  const tr = $(`#stbl tr[data-i="${i}"]`); if (tr) tr.scrollIntoView({ block: 'nearest' });
+}
+const sUuids = () => [...new Set([...S.ssel].sort((a, b) => a - b).map(i => S.sres[i].uuid))];
+stbody.addEventListener('click', e => { const tr = e.target.closest('tr[data-i]'); if (tr) { sSelect(+tr.dataset.i, e); $('#stbl').focus({ preventScroll: true }); } });
+stbody.addEventListener('dblclick', e => { const tr = e.target.closest('tr[data-i]'); if (tr) showInDocs(S.sres[+tr.dataset.i].uuid); });
+stbody.addEventListener('contextmenu', e => {
+  const tr = e.target.closest('tr[data-i]'); if (!tr) return; e.preventDefault();
+  if (!S.ssel.has(+tr.dataset.i)) sSelect(+tr.dataset.i);
+  showMenu(e.clientX, e.clientY, docMenu(S.slug, sUuids(), false));
+});
+$('#stbl').addEventListener('keydown', e => {
+  if (!S.sres.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sSelect(Math.max(0, Math.min(S.sres.length - 1, S.scur + (e.key === 'ArrowDown' ? 1 : -1)))); }
+  else if (e.key === 'Enter' && S.scur >= 0) showInDocs(S.sres[S.scur].uuid);
+});
+$('#p-copy').onclick = () => copyText(S.sres[S.scur].uuid, 'UUID');
+$('#p-show').onclick = () => showInDocs(S.sres[S.scur].uuid);
+$('#p-view').onclick = () => { const r = S.sres[S.scur]; const d = S.byUuid.get(r.uuid) || r; openDoc(S.slug, r.uuid, d.url ? 'url' : 'dir'); };
+
+// ── views, keys, help ────────────────────────────────────────────────────────
+
+function switchView(v) {
+  S.view = v;
+  $$('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === v));
+  $$('.view').forEach(x => x.classList.toggle('on', x.id === v));
+  if (v === 'search') { const q = $(`#q-${S.skind}`); if (q) q.focus(); }
+  if (v === 'docs') $('#dtbl').focus({ preventScroll: true });
+}
+$$('.tab').forEach(t => t.onclick = () => switchView(t.dataset.view));
+
+const HELP = `<p>Humans and agents share one legal document set. Cited wording is always verbatim.</p>
+<p><b>Tabs</b><br>Docs — ingest, label, tags<br>Search — vector, meta, full-text<br>Label — edit a document's label.typ here (opens from <i>Edit .typ</i>)</p>
+<p><b>Keys</b></p><table>
+<tr><td><kbd>Ctrl+PgUp</kbd> / <kbd>Ctrl+PgDn</kbd></td><td>cycle tabs</td></tr>
+<tr><td><kbd>/</kbd></td><td>filter documents</td></tr>
+<tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Shift</kbd> <kbd>Ctrl+A</kbd></td><td>move / extend the selection</td></tr>
+<tr><td><kbd>Enter</kbd> (table)</td><td>label in your editor</td></tr>
+<tr><td><kbd>Delete</kbd></td><td>delete the selected documents</td></tr>
+<tr><td><kbd>Ctrl+S</kbd></td><td>save the detail pane / label.typ</td></tr>
+${CFG.app ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr>' : ''}
+<tr><td><kbd>F1</kbd></td><td>help</td></tr>
+<tr><td>drag rows onto a set</td><td>copy the documents there</td></tr>
+<tr><td>drag a tag pill onto a row</td><td>tag that document</td></tr></table>
+<p><b>Docs</b> — Ingest PDF · Add from URL · Index · Label (<span class="mono">#lab</span>) · Open dir</p>
+<p class="muted">Data: ${CFG.data_dir.replace(/&/g, '&amp;').replace(/</g, '&lt;')}<br>Editor: ${String(CFG.editor).replace(/</g, '&lt;')} (set <span class="mono">editor:</span> in evid.yml)</p>`;
+function help() { const d = el('div', { class: 'help' }); d.innerHTML = HELP; dialog('evid help', d, [{ label: 'Close', primary: true }]); }
+$('#b-help').onclick = help;
+
+document.addEventListener('keydown', e => {
+  if (dlg.open) return;
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if (e.key === 'F1') { e.preventDefault(); help(); }
+  else if (e.ctrlKey && (e.key === 'PageUp' || e.key === 'PageDown')) {
+    e.preventDefault();
+    const tabs = $$('.tab').filter(t => !t.hidden).map(t => t.dataset.view);
+    const i = tabs.indexOf(S.view);
+    switchView(tabs[(i + (e.key === 'PageDown' ? 1 : -1) + tabs.length) % tabs.length]);
+  } else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    if (S.view === 'label') edSave(false); else if (S.view === 'docs' && curDoc()) saveDetail();
+  } else if (CFG.app && e.ctrlKey && (e.key === 'w' || e.key === 'q')) {
+    e.preventDefault(); quitApp();
+  } else if (e.key === '/' && !typing && S.view === 'docs') { e.preventDefault(); $('#filter').focus(); $('#filter').select(); }
+  else if (e.key === 'Escape') hideMenu();
+});
+async function quitApp() {
+  const dirty = S.detailDirty || edDirty();
+  if (dirty && !(await confirmDlg('Quit evid', 'There are unsaved changes. Quit anyway?', 'Quit'))) return;
+  api('POST', '/api/quit', {}).catch(() => {});
+}
+window.addEventListener('beforeunload', e => { if (!CFG.app && (S.detailDirty || edDirty())) { e.preventDefault(); e.returnValue = ''; } });
+
+$('#b-newset').onclick = newSet;
+$('#b-import').onclick = importDir;
+$('#b-ingest').onclick = ingestPdf;
+$('#b-url').onclick = addFromUrl;
+$('#b-index').onclick = indexDocs;
+$('#b-label').onclick = () => curDoc() && labelDoc(S.slug, S.cur);
+$('#b-edit').onclick = () => curDoc() && openEditor(S.slug, S.cur);
+$('#b-opendir').onclick = () => curDoc() && openDoc(S.slug, S.cur, 'dir');
+$('#loghead').onclick = () => { const w = $('#logwrap'); w.classList.toggle('fold'); $('#logtw').textContent = w.classList.contains('fold') ? '▸' : '▾'; store('logopen', !w.classList.contains('fold')); };
+if (load('logopen', false)) $('#loghead').click();
+
+// detail pane width
+(function () {
+  const det = $('#detail'), w = load('detailw', 380); det.style.width = w + 'px';
+  $('#split').addEventListener('mousedown', e => {
+    e.preventDefault(); const x0 = e.clientX, w0 = det.offsetWidth;
+    const mv = ev => { det.style.width = Math.max(260, Math.min(innerWidth * 0.6, w0 - (ev.clientX - x0))) + 'px'; };
+    const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); store('detailw', det.offsetWidth); };
+    addEventListener('mousemove', mv); addEventListener('mouseup', up);
+  });
+})();
+
+// ── start ────────────────────────────────────────────────────────────────────
+
+(async function start() {
+  $('#datadir').textContent = CFG.data_dir; $('#datadir').title = CFG.data_dir;
+  $('#ver').textContent = CFG.version ? 'v' + CFG.version : '';
+  setSkind(CFG.has_vec ? load('skind', 'vec') : 'meta');
+  updateActions(); renderSearch();
+  try {
+    const r = await api('GET', '/api/events?since=0');  // replay the log only
+    for (const e of r.events) if (e.kind === 'log') addLog(e);
+    S.evSince = r.last;
+  } catch (e) { status(e.message, 0, true); }
+  poll();
+  try { S.registry = await api('GET', '/api/tags'); } catch (e) { status(e.message, 6000, true); }
+  await loadSets();
+  $('#dtbl').focus({ preventScroll: true });
+})();
+</script>
+</body>
+</html>

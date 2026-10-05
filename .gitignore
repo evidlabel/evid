@@ -42,3 +42,7 @@ scripts/*
 .vscode/
 clean.sh
 .github/workflows/screenshots.yml
+
+# Tauri window (app/): build output
+app/target/
+app/gen/

@@ -36,7 +36,7 @@ A candidate is one span on one page of that uuid's text. A folio (standalone pag
 
 ## Install
 
-`uv tool install "evid @ git+https://github.com/evidlabel/evid.git"` (CLI + MCP; Python ≥ 3.12; `typst` on PATH for label and gather). Extras: `evid[gui]`, `evid[vec]`, `evid[all]`.
+`uv tool install "evid @ git+https://github.com/evidlabel/evid.git"` (CLI + MCP; Python ≥ 3.12; `typst` on PATH for label and gather). Extra: `evid[vec]` (vector search). `evid gui` opens the GUI (evid-app window, else the browser).
 
 ## Done
 

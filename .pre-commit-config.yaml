@@ -1,4 +1,4 @@
-default_install_hook_types: [pre-commit, pre-push]
+default_install_hook_types: [pre-commit]
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -23,14 +23,7 @@ repos:
       - id: pytest
         name: pytest
         language: system
-        entry: bash -c 'HEADLESS=1 QT_QPA_PLATFORM=offscreen CI=true uv run --no-sync pytest -q --tb=short'
+        entry: bash -c 'uv run --no-sync pytest -q --tb=short'
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
-      - id: readme-gui-shots
-        name: README GUI screenshots
-        language: system
-        entry: bash -c 'QT_QPA_PLATFORM=offscreen HEADLESS=1 uv run python scripts/gui_readme_shots.py && git diff --exit-code -- assets/gui-docs.png assets/gui-search.png'
-        pass_filenames: false
-        always_run: true
-        stages: [pre-push]
