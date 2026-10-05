@@ -230,20 +230,3 @@ def quotes_markdown(workdirs) -> str:
         if chapter is not None:
             parts.append(chapter)
     return "\n\n".join(parts)
-
-
-def create_prompt(uuids, dataset, directory):
-    """Build a YAML quote prompt from evidence UUIDs and copy to clipboard."""
-    if not uuids:
-        logger.warning("No entries selected for prompt.")
-        return
-
-    md = quotes_yaml(directory / dataset / uuid for uuid in uuids)
-    if not md:
-        logger.warning("No labelled entries found — nothing to copy.")
-        return
-
-    from PySide6.QtWidgets import QApplication  # noqa: PLC0415, RUF100
-
-    QApplication.clipboard().setText(md)
-    logger.info("Prompt copied to clipboard.")
