@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from evid.models import Document
+from evid.models import Document, _join_if_list
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,8 @@ def load_document(doc_dir: Path, doc_uuid: str | None = None) -> Document:
         indexed=meta.get("indexed", False),
         notes=meta.get("notes", ""),
         source_url=info.get("url") or "",
+        authors=_join_if_list(info.get("authors", info.get("author", ""))),
+        dates=_join_if_list(info.get("dates", "")),
     )
 
 

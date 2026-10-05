@@ -65,11 +65,11 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 .view { flex: 1; min-height: 0; display: none; }
 .view.on { display: flex; }
 #docs { flex-direction: row; }
-#docsleft { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 8px; gap: 6px; }
+#docsleft { width: 480px; flex: none; display: flex; flex-direction: column; min-width: 0; padding: 8px; gap: 6px; }
 .toolbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .split-v { width: 5px; cursor: col-resize; background: transparent; flex: none; }
 .split-v:hover { background: var(--line); }
-#rpane { width: 380px; flex: none; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
+#rpane { flex: 1; min-width: 300px; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
 .ptabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); background: var(--panel2); flex: none; }
 .ptabs button { border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; background: transparent; padding: 3px 12px; }
 .ptabs button.on { background: var(--panel); border-color: var(--line); margin-bottom: -1px; font-weight: 600; }
@@ -86,8 +86,6 @@ table.tbl { width: 100%; border-collapse: collapse; user-select: none; }
 .tbl tr.droptag td { background: color-mix(in srgb, var(--pill-carried) 70%, transparent); }
 .tbl tbody tr:hover:not(.sel) td { background: var(--hover); }
 .tbl .c { text-align: center; width: 26px; }
-#docs.labelling #dtbl col.opt { width: 0 !important; }
-#docs.labelling #dtbl th:nth-child(n+4), #docs.labelling #dtbl td:nth-child(n+4) { display: none; }
 .tbl .uuid, .mono { font-family: var(--mono); font-size: 12px; }
 .tbl .empty td { color: var(--muted); text-align: center; padding: 18px; }
 .legend { color: var(--muted); font-size: 11px; }
@@ -229,10 +227,10 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
           <input id="filter" placeholder="Filter by title or UUID…  ( / )" style="flex:1; min-width:160px">
         </div>
         <div class="tblwrap"><table class="tbl" id="dtbl" tabindex="0">
-          <colgroup><col style="width:28px"><col style="width:28px"><col><col class="opt" style="width:92px"><col class="opt" style="width:230px"></colgroup>
-          <thead><tr><th class="c" title="PDF fetched">F</th><th class="c" title="Labelled (label.json)">J</th><th>Label</th><th>Added</th><th>UUID</th></tr></thead>
+          <colgroup><col style="width:28%"><col><col style="width:88px"></colgroup>
+          <thead><tr><th>Author</th><th>Label</th><th title="The document's date (else the date it was added, in italics)">Date</th></tr></thead>
           <tbody></tbody></table></div>
-        <div class="legend">✓ F = Fetched &nbsp; ✓ J = Indexed (JSON) &nbsp;·&nbsp; <span id="count"></span></div>
+        <div class="legend"><span id="count"></span> · drag the divider to widen the list</div>
       </div>
       <div class="split-v" id="split"></div>
       <div id="rpane">
@@ -789,12 +787,12 @@ function renderDocs(msg) {
   const docs = msg ? [] : visibleDocs();
   $('#count').textContent = S.slug ? `${docs.length} of ${S.docs.length} document(s)` : '';
   if (!docs.length) {
-    tb.replaceChildren(el('tr', { class: 'empty' }, el('td', { colspan: 5, text: msg || (S.slug ? (S.docs.length ? '(No documents match the filter)' : '(No documents in this set)') : '(Create or pick a set)') })));
+    tb.replaceChildren(el('tr', { class: 'empty' }, el('td', { colspan: 3, text: msg || (S.slug ? (S.docs.length ? '(No documents match the filter)' : '(No documents in this set)') : '(Create or pick a set)') })));
   } else {
     tb.replaceChildren(...docs.map(d => {
       const tr = el('tr', { 'data-uuid': d.uuid, class: (S.sel.has(d.uuid) ? 'sel ' : '') + (S.cur === d.uuid ? 'cur' : ''), draggable: 'true', title: `${d.label}\n${d.uuid}` + (d.tags.length ? '\nTags: ' + d.tags.join(', ') : '') },
-        el('td', { class: 'c', text: d.has_pdf ? '✓' : '' }), el('td', { class: 'c', text: d.has_json ? '✓' : '' }),
-        el('td', { text: d.label }), el('td', { text: d.added }), el('td', { class: 'uuid', text: d.uuid }));
+        el('td', { class: 'muted', text: d.authors }), el('td', { text: d.label }),
+        d.dates ? el('td', { text: d.dates }) : el('td', { class: 'muted', style: 'font-style:italic', text: d.added }));
       return tr;
     }));
   }
@@ -1316,12 +1314,9 @@ function switchPane(p) {
   S.pane = p; store('pane', p);
   $$('.ptabs button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
   $$('.pview').forEach(v => v.classList.toggle('on', v.id === p));
-  $('#rpane').style.width = paneWidth() + 'px';
-  $('#docs').classList.toggle('labelling', p === 'label');  // titles get the room; UUID is in the row tooltip
   if (p === 'label') edLoad(S.slug, S.cur, false);
 }
 $$('.ptabs button').forEach(b => b.onclick = () => switchPane(b.dataset.p));
-const paneWidth = () => S.pane === 'label' ? load('labelw', Math.round(innerWidth * 0.5)) : load('detailw', 380);
 async function edLabels() {
   if (!S.ed) return;
   const r = await api('GET', docUrl(S.ed.slug, S.ed.uuid));
@@ -1568,13 +1563,13 @@ $('#b-opendir').onclick = () => curDoc() && openDoc(S.slug, S.cur, 'dir');
 $('#loghead').onclick = () => { const w = $('#logwrap'); w.classList.toggle('fold'); $('#logtw').textContent = w.classList.contains('fold') ? '▸' : '▾'; store('logopen', !w.classList.contains('fold')); };
 if (load('logopen', false)) $('#loghead').click();
 
-// detail pane width
+// document list width: the list stays narrow, the Detail / Label pane takes the rest
 (function () {
-  const det = $('#rpane');
+  const list = $('#docsleft'); list.style.width = load('listw', 480) + 'px';
   $('#split').addEventListener('mousedown', e => {
-    e.preventDefault(); const x0 = e.clientX, w0 = det.offsetWidth;
-    const mv = ev => { det.style.width = Math.max(260, Math.min(innerWidth * 0.8, w0 - (ev.clientX - x0))) + 'px'; };
-    const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); store(S.pane === 'label' ? 'labelw' : 'detailw', det.offsetWidth); };
+    e.preventDefault(); const x0 = e.clientX, w0 = list.offsetWidth;
+    const mv = ev => { list.style.width = Math.max(320, Math.min(innerWidth - 560, w0 + (ev.clientX - x0))) + 'px'; };
+    const up = () => { removeEventListener('mousemove', mv); removeEventListener('mouseup', up); store('listw', list.offsetWidth); };
     addEventListener('mousemove', mv); addEventListener('mouseup', up);
   });
 })();

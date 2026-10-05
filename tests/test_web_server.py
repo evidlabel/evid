@@ -121,6 +121,7 @@ def test_sets_and_docs(server, doc):
     rows = call(server, "GET", "/api/sets/case/docs")[1]
     assert len(rows) == 1 and rows[0]["uuid"] == doc
     assert rows[0]["has_pdf"] and rows[0]["tags"] == ["case.x"]
+    assert "authors" in rows[0] and "dates" in rows[0]
     d = call(server, "GET", f"/api/sets/case/docs/{doc}")[1]
     assert d["title"] == "A title" and d["labels"] == []
     status, d = call(
@@ -513,3 +514,14 @@ def test_doc_files_list_and_open(server, doc, app, monkeypatch):
         )[0]
         == 400
     )
+
+
+def test_doc_rows_carry_author_and_date(server, doc):
+    call(
+        server,
+        "PUT",
+        f"/api/sets/case/docs/{doc}",
+        {"authors": "Dr. A", "dates": "2024-03-12"},
+    )
+    row = call(server, "GET", "/api/sets/case/docs")[1][0]
+    assert (row["authors"], row["dates"]) == ("Dr. A", "2024-03-12")

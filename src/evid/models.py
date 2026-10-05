@@ -35,6 +35,8 @@ class Document:
     indexed: bool = False
     notes: str = ""
     source_url: str = ""
+    authors: str = ""
+    dates: str = ""
 
 
 @dataclass

@@ -31,7 +31,7 @@ def collect_documents(set_manager: SetManager, slug: str) -> list[Document]:
     libyaml loader because this parses one YAML file per document.
     """
     from evid.core.evid_meta import read_meta
-    from evid.models import Document
+    from evid.models import Document, _join_if_list
     from evid.utils.yaml_io import load_yaml
 
     docs: list[Document] = []
@@ -77,6 +77,8 @@ def collect_documents(set_manager: SetManager, slug: str) -> list[Document]:
                     indexed=meta.get("indexed", False),
                     notes=meta.get("notes", ""),
                     source_url=info.get("url", ""),
+                    authors=_join_if_list(info.get("authors", info.get("author", ""))),
+                    dates=_join_if_list(info.get("dates", "")),
                 )
             )
         except Exception:

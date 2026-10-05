@@ -140,6 +140,8 @@ def doc_row(doc) -> dict:
         "added": doc.added.strftime("%Y-%m-%d"),
         "indexed": bool(doc.indexed),
         "url": str(doc.source_url or ""),
+        "authors": str(doc.authors or ""),
+        "dates": str(doc.dates or ""),
         "has_pdf": resolve_doc_pdf(doc.path) is not None,
         "has_json": (doc.path / "label.json").exists(),
     }
