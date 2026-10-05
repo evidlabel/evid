@@ -143,6 +143,9 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 #edtitle { flex: 1; }
 #edbox { flex: 1; position: relative; min-height: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); overflow: hidden; }
 #ed, #edhl { position: absolute; inset: 0; margin: 0; border: 0; font: 13px/1.5 var(--mono); tab-size: 2; white-space: pre; padding: 8px; letter-spacing: 0; }
+#edbox.wrap #ed, #edbox.wrap #edhl { white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
+#edbox.wrap #ed { overflow-x: hidden; }
+#ed-wrap.on { background: var(--sel); }
 #ed { resize: none; background: transparent; color: transparent; caret-color: var(--fg); z-index: 1; border-radius: 5px; overflow: auto; }
 #ed::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); color: transparent; }
 #ed:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -264,6 +267,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
         <div id="edhead"><span id="edtitle"></span>
           <button id="ed-lab" title="Wrap the selected text in a #lab label (Ctrl+L)">+ Label</button>
           <button id="ed-ext" title="Open in your editor (saves there rebuild the labels too)">Editor</button>
+          <button id="ed-wrap" title="Wrap long lines">Wrap</button>
           <button id="ed-reload" title="Reload from disk">↻</button>
           <button class="primary" id="ed-save" title="Save and rebuild the labels (Ctrl+S; also happens when you move to another doc)">Save</button>
           <span id="edpath"></span></div>
@@ -1237,9 +1241,30 @@ const edhl = $('#edhl');
 let edPaintReq = 0;
 function edPaint() {  // re-highlight on the next frame (coalesces fast typing)
   if (edPaintReq) return;
-  edPaintReq = requestAnimationFrame(() => { edPaintReq = 0; edhl.innerHTML = typHighlight(ed.value) + '\n '; edSync(); });
+  edPaintReq = requestAnimationFrame(() => { edPaintReq = 0; edhl.innerHTML = typHighlight(ed.value) + '\n '; edFit(); });
 }
 function edSync() { edhl.scrollTop = ed.scrollTop; edhl.scrollLeft = ed.scrollLeft; }
+// The highlight layer must wrap exactly where the textarea does: give it the same content
+// width by padding it on the right by the textarea's scrollbar.
+function edFit() {
+  const sb = ed.offsetWidth - ed.clientWidth;
+  edhl.style.paddingRight = `${8 + sb}px`;
+  edhl.style.paddingBottom = `${8 + (ed.offsetHeight - ed.clientHeight)}px`;
+  edSync();
+}
+function setWrap(on) {
+  $('#edbox').classList.toggle('wrap', on); $('#ed-wrap').classList.toggle('on', on);
+  ed.setAttribute('wrap', on ? 'soft' : 'off'); store('wrap', on); edFit();
+}
+new ResizeObserver(edFit).observe(ed);
+// Pixel offset of character `i` inside the editor (works with wrapped lines): measure it in the layer.
+function edOffsetTop(i) {
+  const keep = edhl.innerHTML;
+  edhl.innerHTML = escHtml(ed.value.slice(0, i)) + '<span id="edprobe">\u200b</span>';
+  const top = $('#edprobe').offsetTop;
+  edhl.innerHTML = keep;
+  return top;
+}
 // The label pane follows the selected doc. Leaving a doc with unsaved edits saves them.
 async function edLeave() {
   if (!edDirty()) return true;
@@ -1309,7 +1334,7 @@ function edFind(l) {
   if (i < 0 && l.text) i = v.indexOf(l.text.slice(0, 40));
   if (i < 0) { edMsg(`'${l.key}' not found in the text`, true); return; }
   ed.focus(); ed.setSelectionRange(i, i + l.key.length);
-  const line = v.slice(0, i).split('\n').length; ed.scrollTop = Math.max(0, (line - 5) * parseFloat(getComputedStyle(ed).lineHeight));
+  ed.scrollTop = Math.max(0, edOffsetTop(i) - 4 * parseFloat(getComputedStyle(ed).lineHeight));
 }
 async function edSave(force) {
   if (!S.ed) return;
@@ -1361,6 +1386,8 @@ $('#ed-reload').onclick = async () => { if (!S.ed) return; if (edDirty() && !(aw
 $('#ed-ext').onclick = () => S.ed && labelDoc(S.ed.slug, S.ed.uuid);
 ed.addEventListener('input', edMark);
 ed.addEventListener('scroll', edSync);
+$('#ed-wrap').onclick = () => setWrap(!$('#edbox').classList.contains('wrap'));
+setWrap(load('wrap', true));
 ed.addEventListener('keydown', e => {
   if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) { e.preventDefault(); const s = ed.selectionStart; ed.setRangeText('  ', s, ed.selectionEnd, 'end'); edMark(); }
 });
