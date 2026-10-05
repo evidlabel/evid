@@ -10,6 +10,8 @@
   --bg: #f6f6f4; --panel: #ffffff; --panel2: #efefec; --fg: #1d1d1b; --muted: #6b6b66;
   --line: #d9d9d4; --accent: #2f6fb3; --accent-fg: #ffffff; --sel: #d6e4f5; --hover: #ececea;
   --pill: #e7e7e3; --pill-active: #2f6fb3; --pill-carried: #c8e2c4; --mark: #ffe08a; --err: #b3261e; --ok: #2e7d32;
+  --hl-lab: #8a2be2; --hl-key: #b4530a; --hl-quote: #0d6b3f; --hl-quote-bg: #e3f4e9; --hl-note: #6b6b66;
+  --hl-head: #2f6fb3; --hl-hash: #a0306e; --hl-str: #7a5c00; --hl-com: #8c8c86;
   --mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
 }
 @media (prefers-color-scheme: dark) {
@@ -17,6 +19,8 @@
     --bg: #1b1c1e; --panel: #232427; --panel2: #2b2c30; --fg: #e4e4e1; --muted: #9a9a95;
     --line: #3a3b3f; --accent: #6aa4e0; --accent-fg: #0e1115; --sel: #2d4462; --hover: #2f3034;
     --pill: #34353a; --pill-active: #4d86c4; --pill-carried: #35553a; --mark: #8a6d1d; --err: #ff8a80; --ok: #81c784;
+    --hl-lab: #c792ea; --hl-key: #f0a35e; --hl-quote: #9be0b0; --hl-quote-bg: #203a2a; --hl-note: #9a9a95;
+    --hl-head: #82aaff; --hl-hash: #f07178; --hl-str: #ddc27a; --hl-com: #6f6f6a;
   }
 }
 * { box-sizing: border-box; }
@@ -116,7 +120,22 @@ pre.box { margin: 0; white-space: pre-wrap; word-break: break-word; border: 1px 
 #edhead { display: flex; gap: 6px; align-items: center; }
 #edtitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #edpath { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-#ed { flex: 1; resize: none; font: 13px/1.5 var(--mono); tab-size: 2; white-space: pre; padding: 8px; }
+#edbox { flex: 1; position: relative; min-height: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); overflow: hidden; }
+#ed, #edhl { position: absolute; inset: 0; margin: 0; border: 0; font: 13px/1.5 var(--mono); tab-size: 2; white-space: pre; padding: 8px; letter-spacing: 0; }
+#ed { resize: none; background: transparent; color: transparent; caret-color: var(--fg); z-index: 1; border-radius: 5px; overflow: auto; }
+#ed::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); color: transparent; }
+#ed:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+#edhl { overflow: hidden; color: var(--fg); pointer-events: none; }
+#edhl .lab { color: var(--hl-lab); font-weight: 700; }
+#edhl .lab-p { color: var(--hl-lab); }
+#edhl .key { color: var(--hl-key); font-weight: 700; }
+#edhl .quote { color: var(--hl-quote); background: var(--hl-quote-bg); border-radius: 3px; }
+#edhl .note { color: var(--hl-note); font-style: italic; }
+#edhl .head { color: var(--hl-head); font-weight: 700; }
+#edhl .page { color: var(--hl-head); background: color-mix(in srgb, var(--hl-head) 10%, transparent); font-weight: 700; }
+#edhl .hash { color: var(--hl-hash); }
+#edhl .str { color: var(--hl-str); }
+#edhl .com { color: var(--hl-com); font-style: italic; }
 #edbanner { display: none; padding: 6px 8px; border-radius: 5px; background: color-mix(in srgb, var(--mark) 60%, transparent); align-items: center; gap: 8px; }
 #edbanner.on { display: flex; }
 #edmsg { font-size: 12px; color: var(--muted); }
@@ -245,7 +264,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
           <button id="ed-reload">Reload</button>
           <button class="primary" id="ed-save" title="Ctrl+S">Save &amp; rebuild</button></div>
         <div id="edbanner"><span id="edbanner-msg">label.typ changed on disk.</span><span style="flex:1"></span><button id="ed-take">Load disk version</button><button id="ed-keep">Keep mine (overwrite)</button></div>
-        <textarea id="ed" spellcheck="false"></textarea>
+        <div id="edbox"><pre id="edhl" aria-hidden="true"></pre><textarea id="ed" spellcheck="false"></textarea></div>
         <div id="edmsg"></div>
       </div>
       <div id="edside">
@@ -346,6 +365,28 @@ function labKey(text, taken) {
 function labCall(key, text, note) {
   const q = v => '"' + String(v || '').replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
   return `#lab(${q(key)}, ${q(text)}, ${q(note)})`;
+}
+
+// Typst highlighting for the label editor, as escaped HTML. #lab("key", "quote", "note")
+// calls get their parts marked; headings, == Page N, #calls, strings and // comments too.
+const TYP_RX = /(#lab)(\s*\()(\s*)("(?:[^"\\\n]|\\.)*")(\s*,\s*)("(?:[^"\\]|\\.)*")(?:(\s*,\s*)("(?:[^"\\]|\\.)*"))?(\s*\))|(\/\/[^\n]*)|(^==\s*Page\s+\d+[^\n]*)|(^=+\s[^\n]*)|(#[A-Za-z_][\w-]*)|("(?:[^"\\\n]|\\.)*")/gm;
+function escHtml(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function typHighlight(text) {
+  const span = (cls, t) => t ? `<span class="${cls}">${escHtml(t)}</span>` : '';
+  let out = '', last = 0, m;
+  TYP_RX.lastIndex = 0;
+  while ((m = TYP_RX.exec(text))) {
+    out += escHtml(text.slice(last, m.index));
+    if (m[1]) out += span('lab', m[1]) + span('lab-p', m[2]) + escHtml(m[3]) + span('key', m[4]) + span('lab-p', m[5]) + span('quote', m[6])
+      + span('lab-p', m[7] || '') + span('note', m[8] || '') + span('lab-p', m[9]);
+    else if (m[10]) out += span('com', m[10]);
+    else if (m[11]) out += span('page', m[11]);
+    else if (m[12]) out += span('head', m[12]);
+    else if (m[13]) out += span('hash', m[13]);
+    else out += span('str', m[14]);
+    last = m.index + m[0].length;
+  }
+  return out + escHtml(text.slice(last));
 }
 
 function shortUuid(u) { return u.length > 16 ? u.slice(0, 8) + '…' + u.slice(-8) : u; }
@@ -1089,7 +1130,14 @@ async function labelDoc(slug, uuid) {
 const ed = $('#ed');
 function edMsg(m, err) { const e = $('#edmsg'); e.textContent = m || ''; e.className = err ? 'err' : ''; }
 const edDirty = () => !!S.ed && ed.value !== S.ed.orig;
-function edMark() { $('#tab-label').firstChild.textContent = edDirty() ? 'Label •' : 'Label'; }
+function edMark() { $('#tab-label').firstChild.textContent = edDirty() ? 'Label •' : 'Label'; edPaint(); }
+const edhl = $('#edhl');
+let edPaintReq = 0;
+function edPaint() {  // re-highlight on the next frame (coalesces fast typing)
+  if (edPaintReq) return;
+  edPaintReq = requestAnimationFrame(() => { edPaintReq = 0; edhl.innerHTML = typHighlight(ed.value) + '\n '; edSync(); });
+}
+function edSync() { edhl.scrollTop = ed.scrollTop; edhl.scrollLeft = ed.scrollLeft; }
 async function openEditor(slug, uuid) {
   if (S.ed && edDirty() && (S.ed.uuid !== uuid) && !(await confirmDlg('Unsaved label.typ', 'Discard your unsaved changes to the open label.typ?', 'Discard'))) return;
   const doc = S.byUuid.get(uuid) || { label: uuid };
@@ -1171,6 +1219,7 @@ $('#ed-lab').onclick = addLabel;
 $('#ed-reload').onclick = async () => { if (edDirty() && !(await confirmDlg('Reload', 'Discard your unsaved changes?', 'Discard'))) return; const s = S.ed; S.ed.orig = ed.value; openEditor(s.slug, s.uuid); };
 $('#ed-ext').onclick = () => S.ed && labelDoc(S.ed.slug, S.ed.uuid);
 ed.addEventListener('input', edMark);
+ed.addEventListener('scroll', edSync);
 ed.addEventListener('keydown', e => {
   if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) { e.preventDefault(); const s = ed.selectionStart; ed.setRangeText('  ', s, ed.selectionEnd, 'end'); edMark(); }
 });

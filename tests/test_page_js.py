@@ -24,6 +24,8 @@ FUNCS = [
     "highlight",
     "labKey",
     "labCall",
+    "escHtml",
+    "typHighlight",
 ]
 
 
@@ -41,6 +43,8 @@ def js_function(src: str, name: str) -> str:
 def js():
     src = (resources.files("evid.web") / "page.html").read_text("utf-8")
     lib = "\n".join(js_function(src, n) for n in FUNCS)
+    rx = src[src.index("const TYP_RX") :]
+    lib = rx[: rx.index("\n") + 1] + lib
 
     def run(expr: str):
         prog = lib + f"\nprocess.stdout.write(JSON.stringify((() => {{ {expr} }})()));"
@@ -180,4 +184,34 @@ def test_lab_call_escapes(js):
     assert (
         js("""return labCall('k', 'He said "no"\\nback\\\\slash', '');""")
         == '#lab("k", "He said \\"no\\" back\\\\slash", "")'
+    )
+
+
+def test_typ_highlight_marks_lab_parts(js):
+    html = js("""return typHighlight('x #lab("k-1", "a \\\\"q\\\\" <b>", "n") y');""")
+    assert '<span class="lab">#lab</span>' in html
+    assert '<span class="key">"k-1"</span>' in html
+    assert '<span class="quote">"a \\"q\\" &lt;b&gt;"</span>' in html
+    assert '<span class="note">"n"</span>' in html
+    assert html.startswith("x ") and html.endswith(" y")
+
+
+def test_typ_highlight_other_tokens(js):
+    src = '#import "@preview/labtyp:0.1.0": lab\\n= Title\\n== Page 3\\n// c\\n#lab("k", "two-arg")'
+    html = js(f"return typHighlight('{src}');")
+    assert (
+        '<span class="hash">#import</span>' in html
+        and '<span class="str">"@preview/labtyp:0.1.0"</span>' in html
+    )
+    assert (
+        '<span class="head">= Title</span>' in html
+        and '<span class="page">== Page 3</span>' in html
+    )
+    assert (
+        '<span class="com">// c</span>' in html
+        and '<span class="quote">"two-arg"</span>' in html
+    )
+    assert (
+        js("return typHighlight('plain <text> & more');")
+        == "plain &lt;text&gt; &amp; more"
     )
