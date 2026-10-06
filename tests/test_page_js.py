@@ -27,6 +27,7 @@ FUNCS = [
     "escHtml",
     "typHighlight",
     "keepOrder",
+    "isSaveKey",
 ]
 
 
@@ -223,3 +224,16 @@ def test_keep_order_on_reload(js):
         """return keepOrder(['a', 'b', 'c'], [{uuid: 'c'}, {uuid: 'n'}, {uuid: 'a'}]).map(d => d.uuid);"""
     )
     assert out == ["n", "a", "c"]  # new first, known keep their places, gone dropped
+
+
+def test_is_save_key(js):
+    cases = [
+        ("{ctrlKey: true, key: 's'}", True),
+        ("{ctrlKey: true, key: 'S', shiftKey: true}", True),  # Caps Lock / Shift
+        ("{metaKey: true, code: 'KeyS', key: 'ß'}", True),  # another layout
+        ("{key: 's'}", False),
+        ("{ctrlKey: true, altKey: true, key: 's'}", False),
+        ("{ctrlKey: true, key: 'l'}", False),
+    ]
+    for ev, want in cases:
+        assert js(f"return isSaveKey({ev});") is want, ev
