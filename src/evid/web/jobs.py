@@ -95,6 +95,7 @@ class Jobs:
             self._jobs[jid] = job
 
         def progress(msg: str) -> None:
+            logger.info("%s", msg)
             self._events.emit("job", job_id=jid, job=kind, state="running", msg=msg)
 
         def run() -> None:
@@ -112,10 +113,14 @@ class Jobs:
                 )
                 return
             job["state"] = "cancelled" if job["cancelled"] else "done"
+            if job["cancelled"]:
+                logger.info("%s: cancelled", label or kind)
             self._events.emit(
                 "job", job_id=jid, job=kind, state=job["state"], result=result
             )
 
+        if label:
+            logger.info("%s", label)
         self._events.emit("job", job_id=jid, job=kind, state="running", msg=label)
         threading.Thread(target=run, name=f"evid-{kind}-{jid}", daemon=True).start()
         return jid

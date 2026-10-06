@@ -79,6 +79,7 @@ class EvidApp:
         self._vec_lock = threading.Lock()
         self.index = IndexQueue(self.events, before_index=self._release_vec)
         self.temps: dict[str, object] = {}  # fetch token -> TemporaryDirectory
+        self._log_handler: logging.Handler | None = None
 
     # vec ------------------------------------------------------------------
 
@@ -118,7 +119,18 @@ class EvidApp:
         except ValueError as exc:
             raise HTTPError(400, str(exc)) from exc
 
+    def attach_log(self) -> None:
+        """Send evid's INFO+ log records to the page's log pane."""
+        evid_log = logging.getLogger("evid")
+        evid_log.setLevel(min(evid_log.getEffectiveLevel(), logging.INFO))
+        if self._log_handler is None:
+            self._log_handler = EventLogHandler(self.events)
+            evid_log.addHandler(self._log_handler)
+
     def shutdown(self) -> None:
+        if self._log_handler is not None:
+            logging.getLogger("evid").removeHandler(self._log_handler)
+            self._log_handler = None
         self.watcher.stop()
         self.index.stop()
         for tmp in self.temps.values():
@@ -128,6 +140,19 @@ class EvidApp:
 
 
 # ── serialisation ─────────────────────────────────────────────────────────────
+
+
+def doc_name(doc_dir: Path) -> str:
+    """'Label (uuid8)' for log lines."""
+    from evid.utils.yaml_io import load_yaml
+
+    try:
+        with (doc_dir / "info.yml").open(encoding="utf-8") as f:
+            info = load_yaml(f) or {}
+        label = str(info.get("label") or info.get("title") or "")
+    except (OSError, ValueError):
+        label = ""
+    return f"{label} ({doc_dir.name[:8]})" if label else doc_dir.name[:8]
 
 
 def doc_row(doc) -> dict:
@@ -299,12 +324,12 @@ class Handler(BaseHTTPRequestHandler):
                     return getattr(self, name)(**args)
             raise HTTPError(404, "no such endpoint")
         except HTTPError as e:
-            self.send_json(e.status, {"error": e.msg})
+            self.fail(method, u.path, e.status, e.msg)
         except FileNotFoundError as e:
-            self.send_json(404, {"error": str(e)})
+            self.fail(method, u.path, 404, str(e))
         except (PermissionError, FileExistsError, ValueError) as e:
-            self.send_json(
-                400 if not isinstance(e, PermissionError) else 403, {"error": str(e)}
+            self.fail(
+                method, u.path, 403 if isinstance(e, PermissionError) else 400, str(e)
             )
         except ConnectionError:
             pass  # the page went away
@@ -312,6 +337,12 @@ class Handler(BaseHTTPRequestHandler):
             logger.exception("%s %s failed", method, u.path)
             with contextlib.suppress(ConnectionError):
                 self.send_json(500, {"error": f"{type(e).__name__}: {e}"})
+
+    def fail(self, method: str, path: str, status: int, msg: str) -> None:
+        """Answer an error, and put it in the log pane (failed actions are not silent)."""
+        if path.startswith("/api/") and path != "/api/events":
+            logger.warning("%s %s failed: %s", method, path, msg)
+        self.send_json(status, {"error": msg})
 
     # page -----------------------------------------------------------------
 
@@ -423,6 +454,9 @@ class Handler(BaseHTTPRequestHandler):
         ]
         for d in todo:
             self.app.enqueue_index(d.path, es)
+        logger.info(
+            "Queued %d document(s) of '%s' for vector indexing", len(todo), slug
+        )
         self.send_json(200, {"queued": len(todo)})
 
     @route("POST", "/api/sets/{slug}/delete")
@@ -430,7 +464,9 @@ class Handler(BaseHTTPRequestHandler):
         uuids = list(self.body().get("uuids") or [])
         for u in uuids:
             _, d = self.app.doc_dir(slug, u)
+            name = doc_name(d)
             doc_ops.delete_doc(d)
+            logger.info("Deleted %s from '%s'", name, slug)
         self.app.events.emit("docs_changed", slug=slug)
         self.send_json(200, {"deleted": len(uuids)})
 
@@ -476,6 +512,13 @@ class Handler(BaseHTTPRequestHandler):
         for u in list(b.get("uuids") or []):
             _, d = self.app.doc_dir(slug, u)
             n += bool(fn(self.app.tags, es.slug, u, d / "info.yml", tag))
+        verb = (
+            "Removed tag %s from %d document(s)"
+            if b.get("remove")
+            else "Tagged %d document(s) with %s"
+        )
+        args = (tag, n) if b.get("remove") else (n, tag)
+        logger.info(verb, *args)
         self.send_json(200, {"tag": tag, "changed": n})
 
     # one document ---------------------------------------------------------
@@ -488,7 +531,9 @@ class Handler(BaseHTTPRequestHandler):
     @route("PUT", "/api/sets/{slug}/docs/{uuid}")
     def put_doc(self, slug: str, uuid: str):
         _, d = self.app.doc_dir(slug, uuid)
-        out = doc_ops.update_doc(d, self.body())
+        b = self.body()
+        out = doc_ops.update_doc(d, b)
+        logger.info("Saved details of %s", doc_name(d))
         self.send_json(200, {**out, "labels": label_rows(d)})
 
     @route("POST", "/api/sets/{slug}/docs/{uuid}/labels-yaml")
@@ -536,6 +581,7 @@ class Handler(BaseHTTPRequestHandler):
             err = open_local_path(d)
         if err:
             raise HTTPError(500, err)
+        logger.info("Opened %s of %s", b.get("path") or what, doc_name(d))
         self.send_json(200, {"ok": True})
 
     @route("PUT", "/api/sets/{slug}/docs/{uuid}/annotations")
@@ -545,7 +591,15 @@ class Handler(BaseHTTPRequestHandler):
 
         _, d = self.app.doc_dir(slug, uuid)
         b = self.body()
-        notes = write_annotation(d, str(b.get("path", ".")), str(b.get("text", "")))
+        path = str(b.get("path", "."))
+        notes = write_annotation(d, path, str(b.get("text", "")))
+        target = "the document" if path in ("", ".") else path
+        logger.info(
+            "%s note on %s of %s",
+            "Set" if str(b.get("text", "")).strip() else "Removed",
+            target,
+            doc_name(d),
+        )
         self.app.events.emit("docs_changed", slug=slug)
         self.send_json(200, {"annotations": notes})
 
@@ -624,6 +678,7 @@ class Handler(BaseHTTPRequestHandler):
         typ.write_text(str(b.get("content", "")), encoding="utf-8")
         self.app.watcher.watch(typ, slug, uuid)
         self.app.watcher.mark_seen(typ)
+        logger.info("Saved %s of %s", typ.name, doc_name(d))
         ok, msg = rebuild_labels(self.app.events, typ, slug, uuid)
         self.send_json(
             200,
@@ -650,6 +705,7 @@ class Handler(BaseHTTPRequestHandler):
             self.app.tags.get_tag(name)
         except KeyError:
             self.app.tags.create_tag(name, es.slug)
+            logger.info("Created tag %s", name)
         self.send_json(200, {"tag": name})
 
     # ingest ---------------------------------------------------------------
@@ -760,6 +816,17 @@ class Handler(BaseHTTPRequestHandler):
             if not existing:
                 app.enqueue_index(es.path / "docs" / doc.uuid, es)
             app.events.emit("docs_changed", slug=es.slug)
+            if existing:
+                logger.info(
+                    "%s is already in '%s' (%s)", pdf.name, es.slug, doc.uuid[:8]
+                )
+            else:
+                logger.info(
+                    "Added %s to '%s' as %s",
+                    pdf.name,
+                    es.slug,
+                    doc_name(es.path / "docs" / doc.uuid),
+                )
             return {"slug": es.slug, "uuid": doc.uuid, "existing": existing}
 
         self.send_json(
@@ -779,6 +846,12 @@ class Handler(BaseHTTPRequestHandler):
         b = self.body()
         es = self.app.evidence_set(str(b.get("slug", "")))
         docs = search_meta_documents(es.path, str(b.get("pattern", "")))
+        logger.info(
+            "Meta search %r in '%s': %d document(s)",
+            str(b.get("pattern", "")),
+            es.slug,
+            len(docs),
+        )
         self.send_json(200, [doc_row(d) for d in docs])
 
     @route("POST", "/api/search/vec")
@@ -789,6 +862,12 @@ class Handler(BaseHTTPRequestHandler):
         vec = self.app.vec()
         with self.app._vec_lock:
             results = vec.query(es, str(b.get("query", "")), n_results=n)
+        logger.info(
+            "Vector search %r in '%s': %d hit(s)",
+            str(b.get("query", "")),
+            es.slug,
+            len(results),
+        )
         out = []
         for r in results:
             out.append(
@@ -815,6 +894,12 @@ class Handler(BaseHTTPRequestHandler):
         n = max(1, min(100, int(b.get("n", 10) or 10)))
         hits = search_fulltext(
             es.path, str(b.get("query", "")), regex=bool(b.get("regex")), n=n
+        )
+        logger.info(
+            "Full-text search %r in '%s': %d hit(s)",
+            str(b.get("query", "")),
+            es.slug,
+            len(hits),
         )
         self.send_json(
             200,
@@ -1000,10 +1085,7 @@ def serve_gui(
         else lp.with_suffix(".raise")
     )
 
-    evid_log = logging.getLogger("evid")
-    evid_log.setLevel(min(evid_log.getEffectiveLevel(), logging.INFO))
-    handler = EventLogHandler(app.events)
-    evid_log.addHandler(handler)
+    app.attach_log()
 
     print(f"evid  {config.data_dir}\n  open {url}")
     exe = None if headless or browser else find_app()
@@ -1035,7 +1117,6 @@ def serve_gui(
         with contextlib.suppress(KeyboardInterrupt):
             srv.serve_forever()
     finally:
-        evid_log.removeHandler(handler)
         app.shutdown()
         srv.server_close()
         with contextlib.suppress(OSError):

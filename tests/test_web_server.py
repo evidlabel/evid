@@ -32,6 +32,7 @@ def app(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "run"))
     a = web.EvidApp(EvidConfig(data_dir=tmp_path / "data", editor="true"))
     a.has_vec = False
+    a.attach_log()
     yield a
     a.shutdown()
 
@@ -582,3 +583,19 @@ def test_annotations_api(server, doc, app):
         ".": "Key exhibit.",
         "original.pdf": "Signed copy.",
     }
+
+
+def test_actions_reach_the_log_pane(server, doc):
+    call(server, "POST", "/api/sets/case/tag", {"uuids": [doc], "tag": "psych"})
+    call(
+        server,
+        "PUT",
+        f"/api/sets/case/docs/{doc}/annotations",
+        {"path": "../x", "text": "y"},
+    )
+    _, r = call(server, "GET", "/api/events?since=0")
+    logs = [e["msg"] for e in r["events"] if e["kind"] == "log"]
+    assert any("Adding a.pdf" in m for m in logs)  # job start
+    assert any("Added a.pdf to 'case'" in m for m in logs)
+    assert any("Tagged 1 document(s) with case.psych" in m for m in logs)
+    assert any("failed: path outside the document folder" in m for m in logs)
