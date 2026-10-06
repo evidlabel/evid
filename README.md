@@ -64,6 +64,8 @@ An editable checkout also finds `app/target/{release,debug}/evid-app` without in
 
 **Agent pane.** The *Agent* button (top right) opens terminals next to the documents, as in [treedit](https://github.com/wr1/treedit): a shell, or an agent with `evid gui --agent claude` (or `$EVID_AGENT`). An agent belongs to one evidence set: it starts in that set's folder, and `evid` there uses the GUI's data dir and that set by default (`$EVID_DB`, `$EVID_SET`), so `evid doc notes` just works. The pane shows the selected set's terminals; other sets' keep running, and the set tree marks sets with an agent attached. *Selection* types a reference to the selected documents, labels or label.typ text into the terminal. The terminal is served on loopback only and needs the page's token.
 
+**Live.** While an agent (or the CLI, or an editor) changes a set — cleaning up titles, adding notes, labelling — the GUI follows along: changed rows get a fading ◆ marker, the open document's details take in the outside change without losing your unsaved edits (a field you both changed shows a banner: use the disk version or keep yours), the label editor merges outside edits into yours line by line, and a `label.typ` edited outside has its labels extracted again.
+
 ## Development
 
 ```bash
