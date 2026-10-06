@@ -11,22 +11,11 @@ from evid.core.gather import (
     _parse_date_spec,
     gather_dataset,
 )
+from tests.labelkit import label_doc
 
 TODAY = _parse_date_spec("today")
 YESTERDAY = TODAY - datetime.timedelta(days=1)
 OLD = TODAY - datetime.timedelta(days=10)
-
-
-def _bib(prefix: str, snippet: str) -> str:
-    return (
-        f"@article{{ {prefix}:main ,\n"
-        f"  title = {{Doc {prefix}}},\n"
-        f"}}\n"
-        f"@article{{{prefix}:s1,\n"
-        f"  title = {{{snippet}}},\n"
-        f"  pages = {{1}}\n"
-        f"}}\n"
-    )
 
 
 def _add_doc(docs, uuid, title, time_added, snippet):
@@ -34,7 +23,7 @@ def _add_doc(docs, uuid, title, time_added, snippet):
     doc.mkdir(parents=True)
     info = {"uuid": uuid, "title": title, "time_added": time_added.isoformat()}
     (doc / "info.yml").write_text(yaml.safe_dump(info), encoding="utf-8")
-    (doc / "label.bib").write_text(_bib(uuid[:4], snippet), encoding="utf-8")
+    label_doc(doc, labels=[{"key": "s1", "text": snippet}])
 
 
 def _make_dataset(tmp_path):

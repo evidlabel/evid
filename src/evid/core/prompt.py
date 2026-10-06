@@ -83,22 +83,10 @@ def _doc_ref(ref: str | Mapping[str, Any]) -> tuple[str, dict[str, str]]:
 
 def _doc_chapter(workdir: Path) -> str | None:
     """Build the markdown chapter for one doc workdir, or None if it has no labels."""
-    json_file = workdir / "label.json"
-
-    if not json_file.exists():
-        logger.debug("No label.json for %s — unlabelled, skipping.", workdir)
+    entries = label_entries(workdir)
+    if not entries:
+        logger.debug("No labels or machine quotes for %s, skipping.", workdir)
         return None
-
-    raw = json_file.read_text(encoding="utf-8").strip()
-    if not raw:
-        logger.debug("Empty label.json for %s — unlabelled, skipping.", workdir)
-        return None
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as e:
-        logger.warning("Malformed label.json for %s: %s", workdir, e)
-        return None
-
     info = _load_info(workdir)
     if info is None:
         return None
@@ -119,40 +107,36 @@ def _doc_chapter(workdir: Path) -> str | None:
         chapter += f"**Link:** {url}\n\n"
     chapter += f"**Dataset:** {dataset}\n\n"
     chapter += f"**UUID:** {uuid}\n\n"
-
-    labels = [item["value"] for item in data if item["value"].get("key") != "main"]
-    for label in labels:
+    for _key, label in entries:
         opage = label.get("opage", "")
         text = label.get("text", "")
         chapter += f"- Page {opage}: {text.replace(chr(10), chr(10) + '  ')}\n"
-
     return chapter
 
 
 def label_entries(workdir: Path) -> list[tuple[str, dict]]:
-    """Load ``(key, value)`` label pairs from a doc workdir's label.json.
+    """``(key, value)`` pairs for a document: its labels (``label/labels.json``),
+    then its machine quotes (``pass/``), each value with ``text``, ``note`` and
+    ``opage`` (the page). Returns [] when there are none."""
+    from evid.core import labels
+    from evid.core.quote_pass import found_quotes
 
-    Skips the ``main`` entry and entries without a key. Returns [] if the doc
-    has no (readable) label.json.
-    """
-    json_file = Path(workdir) / "label.json"
-    if not json_file.exists():
-        return []
-    raw = json_file.read_text(encoding="utf-8").strip()
-    if not raw:
-        return []
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as e:
-        logger.warning("Malformed label.json for %s: %s", workdir, e)
-        return []
-    pairs = []
-    for item in data:
-        val = item.get("value", {}) if isinstance(item, dict) else {}
-        key = val.get("key", "")
-        if not key or key == "main":
-            continue
-        pairs.append((key, val))
+    workdir = Path(workdir)
+    pairs = labels.label_entries(workdir)
+    pairs += [
+        (
+            q["key"],
+            {
+                "key": q["key"],
+                "text": q["text"],
+                "note": "",
+                "opage": q.get("page"),
+                "machine": True,
+            },
+        )
+        for q in found_quotes(workdir)
+        if not q.get("lost")
+    ]
     return pairs
 
 

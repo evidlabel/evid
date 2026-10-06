@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 from evid.core.prompt import labels_to_yaml, quotes_markdown, quotes_yaml
+from tests.labelkit import label_doc
 
 
 def _make_doc(
@@ -31,13 +32,12 @@ def _make_doc(
         "label": title,
     }
     (workdir / "info.yml").write_text(yaml.safe_dump(info), encoding="utf-8")
-    label_items = (
-        [{"value": {"key": "q1", "opage": 3, "text": "Quoted passage.", "note": ""}}]
+    items = (
+        [{"key": "q1", "page": 3, "text": "Quoted passage."}]
         if labels is None
         else labels
     )
-    (workdir / "label.json").write_text(json.dumps(label_items), encoding="utf-8")
-    return workdir
+    return label_doc(workdir, labels=items)
 
 
 def test_quotes_markdown_includes_dataset_and_uuid(tmp_path: Path) -> None:
@@ -82,10 +82,7 @@ def test_quotes_markdown_handles_legacy_layout(tmp_path: Path) -> None:
         "label": "Legacy Doc",
     }
     (workdir / "info.yml").write_text(yaml.safe_dump(info), encoding="utf-8")
-    (workdir / "label.json").write_text(
-        json.dumps([{"value": {"key": "q1", "opage": 1, "text": "hi", "note": ""}}]),
-        encoding="utf-8",
-    )
+    label_doc(workdir, labels=[{"key": "q1", "page": 1, "text": "hi there"}])
 
     md = quotes_markdown([workdir])
 
@@ -100,12 +97,10 @@ def test_quotes_markdown_uses_quote_text_not_note(tmp_path: Path) -> None:
         "uuid-note",
         labels=[
             {
-                "value": {
-                    "key": "q1",
-                    "opage": 5,
-                    "text": "The actual quote.",
-                    "note": "Editorial note.",
-                }
+                "key": "q1",
+                "page": 5,
+                "text": "The actual quote.",
+                "note": "Editorial note.",
             }
         ],
     )
@@ -131,7 +126,7 @@ def test_quotes_markdown_empty_when_no_label_json(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
-    # No label.json — unlabelled doc is skipped entirely.
+    # No labels — an unlabelled doc is skipped entirely.
     assert quotes_markdown([workdir]) == ""
     assert quotes_yaml([workdir]) == ""
 
@@ -183,10 +178,7 @@ def test_quotes_yaml_multi_doc_is_list_with_uuid_once_each(tmp_path: Path) -> No
         tmp_path,
         "case_yaml2",
         "uuid-b",
-        labels=[
-            {"value": {"key": "main", "text": "skipped"}},
-            {"value": {"key": "k2", "opage": 7, "text": "Second doc quote."}},
-        ],
+        labels=[{"key": "k2", "page": 7, "text": "Second doc quote."}],
     )
 
     data = yaml.safe_load(quotes_yaml([wd1, wd2]))

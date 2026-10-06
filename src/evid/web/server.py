@@ -623,14 +623,6 @@ class Handler(BaseHTTPRequestHandler):
     @route("GET", "/api/sets/{slug}/docs/{uuid}")
     def get_doc(self, slug: str, uuid: str):
         _, d = self.app.doc_dir(slug, uuid)
-        typ = doc_ops.find_label_typ(d)
-        lj = d / "label.json"
-        if typ.exists() and (
-            not lj.exists() or lj.stat().st_mtime_ns < typ.stat().st_mtime_ns
-        ):
-            # label.typ changed while the GUI was not watching: extract its labels now
-            self.app.disk.touch(slug, uuid)
-            rebuild_labels(self.app.events, typ, slug, uuid)
         self.send_json(200, {**doc_ops.get_doc(d), "labels": label_rows(d)})
 
     @route("PUT", "/api/sets/{slug}/docs/{uuid}")
