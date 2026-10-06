@@ -57,7 +57,12 @@ def _resolve_dataset(
     prompt: str = "Select dataset",
     allow_create: bool = False,
 ) -> str:
-    """Resolve a dataset name/number to a slug, prompting interactively if needed."""
+    """Resolve a dataset name/number to a slug, prompting interactively if needed.
+
+    Without -s, EVID_SET (set for the GUI's Agent pane of a set) is the default.
+    """
+    if not dataset:
+        dataset = os.environ.get("EVID_SET") or None
     if not dataset:
         return select_dataset(DIRECTORY, prompt, allow_create=allow_create)
     if dataset.isdigit():
@@ -805,6 +810,7 @@ def mcp_callback(db: str = None, dataset: str = None):
     single dataset (-s); it exposes no other set, so an attached agent cannot
     wander into other (private) sets in the same database.
     """
+    dataset = dataset or os.environ.get("EVID_SET")
     if not dataset:
         sys.exit(
             "`evid mcp <dataset>` requires a dataset — the server is scoped to one "

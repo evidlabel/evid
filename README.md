@@ -62,7 +62,7 @@ install -m755 app/target/release/evid-app ~/.local/bin/   # or set EVID_APP=/pat
 
 An editable checkout also finds `app/target/{release,debug}/evid-app` without installing it.
 
-**Agent pane.** The *Agent* button (top right) opens terminals next to the documents, as in [treedit](https://github.com/wr1/treedit): a shell, or an agent with `evid gui --agent claude` (or `$EVID_AGENT`). They start in the folder `evid gui` was started in, and `evid` there uses the GUI's data dir (`$EVID_DB`), so `evid doc notes -s <set>` just works. *Selection* types a reference to the selected documents, labels or label.typ text into the terminal. The terminal is served on loopback only and needs the page's token.
+**Agent pane.** The *Agent* button (top right) opens terminals next to the documents, as in [treedit](https://github.com/wr1/treedit): a shell, or an agent with `evid gui --agent claude` (or `$EVID_AGENT`). An agent belongs to one evidence set: it starts in that set's folder, and `evid` there uses the GUI's data dir and that set by default (`$EVID_DB`, `$EVID_SET`), so `evid doc notes` just works. The pane shows the selected set's terminals; other sets' keep running, and the set tree marks sets with an agent attached. *Selection* types a reference to the selected documents, labels or label.typ text into the terminal. The terminal is served on loopback only and needs the page's token.
 
 ## Development
 

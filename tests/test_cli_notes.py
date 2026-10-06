@@ -78,3 +78,12 @@ def test_evid_db_env_selects_the_data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(type(m.app), "run", lambda _self: None)
     m.main()
     assert tmp_path / "db" == cb.DIRECTORY and cb.DIRECTORY_EXPLICIT is True
+
+
+def test_evid_set_env_is_the_default_dataset(setdir, monkeypatch, capsys):
+    """In a set's Agent pane EVID_SET makes -s optional."""
+    monkeypatch.setenv("EVID_SET", "case")
+    cb.note_callback(uuid="u1", text="From the agent pane.")
+    capsys.readouterr()
+    cb.note_callback(uuid="u1")
+    assert "From the agent pane." in capsys.readouterr().out

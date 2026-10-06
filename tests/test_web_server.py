@@ -609,41 +609,59 @@ def test_vendor_files(server):
     assert call(server, "GET", "/vendor/nope.js")[0] == 404
 
 
-def test_terminal_websocket(server, monkeypatch, tmp_path):
+def _agents(app, monkeypatch, agent=""):
+    agents = web.SetAgents(
+        app.data_dir,
+        "http://127.0.0.1:1/",
+        agent,
+        lambda slug: app.events.emit("agents", slug=slug),
+    )
+    monkeypatch.setattr(web.Handler, "agents", agents)
+    return agents
+
+
+def test_terminal_websocket(server, app, monkeypatch):
     import base64
     import os
     import socket
 
-    from evid.web.term import Sessions, ws_frame
+    from evid.web.term import ws_frame
 
-    terms = Sessions(
-        str(tmp_path),
-        {"SHELL": "/bin/sh", "PATH": os.environ.get("PATH", ""), "PS1": "$ "},
-        "echo hi-there",
-    )
-    monkeypatch.setattr(web.Handler, "terms", terms)
-    term = terms.get("1")
+    monkeypatch.setenv("SHELL", "/bin/sh")
+    monkeypatch.setenv("PS1", "$ ")
+    agents = _agents(app, monkeypatch)
+    call(server, "POST", "/api/sets", {"name": "Case"})
+    assert call(server, "GET", "/api/config")[1]["term"] is True
+    assert (
+        call(server, "GET", "/api/terms?slug=case")[1]["terms"] == []
+    )  # looking attaches nothing
+    r = call(
+        server, "POST", "/api/term/new", {"slug": "case", "agent": "echo hi-there"}
+    )[1]
+    term = agents.get(app.sets.load_set("case")).get(r["id"])
     host, port = server.removeprefix("http://").split(":")
     token = web.Handler.token
-    assert call(server, "GET", "/api/config")[1]["term"] is True
 
-    def handshake(origin, tok=token):
+    def handshake(origin, tok=token, slug="case"):
         s = socket.create_connection((host, int(port)), timeout=5)
         key = base64.b64encode(os.urandom(16)).decode()
         s.sendall(
             (
-                f"GET /api/term?token={tok} HTTP/1.1\r\nHost: {host}:{port}\r\nOrigin: {origin}\r\n"
+                f"GET /api/term?token={tok}&slug={slug}&id={r['id']} HTTP/1.1\r\nHost: {host}:{port}\r\nOrigin: {origin}\r\n"
                 f"Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\n\r\n"
             ).encode()
         )
         return s
 
-    s = handshake("http://evil.example")
-    assert b"403" in s.recv(1024)
-    s.close()
-    s = handshake(f"http://{host}:{port}", tok="wrong")
-    assert b"403" in s.recv(1024)
-    s.close()
+    for bad in (
+        handshake("http://evil.example"),
+        handshake(f"http://{host}:{port}", tok="wrong"),
+    ):
+        assert b"403" in bad.recv(1024)
+        bad.close()
+    other = handshake(f"http://{host}:{port}", slug="nope")
+    assert b"404" in other.recv(1024)
+    other.close()
     s = handshake(f"http://{host}:{port}")
     data, deadline = b"", time.time() + 10
     while (
@@ -663,47 +681,54 @@ def test_terminal_websocket(server, monkeypatch, tmp_path):
         )
 
     send(1, json.dumps({"t": "resize", "rows": 30, "cols": 100}).encode())
-    send(1, json.dumps({"t": "in", "d": "echo $EVID_DB-again\r"}).encode())
+    send(1, json.dumps({"t": "in", "d": "echo [$EVID_SET][$PWD]\r"}).encode())
     data, deadline = b"", time.time() + 10
-    while (
-        b"-again" not in data.split(b"echo $EVID_DB-again")[-1]
-        and time.time() < deadline
-    ):
+    want = f"[case][{app.data_dir / 'sets' / 'case'}]".encode()
+    while want not in data and time.time() < deadline:
         data += s.recv(65536)
+    assert want in data  # the set's terminal: EVID_SET and the set's folder
     assert term.size == (30, 100)
     send(8, b"")
     s.close()
-    terms.stop()
+    agents.stop()
     assert not term.alive
 
 
-def test_terminal_sessions_routes(server, monkeypatch, tmp_path):
-    import os
-
-    from evid.web.term import Sessions
-
-    terms = Sessions(
-        str(tmp_path), {"SHELL": "/bin/sh", "PATH": os.environ.get("PATH", "")}, ""
-    )
-    monkeypatch.setattr(web.Handler, "terms", terms)
-    assert [t["id"] for t in call(server, "GET", "/api/terms")[1]["terms"]] == ["1"]
-    r = call(server, "POST", "/api/term/new", {"agent": "claude"})[1]
-    assert r["id"] == "2" and r["terms"][1]["label"] == "claude"
-    assert [
-        t["id"]
-        for t in call(server, "POST", "/api/term/close", {"id": "2"})[1]["terms"]
-    ] == ["1"]
-    assert call(server, "POST", "/api/term/close", {"id": "9"})[0] == 404
-    terms.stop()
-    monkeypatch.setattr(web.Handler, "terms", None)
-    assert call(server, "GET", "/api/terms")[0] == 404
-
-
-def test_terminal_env_points_evid_at_the_data_dir(tmp_path, monkeypatch):
-    monkeypatch.setenv("EVID_IN_APP", "1")
-    env = web.terminal_env(tmp_path, "http://127.0.0.1:1/")
+def test_terminals_are_per_set(server, app, monkeypatch):
+    agents = _agents(app, monkeypatch, agent="claude")
+    call(server, "POST", "/api/sets", {"name": "Case"})
+    call(server, "POST", "/api/sets", {"name": "Other"})
+    r = call(server, "POST", "/api/term/new", {"slug": "case", "agent": "claude"})[1]
+    assert r["id"] == "1" and r["terms"][0]["label"] == "claude"
     assert (
-        env["EVID_DB"] == str(tmp_path)
-        and "EVID_IN_APP" not in env
-        and env["TERM"] == "xterm-256color"
+        call(server, "GET", "/api/terms?slug=other")[1]["terms"] == []
+    )  # not shared across sets
+    sets = {x["slug"]: x for x in call(server, "GET", "/api/sets")[1]}
+    assert (
+        sets["case"]["agents"] == {"terms": 1, "alive": 0}
+        and sets["other"]["agents"] is None
     )
+    events = call(server, "GET", "/api/events?since=0")[1]["events"]
+    assert any(e["kind"] == "agents" and e["slug"] == "case" for e in events)
+    assert (
+        call(server, "POST", "/api/term/close", {"slug": "other", "id": "1"})[0] == 404
+    )
+    assert (
+        call(server, "POST", "/api/term/close", {"slug": "case", "id": "1"})[1]["terms"]
+        == []
+    )
+    assert {x["slug"]: x for x in call(server, "GET", "/api/sets")[1]}["case"][
+        "agents"
+    ] is None
+    assert call(server, "GET", "/api/terms?slug=missing")[0] == 404
+    agents.stop()
+    monkeypatch.setattr(web.Handler, "agents", None)
+    assert call(server, "GET", "/api/terms?slug=case")[0] == 404
+
+
+def test_terminal_env_points_evid_at_the_data_dir_and_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("EVID_IN_APP", "1")
+    env = web.terminal_env(tmp_path, "http://127.0.0.1:1/", "case")
+    assert env["EVID_DB"] == str(tmp_path) and env["EVID_SET"] == "case"
+    assert "EVID_IN_APP" not in env and env["TERM"] == "xterm-256color"
+    assert "EVID_SET" not in web.terminal_env(tmp_path, "http://127.0.0.1:1/")

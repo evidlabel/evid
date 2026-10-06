@@ -69,7 +69,9 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 .tbar button { padding: 2px 8px; font-size: 12px; }
 #t-close, #t-add { font-size: 15px; line-height: 1; padding: 1px 9px 3px; }
 #terms { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-#terms:empty::after { content: 'No terminals — + adds a shell or an agent'; color: var(--muted); font-size: 12.5px; padding: 12px; }
+#tempty { padding: 14px 12px; color: var(--muted); font-size: 12.5px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.set .ag { flex: none; font-size: 10px; font-weight: 600; letter-spacing: .02em; padding: 0 6px; border-radius: 999px; border: 1px solid var(--muted); color: var(--muted); }
+.set .ag.live { border-color: var(--ok); color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
 .tsess { flex: 1 1 0; min-height: 90px; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .tsess:first-child { border-top: 0; }
 .thead { display: flex; gap: 6px; align-items: center; padding: 2px 6px 2px 10px; font-size: 12px; background: var(--panel2); border-bottom: 1px solid var(--line); }
@@ -337,11 +339,12 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
   </div>
   <div id="divider2" hidden></div>
   <aside id="termpane" hidden>
-    <div class="tbar"><b>Agents</b>
+    <div class="tbar"><b id="t-title" title="Terminals belong to one evidence set; switching sets switches them">Agents</b>
       <button id="t-sel" title="Type a reference to what you selected (documents, labels, text in the label editor) into the terminal">Selection</button>
       <button id="t-ext" title="Open the agent in a separate Ptyxis window">Ptyxis</button>
       <button id="t-add" title="Add a terminal below: a shell, or an agent such as claude">+</button>
       <button id="t-close" title="Hide the pane (the sessions keep running)">›</button></div>
+    <div id="tempty" hidden><span id="tempty-msg"></span><button class="primary" id="t-start"></button></div>
     <div id="terms"></div>
   </aside>
 </div>
@@ -711,6 +714,7 @@ function onEvent(e) {
     case 'index_queue': if (e.pending > 0) status(`Indexing in background (${e.pending} queued)…`); break;
     case 'indexed': if (e.slug === S.slug) scheduleReload(); if (e.pending > 0) status(`Indexing in background (${e.pending} queued)…`); break;
     case 'index_idle': status('Indexing complete', 4000); break;
+    case 'agents': refreshSetCounts(); break;
     case 'docs_changed': if (e.slug === S.slug) scheduleReload(); else refreshSetCounts(); S.setTags.delete(e.slug); break;
     case 'labels_updated':
       if (e.slug === S.slug) { scheduleReload(); if (S.cur === e.uuid) { refreshLabels(); renderFiles(); } }
@@ -744,8 +748,8 @@ async function loadSets(select) {
 // Re-read the per-set document counts (after a copy into another set).
 async function refreshSetCounts() {
   const fresh = await api('GET', '/api/sets');
-  const by = new Map(fresh.map(s => [s.slug, s.docs]));
-  for (const s of S.sets) if (by.has(s.slug)) s.docs = by.get(s.slug);
+  const by = new Map(fresh.map(s => [s.slug, s]));
+  for (const s of S.sets) if (by.has(s.slug)) { s.docs = by.get(s.slug).docs; s.agents = by.get(s.slug).agents; }
   renderSets();
 }
 
@@ -763,7 +767,10 @@ async function renderSets() {
     const open = S.expanded.has(s.slug);
     const tw = el('span', { class: 'tw', text: open ? '▾' : '▸', title: open ? 'Hide tags' : 'Show tags' });
     tw.onclick = e => { e.stopPropagation(); open ? S.expanded.delete(s.slug) : S.expanded.add(s.slug); store('expanded', [...S.expanded]); renderSets(); };
-    const row = el('div', { class: 'set' + (s.slug === S.slug ? ' cur' : ''), role: 'treeitem', title: s.description || s.slug, 'data-slug': s.slug }, tw, el('span', { class: 'nm', text: s.name }), el('span', { class: 'n', title: `${s.docs} document(s)`, text: s.docs }));
+    const row = el('div', { class: 'set' + (s.slug === S.slug ? ' cur' : ''), role: 'treeitem', title: s.description || s.slug, 'data-slug': s.slug }, tw, el('span', { class: 'nm', text: s.name }),
+      s.agents ? el('span', { class: 'ag' + (s.agents.alive ? ' live' : ''), text: 'agent',
+        title: `Agent attached: ${s.agents.terms} terminal(s), ${s.agents.alive} running — open the Agent pane on this set to see it` }) : null,
+      el('span', { class: 'n', title: `${s.docs} document(s)`, text: s.docs }));
     row.onclick = () => selectSet(s.slug);
     row.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('application/x-evid-doc') && s.slug !== S.slug) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; row.classList.add('drop'); } });
     row.addEventListener('dragleave', () => row.classList.remove('drop'));
@@ -790,6 +797,7 @@ async function selectSet(slug) {
   if (slug !== S.slug) { S.tagFilter = new Set(); S.sel = new Set(); S.cur = null; S.anchor = null; S.sres = []; renderSearch(); }
   S.slug = slug; store('slug', slug);
   renderSets();
+  if (T.open && T.slug !== slug) termLoad();  // the pane follows the set
   await loadDocs(false);
 }
 
@@ -1623,7 +1631,7 @@ const HELP = `<p>Humans and agents share one legal document set. Cited wording i
 <tr><td><kbd>Ctrl+S</kbd></td><td>Label pane: save label.typ and extract the labels · Detail pane: save the detail</td></tr>
 ${CFG.app ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr>' : ''}
 <tr><td><kbd>F1</kbd></td><td>help</td></tr>
-<tr><td>Agent (top right)</td><td>terminals running your agent or a shell, in the folder evid gui started in; <span class="mono">evid</span> there uses this data dir. Selection types what you selected into the terminal. Ctrl+Shift+C / V copy and paste.</td></tr>
+<tr><td>Agent (top right)</td><td>terminals running your agent or a shell for the selected set (marked <i>agent</i> in the set tree): they start in the set's folder, and <span class="mono">evid</span> there uses this data dir and set. Selection types what you selected into the terminal. Ctrl+Shift+C / V copy and paste.</td></tr>
 <tr><td>drag rows onto a set</td><td>copy the documents there</td></tr>
 <tr><td>drag a tag pill onto a row</td><td>tag that document</td></tr></table>
 <p><b>Docs</b> — Ingest PDF · Add from URL · Index · Label (<span class="mono">#lab</span>, in the Label pane) · Open dir</p>
@@ -1710,7 +1718,7 @@ function termTheme() {
     selectionBackground: darkMode() ? 'rgba(127,167,224,.35)' : 'rgba(63,111,181,.25)', ...(darkMode() ? {} : LIGHT_ANSI) };
 }
 function termMake(info) {  // the pane, the xterm and (once shown) the socket of one server terminal
-  const P = { id: info.id, agent: info.agent, ws: null, retry: 0, queue: [], closed: false };
+  const P = { id: info.id, slug: T.slug, agent: info.agent, ws: null, retry: 0, queue: [], closed: false };
   P.dot = el('span', { class: 'tdot' }); P.lab = el('b', { text: info.label }); P.body = el('div', { class: 'tbody' });
   const restart = el('button', { text: '↻', title: 'End this session and start a new one',
     onclick: async () => { if (await confirmDlg('Restart terminal', `End "${P.lab.textContent}" and start it again?`, 'Restart')) termSend(P, { t: 'restart' }); } });
@@ -1744,6 +1752,7 @@ function termSync(infos) {  // match the panes to the server's terminals: add ne
     if (T.open) termConnect(P);
   }
   if (!T.list.includes(T.active)) termActive(T.list[0] || null);
+  termEmpty();
   requestAnimationFrame(() => T.list.forEach(termFit));
 }
 function termDrop(P) {
@@ -1764,7 +1773,7 @@ function termSend(P, m) { if (P && P.ws && P.ws.readyState === 1) { P.ws.send(JS
 function termState(P, st) { P.dot.className = 'tdot ' + st; P.dot.title = { live: 'connected', ended: 'session ended', off: 'disconnected' }[st] || ''; }
 function termConnect(P) {
   if (P.closed || (P.ws && P.ws.readyState <= 1)) return;
-  const ws = new WebSocket(`ws://${location.host}/api/term?token=${encodeURIComponent(CFG.token)}&id=${encodeURIComponent(P.id)}`);
+  const ws = new WebSocket(`ws://${location.host}/api/term?token=${encodeURIComponent(CFG.token)}&slug=${encodeURIComponent(P.slug)}&id=${encodeURIComponent(P.id)}`);
   ws.binaryType = 'arraybuffer'; P.ws = ws;
   ws.onopen = () => { P.retry = 0; termState(P, 'live'); termFit(P); const q = P.queue; P.queue = []; q.forEach(f => f()); };
   ws.onmessage = ev => {
@@ -1781,22 +1790,39 @@ function termConnect(P) {
     if (T.open && !P.closed) setTimeout(() => termConnect(P), Math.min(5000, 400 * 2 ** P.retry++));
   };
 }
+// The pane shows the selected set's terminals only; other sets' keep running in the background.
 async function termLoad() {
-  try { termSync((await api('GET', '/api/terms')).terms); } catch (e) { status(e.message, 6000, true); }
+  if (T.slug !== S.slug) { for (const P of T.list.slice()) termDrop(P); T.slug = S.slug; }
+  const set = S.sets.find(x => x.slug === S.slug);
+  $('#t-title').textContent = set ? `Agent · ${set.name}` : 'Agent';
+  if (!S.slug) { termSync([]); return; }
+  try { termSync((await api('GET', `/api/terms?slug=${enc(S.slug)}`)).terms); } catch (e) { status(e.message, 6000, true); }
+}
+function termEmpty() {
+  const empty = !T.list.length, set = S.sets.find(x => x.slug === S.slug);
+  $('#tempty').hidden = !empty;
+  if (!empty) return;
+  $('#tempty-msg').textContent = set ? `No agent on “${set.name}”. An agent here works on this set only: it starts in the set's folder, and evid there defaults to this set.` : 'Pick an evidence set first.';
+  $('#t-start').hidden = !set;
+  $('#t-start').textContent = `Start ${CFG.agent || 'a shell'} on this set`;
+}
+async function termNew(cmd) {
+  const r = await api('POST', '/api/term/new', { slug: S.slug, agent: cmd });
+  termSync(r.terms);
+  const P = T.list.find(x => x.id === r.id);
+  if (P) { termActive(P); requestAnimationFrame(() => P.term.focus()); }
 }
 async function termAdd() {
-  const cmd = await promptDlg('New terminal', 'Command (empty for a shell), e.g. claude:', '');
+  if (!S.slug) return status('Pick an evidence set first', 3000, true);
+  const cmd = await promptDlg('New terminal', 'Command (empty for a shell), e.g. claude:', CFG.agent || '');
   if (cmd === null) return;
   try {
-    const r = await api('POST', '/api/term/new', { agent: cmd });
-    termSync(r.terms);
-    const P = T.list.find(x => x.id === r.id);
-    if (P) { termActive(P); requestAnimationFrame(() => P.term.focus()); }
+    await termNew(cmd);
   } catch (e) { status(e.message, 6000, true); }
 }
 async function termClose(P) {
   if (!(await confirmDlg('Close terminal', `Close "${P.lab.textContent}"? Its session ends.`, 'Close'))) return;
-  try { termSync((await api('POST', '/api/term/close', { id: P.id })).terms); } catch (e) { status(e.message, 6000, true); }
+  try { termSync((await api('POST', '/api/term/close', { slug: P.slug, id: P.id })).terms); } catch (e) { status(e.message, 6000, true); }
 }
 async function openTerm(open) {
   T.open = open; store('term', open);
@@ -1810,7 +1836,7 @@ async function openTerm(open) {
 async function sendToAgent(text, enter) {  // type into the active terminal (Enter separately, so TUIs don't take it as pasted)
   if (!T.open) await openTerm(true);
   const P = T.active;
-  if (!P) return status('No terminal: + adds one', 4000, true);
+  if (!P) return status('No agent on this set yet — start one in the Agent pane', 4000, true);
   const go = () => {
     termSend(P, { t: 'in', d: text });
     if (enter) setTimeout(() => termSend(P, { t: 'in', d: '\r' }), 200);
@@ -1834,9 +1860,10 @@ if (CFG.term) {
   $('#b-term').onclick = () => openTerm(!T.open);
   $('#t-close').onclick = () => openTerm(false);
   $('#t-add').onclick = termAdd;
+  $('#t-start').onclick = () => termNew(CFG.agent || '').catch(e => status(e.message, 6000, true));
   $('#t-sel').onclick = () => { const t = selectionText(currentSelection()); if (!t) return status('Select a document first', 3000, true); sendToAgent(t, false); };
   $('#t-ext').hidden = !CFG.ptyxis;
-  $('#t-ext').onclick = async () => { try { await api('POST', '/api/term/external', {}); status('Opened in a new terminal window', 3000); } catch (e) { status(e.message, 6000, true); } };
+  $('#t-ext').onclick = async () => { try { await api('POST', '/api/term/external', { slug: S.slug }); status('Opened in a new terminal window', 3000); } catch (e) { status(e.message, 6000, true); } };
   (() => {  // resizable from its left edge
     const d = $('#divider2'), w = load('termw', null);
     if (w) document.documentElement.style.setProperty('--term-w', w + 'px');

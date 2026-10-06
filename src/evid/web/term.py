@@ -92,8 +92,9 @@ class Client:
 
 # ---------- the shared terminal ----------
 class Terminal:
-    def __init__(self, cwd: str, env: dict, agent: str = ""):
+    def __init__(self, cwd: str, env: dict, agent: str = "", on_change=None):
         self.cwd, self.env, self.agent = cwd, env, agent
+        self.on_change = on_change  # called when the session starts or ends
         self.lock = threading.Lock()
         self.clients: set = set()
         self.buf = bytearray()
@@ -144,6 +145,8 @@ class Terminal:
             ).start()
             if self.agent:
                 self.write((self.agent + "\r").encode())
+        if self.on_change:
+            self.on_change()
 
     def _winsize(self, fd: int) -> None:
         rows, cols = self.size
@@ -170,6 +173,8 @@ class Terminal:
         )
         for c in list(self.clients):
             c.send(1, json.dumps({"t": "exit"}).encode())
+        if self.on_change:
+            self.on_change()
 
     def _broadcast(self, chunk: bytes) -> None:
         with self.lock:
@@ -256,19 +261,25 @@ class Sessions:
     """The terminals of the agent pane, in the order they were added: each its own shell or agent preset
     on a pseudo-terminal, started in CWD with ENV. The first runs AGENT; more are added from the page."""
 
-    def __init__(self, cwd: str, env: dict, agent: str = ""):
+    def __init__(self, cwd: str, env: dict, agent: str | None = "", on_change=None):
         self.cwd, self.env = cwd, env
+        self.on_change = on_change
         self.lock = threading.Lock()
         self.terms: dict = {}
         self.next = 1
-        self.add(agent)
+        if agent is not None:  # None: start empty; terminals are added from the page
+            self.add(agent)
 
     def add(self, agent: str = "") -> str:
         with self.lock:
             sid = str(self.next)
             self.next += 1
-            self.terms[sid] = Terminal(self.cwd, self.env, agent.strip())
-            return sid
+            self.terms[sid] = Terminal(
+                self.cwd, self.env, agent.strip(), self.on_change
+            )
+        if self.on_change:
+            self.on_change()
+        return sid
 
     def get(self, sid: str):
         return self.terms.get(sid)
@@ -282,6 +293,8 @@ class Sessions:
         for c in list(t.clients):  # tell its pages the pane is gone
             c.send(1, json.dumps({"t": "closed"}).encode())
             c.send(8, b"")
+        if self.on_change:
+            self.on_change()
         return True
 
     def list(self) -> list:

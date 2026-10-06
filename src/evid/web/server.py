@@ -268,7 +268,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "evid"
     # proves a terminal connection comes from the page we served
     token = secrets.token_urlsafe(18)
-    terms: Sessions | None = None  # the agent pane's terminals
+    agents: SetAgents | None = None  # the agent pane's terminals, per evidence set
     agent = ""  # what the first terminal runs (empty: a shell)
 
     def log_message(self, *args):
@@ -398,7 +398,7 @@ class Handler(BaseHTTPRequestHandler):
             "vec_install": extras.VEC_INSTALL,
             "version": _version(),
             "token": self.token,
-            "term": self.terms is not None,
+            "term": self.agents is not None,
             "agent": self.agent,
             "ptyxis": bool(shutil.which("ptyxis") or shutil.which("gnome-terminal")),
         }
@@ -424,6 +424,7 @@ class Handler(BaseHTTPRequestHandler):
 
     @route("GET", "/api/sets")
     def list_sets(self):
+        agents = self.agents.summary() if self.agents is not None else {}
         out = []
         for s in self.app.sets.list_sets():
             out.append(
@@ -432,6 +433,7 @@ class Handler(BaseHTTPRequestHandler):
                     "name": s.name,
                     "description": s.description,
                     "docs": len(self.app.sets.list_documents(s.slug)),
+                    "agents": agents.get(s.slug),
                 }
             )
         self.send_json(200, out)
@@ -962,39 +964,49 @@ class Handler(BaseHTTPRequestHandler):
 
     # agent pane --------------------------------------------------------------
 
-    def sessions(self) -> Sessions:
-        if self.terms is None:
+    def sessions(self, slug: str, create: bool = True) -> Sessions | None:
+        """The terminals of one evidence set (an agent never spans sets)."""
+        if self.agents is None:
             raise HTTPError(404, "the agent pane is off")
-        return self.terms
+        es = self.app.evidence_set(slug)
+        return self.agents.get(es, create=create)
 
     @route("GET", "/api/terms")
     def list_terms(self):
-        self.send_json(200, {"terms": self.sessions().list()})
+        terms = self.sessions(
+            self.q.get("slug", ""), create=False
+        )  # looking attaches nothing
+        self.send_json(200, {"terms": terms.list() if terms else []})
 
     @route("POST", "/api/term/new")
     def new_term(self):
-        terms = self.sessions()
-        sid = terms.add(str(self.body().get("agent") or ""))
-        logger.info("Agent pane: new terminal %s", terms.get(sid).label())
+        b = self.body()
+        slug = str(b.get("slug", ""))
+        terms = self.sessions(slug)
+        sid = terms.add(str(b.get("agent") or ""))
+        logger.info("Agent pane of '%s': new terminal %s", slug, terms.get(sid).label())
         self.send_json(200, {"id": sid, "terms": terms.list()})
 
     @route("POST", "/api/term/close")
     def close_term(self):
-        terms = self.sessions()
-        if not terms.close(str(self.body().get("id", ""))):
+        b = self.body()
+        terms = self.sessions(str(b.get("slug", "")), create=False)
+        if terms is None or not terms.close(str(b.get("id", ""))):
             raise HTTPError(404, "no such terminal")
         self.send_json(200, {"terms": terms.list()})
 
     @route("POST", "/api/term/external")
     def external_term(self):
-        terms = self.sessions()
+        terms = self.sessions(str(self.body().get("slug", "")))
         cmd = external_terminal(Path(terms.cwd), terms.env, self.agent)
         self.send_json(200, {"ok": True, "cmd": cmd})
 
     @route("GET", "/api/term")
     def terminal(self):
-        """Upgrade to a WebSocket onto one of the agent pane's terminals (?id=, default the first)."""
-        terms = self.sessions()
+        """Upgrade to a WebSocket onto one of a set's terminals (?slug=&id=, default the first)."""
+        terms = self.sessions(self.q.get("slug", ""), create=False)
+        if terms is None:
+            raise HTTPError(404, "no terminals for this set")
         term = terms.get(self.q.get("id") or next(iter(terms.terms), ""))
         if term is None:
             raise HTTPError(404, "no such terminal")
@@ -1057,8 +1069,48 @@ def external_terminal(cwd: Path, env: dict, agent: str) -> str:
     return " ".join(cmd[:4])
 
 
-def terminal_env(data_dir: Path, url: str) -> dict:
-    """The environment of the agent pane: `evid` there uses this GUI's data dir (EVID_DB)."""
+class SetAgents:
+    """The Agent pane's terminals, kept per evidence set. A set's terminals start in
+    the set's folder with EVID_DB / EVID_SET set, so `evid` there works on that set;
+    the pane only ever shows the selected set's terminals."""
+
+    def __init__(
+        self, data_dir: Path, url: str, agent: str = "", on_change=None
+    ) -> None:
+        self.data_dir, self.url, self.agent = data_dir, url, agent
+        self.on_change = on_change  # (slug) -> None, when a set's terminals change
+        self.lock = threading.Lock()
+        self.by_slug: dict[str, Sessions] = {}
+
+    def get(self, evidence_set, create: bool = True) -> Sessions | None:
+        slug = evidence_set.slug
+        with self.lock:
+            if slug not in self.by_slug and create:
+                ping = (lambda: self.on_change(slug)) if self.on_change else None
+                env = terminal_env(self.data_dir, self.url, slug)
+                self.by_slug[slug] = Sessions(str(evidence_set.path), env, None, ping)
+            return self.by_slug.get(slug)
+
+    def summary(self) -> dict[str, dict]:
+        """{slug: {terms, alive}} for the sets that have terminals."""
+        out = {}
+        for slug, sess in list(self.by_slug.items()):
+            items = sess.list()
+            if items:
+                out[slug] = {
+                    "terms": len(items),
+                    "alive": sum(1 for t in items if t["alive"]),
+                }
+        return out
+
+    def stop(self) -> None:
+        for sess in list(self.by_slug.values()):
+            sess.stop()
+
+
+def terminal_env(data_dir: Path, url: str, slug: str = "") -> dict:
+    """The environment of the agent pane: `evid` there uses this GUI's data dir (EVID_DB)
+    and, for a set's terminal, that set by default (EVID_SET)."""
     env = {
         k: v
         for k, v in os.environ.items()
@@ -1070,6 +1122,8 @@ def terminal_env(data_dir: Path, url: str) -> dict:
         EVID_DB=str(data_dir),
         EVID_URL=url,
     )
+    if slug:
+        env["EVID_SET"] = slug
     return env
 
 
@@ -1219,8 +1273,11 @@ def serve_gui(
 
     app.attach_log()
     Handler.agent = agent or os.environ.get("EVID_AGENT", "")
-    Handler.terms = Sessions(
-        str(Path.cwd()), terminal_env(config.data_dir, url), Handler.agent
+    Handler.agents = SetAgents(
+        config.data_dir,
+        url,
+        Handler.agent,
+        lambda slug: app.events.emit("agents", slug=slug),
     )
 
     print(
@@ -1255,8 +1312,8 @@ def serve_gui(
         with contextlib.suppress(KeyboardInterrupt):
             srv.serve_forever()
     finally:
-        if Handler.terms is not None:
-            Handler.terms.stop()
+        if Handler.agents is not None:
+            Handler.agents.stop()
         app.shutdown()
         srv.server_close()
         with contextlib.suppress(OSError):
