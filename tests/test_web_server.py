@@ -706,7 +706,7 @@ def test_terminals_are_per_set(server, app, monkeypatch):
     )  # not shared across sets
     sets = {x["slug"]: x for x in call(server, "GET", "/api/sets")[1]}
     assert (
-        sets["case"]["agents"] == {"terms": 1, "alive": 0}
+        sets["case"]["agents"] == {"terms": 1, "alive": 0, "names": ["claude"]}
         and sets["other"]["agents"] is None
     )
     events = call(server, "GET", "/api/events?since=0")[1]["events"]
@@ -743,3 +743,30 @@ def test_opening_a_doc_extracts_stale_labels(server, doc, app):
     os.utime(typ, (t, t))  # edited after label.json, while no GUI was watching
     det = call(server, "GET", f"/api/sets/case/docs/{doc}")[1]
     assert "late-key" in [x["key"] for x in det["labels"]]
+
+
+def test_agent_name():
+    names = [
+        "grok",
+        "fish",
+        "claude --continue",
+        "opencode",
+        "hermes --skills evid",
+        "codex",
+        "/usr/bin/fish",
+        "env FOO=1 codex",
+        "npx opencode",
+        "",
+    ]
+    assert [web.agent_name(n) for n in names] == [
+        "grok",
+        "fish",
+        "claude",
+        "opencode",
+        "hermes",
+        "codex",
+        "fish",
+        "codex",
+        "opencode",
+        "shell",
+    ]

@@ -1123,20 +1123,33 @@ class SetAgents:
             return self.by_slug.get(slug)
 
     def summary(self) -> dict[str, dict]:
-        """{slug: {terms, alive}} for the sets that have terminals."""
+        """{slug: {terms, alive, names}} for the sets that have terminals; names are the
+        agents in them (claude, codex, …), or the shell (fish, bash) for a plain one."""
         out = {}
         for slug, sess in list(self.by_slug.items()):
             items = sess.list()
             if items:
+                names = list(dict.fromkeys(agent_name(t["label"]) for t in items))
                 out[slug] = {
                     "terms": len(items),
                     "alive": sum(1 for t in items if t["alive"]),
+                    "names": names,
                 }
         return out
 
     def stop(self) -> None:
         for sess in list(self.by_slug.values()):
             sess.stop()
+
+
+def agent_name(command: str) -> str:
+    """'hermes --skills evid' -> 'hermes', '/usr/bin/fish' -> 'fish', 'env X=1 codex' -> 'codex'."""
+    words = [
+        w
+        for w in command.split()
+        if "=" not in w and w not in ("env", "exec", "npx", "uvx")
+    ]
+    return Path(words[0]).name if words else (command.strip() or "shell")
 
 
 def terminal_env(data_dir: Path, url: str, slug: str = "") -> dict:

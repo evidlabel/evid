@@ -70,7 +70,7 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 #t-close, #t-add { font-size: 15px; line-height: 1; padding: 1px 9px 3px; }
 #terms { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 #tempty { padding: 14px 12px; color: var(--muted); font-size: 12.5px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.set .ag { flex: none; font-size: 10px; font-weight: 600; letter-spacing: .02em; padding: 0 6px; border-radius: 999px; border: 1px solid var(--muted); color: var(--muted); }
+.set .ag { flex: none; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 600; letter-spacing: .02em; padding: 0 6px; border-radius: 999px; border: 1px solid var(--muted); color: var(--muted); }
 .set .ag.live { border-color: var(--ok); color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
 .tsess { flex: 1 1 0; min-height: 90px; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .tsess:first-child { border-top: 0; }
@@ -586,6 +586,13 @@ function historyChips(items) {
   return out;
 }
 
+// The set tree's badge: which agents are attached ('claude', 'claude +1').
+function agentBadge(names) {
+  const n = (names || []).filter(Boolean);
+  if (!n.length) return 'agent';
+  return n.length === 1 ? n[0] : `${n[0]} +${n.length - 1}`;
+}
+
 function shortUuid(u) { return u.length > 16 ? u.slice(0, 8) + '…' + u.slice(-8) : u; }
 
 // ── plumbing ─────────────────────────────────────────────────────────────────
@@ -874,8 +881,8 @@ async function renderSets() {
     const tw = el('span', { class: 'tw', text: open ? '▾' : '▸', title: open ? 'Hide tags' : 'Show tags' });
     tw.onclick = e => { e.stopPropagation(); open ? S.expanded.delete(s.slug) : S.expanded.add(s.slug); store('expanded', [...S.expanded]); renderSets(); };
     const row = el('div', { class: 'set' + (s.slug === S.slug ? ' cur' : ''), role: 'treeitem', title: s.description || s.slug, 'data-slug': s.slug }, tw, el('span', { class: 'nm', text: s.name }),
-      s.agents ? el('span', { class: 'ag' + (s.agents.alive ? ' live' : ''), text: 'agent',
-        title: `Agent attached: ${s.agents.terms} terminal(s), ${s.agents.alive} running — open the Agent pane on this set to see it` }) : null,
+      s.agents ? el('span', { class: 'ag' + (s.agents.alive ? ' live' : ''), text: agentBadge(s.agents.names),
+        title: `${(s.agents.names || []).join(', ')} on this set: ${s.agents.terms} terminal(s), ${s.agents.alive} running — open the Agent pane on this set to see it` }) : null,
       el('span', { class: 'n', title: `${s.docs} document(s)`, text: s.docs }));
     row.onclick = () => selectSet(s.slug);
     row.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('application/x-evid-doc') && s.slug !== S.slug) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; row.classList.add('drop'); } });

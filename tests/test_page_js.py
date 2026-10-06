@@ -35,6 +35,7 @@ FUNCS = [
     "mergeFields",
     "freshness",
     "historyChips",
+    "agentBadge",
 ]
 
 
@@ -329,3 +330,9 @@ def test_history_chips(js):
         "🗨 note on original.pdf",
         "added scan.pdf",
     ]
+
+
+def test_agent_badge(js):
+    assert js(
+        "return [agentBadge(['claude']), agentBadge(['claude', 'fish', 'codex']), agentBadge([]), agentBadge(undefined)];"
+    ) == ["claude", "claude +2", "agent", "agent"]
