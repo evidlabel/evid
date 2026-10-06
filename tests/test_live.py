@@ -74,22 +74,28 @@ def test_added_removed_and_sets(tmp_path):
     assert _events(ev, "sets_changed") and _events(ev, "tags_changed")
 
 
-def test_label_typ_edited_outside_is_extracted_again(tmp_path):
+def test_labels_and_passes_edited_outside(tmp_path):
     sm = SetManager(tmp_path)
     es = sm.create_set("Case")
     d = _doc(es.path, "a" * 32)
-    (d / "label.typ").write_text("no labels\n")
-    (d / "label.json").write_text("[]")
+    (d / "label").mkdir()
+    (d / "label" / "labels.json").write_text("{}\n")
+    (d / "pass").mkdir()
     ev = Events()
     w = DiskWatch(tmp_path, ev)
-    _bump(d / "label.typ", "still no labels, edited by an agent\n")
+    _bump(d / "label" / "labels.json", '{"labels":[{"key":"k"}]}\n')
     w.poll()
-    assert _events(ev, "labels_updated")  # label.json rebuilt
-    assert (d / "label.json").stat().st_mtime_ns >= 0
+    (disk,) = _events(ev, "disk")
+    changed = disk["changed"][0]
+    assert changed["by"] == "outside" and "label/labels.json" in changed["files"]
+    assert _events(ev, "labels_updated") == []  # nothing is extracted from a .typ
     ev2 = Events()
     w.events = ev2
+    w.touch("case", "a" * 32)
+    _bump(d / "pass" / "p1.json", "{}\n")
     w.poll()
-    assert _events(ev2, "disk") == []  # our own rebuild is not reported as a change
+    (disk,) = _events(ev2, "disk")
+    assert disk["changed"][0]["by"] == "you" and "pass" in disk["changed"][0]["files"]
 
 
 def test_indexing_is_not_an_outside_change(tmp_path, monkeypatch):

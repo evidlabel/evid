@@ -42,8 +42,6 @@ from evid.web.jobs import (
     Events,
     IndexQueue,
     Jobs,
-    LabelWatcher,
-    rebuild_labels,
 )
 from evid.web.live import DiskWatch
 from evid.web.term import Sessions, ws_accept
@@ -75,7 +73,6 @@ class EvidApp:
         self.tags = TagService(self.data_dir)
         self.events = Events()
         self.jobs = Jobs(self.events)
-        self.watcher = LabelWatcher(self.events)
         self.has_vec = extras.has_vec()
         self._vec = None
         self._vec_lock = threading.Lock()
@@ -138,7 +135,6 @@ class EvidApp:
         if self._log_handler is not None:
             logging.getLogger("evid").removeHandler(self._log_handler)
             self._log_handler = None
-        self.watcher.stop()
         self.disk.stop()
         self.index.stop()
         for tmp in self.temps.values():
@@ -177,7 +173,7 @@ def doc_row(doc) -> dict:
         "note": str(doc.notes or ""),
         "dates": str(doc.dates or ""),
         "has_pdf": resolve_doc_pdf(doc.path) is not None,
-        "has_json": (doc.path / "label.json").exists(),
+        "has_json": (doc.path / "label" / "labels.json").exists(),
     }
 
 
@@ -213,6 +209,86 @@ def label_rows(doc_dir: Path) -> list[dict]:
         }
         for key, val in label_entries(doc_dir)
     ]
+
+
+def text_view(doc_dir: Path) -> dict:
+    """Canonical text, page bands, and the human and machine records on it."""
+    from evid.core.labels import ensure_text, read
+    from evid.core.quote_pass import list_passes
+
+    text, pages = ensure_text(doc_dir)
+    data = read(doc_dir)
+
+    def one(rec: dict, field: str) -> dict:
+        return {
+            field: rec[field],
+            "start": rec.get("start"),
+            "end": rec.get("end"),
+            "page": rec.get("page"),
+            "text": rec.get("text") or "",
+            "notes": list(rec.get("notes") or []),
+        }
+
+    passes = []
+    for qp in list_passes(doc_dir):
+        quotes = [
+            {
+                "key": q.get("key"),
+                "start": q.get("start"),
+                "end": q.get("end"),
+                "page": q.get("page"),
+                "text": q.get("text") or "",
+            }
+            for q in qp.found
+            if not q.get("lost") and "start" in q
+        ]
+        passes.append(
+            {
+                "id": qp.id,
+                "timestamp": qp.timestamp,
+                "model": qp.model,
+                "job": qp.job,
+                "matched": sum(1 for r in qp.results if r.matched),
+                "tried": len(qp.results),
+                "quotes": quotes,
+            }
+        )
+    return {
+        "text": text,
+        "pages": pages,
+        "labels": [one(r, "key") for r in data["labels"] if not r.get("lost")],
+        "annotations": [one(r, "id") for r in data["annotations"] if not r.get("lost")],
+        "passes": passes,
+    }
+
+
+def _span_from_body(doc_dir: Path, body: dict):
+    """A span from ``start``/``end``, or from a ``text`` passage to locate."""
+    from evid.core.labels import span_at, span_of
+
+    if "start" in body and "end" in body:
+        return span_at(doc_dir, int(body["start"]), int(body["end"]))
+    passage = str(body.get("text") or "")
+    if not passage.strip():
+        raise HTTPError(400, "select a passage")
+    span, _score, _how = span_of(doc_dir, passage)
+    return span
+
+
+def _missing(exc: KeyError) -> HTTPError:
+    msg = str(exc.args[0]) if exc.args else "not found"
+    return HTTPError(404, msg)
+
+
+def _commit_view(doc_dir: Path, verb: str) -> dict:
+    """Commit ``label/`` and ``pass/``, then return the reader payload."""
+    from evid.core.bibtex_utils import load_title
+    from evid.core.gitops import commit_labels
+
+    title = load_title(doc_dir / "info.yml") or doc_dir.name[:8]
+    view = text_view(doc_dir)
+    view["commit"] = commit_labels(doc_dir, f"label: {title} ({verb})")
+    return view
 
 
 def list_dir(path: str, pdf_only: bool) -> dict:
@@ -673,8 +749,6 @@ class Handler(BaseHTTPRequestHandler):
             f = doc_ops.doc_path(d, str(b.get("path", "")))
             text = f.is_file() and f.suffix.lower() in doc_ops.TEXT_SUFFIXES
             err = open_local_path(f, editor=self.app.config.editor if text else None)
-            if not err and f.suffix.lower() == ".typ":
-                self.app.watcher.watch(f, slug, uuid)  # saving it rebuilds the labels
         else:
             err = open_local_path(d)
         if err:
@@ -717,86 +791,113 @@ class Handler(BaseHTTPRequestHandler):
             200, {"dir": str(d), "sub": sub, "entries": doc_ops.list_doc_files(d, sub)}
         )
 
-    @route("POST", "/api/sets/{slug}/docs/{uuid}/label")
-    def label_doc(self, slug: str, uuid: str):
-        """Make sure label.typ exists (a job: generating it reads the whole PDF),
-        start watching it, and open it in the editor unless ``editor`` is false."""
-        from evid.open_external import open_local_path
-
+    @route("GET", "/api/sets/{slug}/docs/{uuid}/text")
+    def get_text(self, slug: str, uuid: str):
         _, d = self.app.doc_dir(slug, uuid)
-        want_editor = self.body().get("editor", True)
-        app = self.app
+        self.send_json(200, text_view(d))
 
-        def run(progress, _job):
-            if not doc_ops.find_label_typ(d).exists():
-                progress("Generating label.typ…")
-            app.disk.touch(slug, uuid)
-            typ = doc_ops.ensure_label_typ(d)
-            app.watcher.watch(typ, slug, uuid)
-            if want_editor:
-                err = open_local_path(typ, editor=app.config.editor)
-                if err:
-                    logger.warning("%s", err)
-                    raise RuntimeError(err)
-            return {"slug": slug, "uuid": uuid, "path": str(typ)}
+    @route("POST", "/api/sets/{slug}/docs/{uuid}/labels")
+    def post_label(self, slug: str, uuid: str):
+        from evid.core.labels import add_label, read, suggest_key
 
-        jid = app.jobs.start("label", run, f"Label {uuid[:8]}")
-        self.send_json(200, {"job": jid})
-
-    @route("GET", "/api/sets/{slug}/docs/{uuid}/typ")
-    def get_typ(self, slug: str, uuid: str):
-        _, d = self.app.doc_dir(slug, uuid)
-        typ = doc_ops.find_label_typ(d)
-        if not typ.exists():
-            return self.send_json(200, {"exists": False, "path": str(typ)})
-        st = typ.stat()
-        self.send_json(
-            200,
-            {
-                "exists": True,
-                "path": str(typ),
-                "content": typ.read_text("utf-8"),
-                "mtime": str(st.st_mtime_ns),
-            },
-        )
-
-    @route("PUT", "/api/sets/{slug}/docs/{uuid}/typ")
-    def put_typ(self, slug: str, uuid: str):
-        """Save the in-page editor's label.typ, then rebuild label.json / .bib.
-        Refuses (409) when the file changed on disk since ``mtime``, unless ``force``.
-        ``mtime`` is nanoseconds as a string: as a JSON number it would not survive JS."""
         _, d = self.app.doc_dir(slug, uuid)
         b = self.body()
-        typ = doc_ops.find_label_typ(d)
-        if (
-            typ.exists()
-            and not b.get("force")
-            and b.get("mtime") is not None
-            and str(typ.stat().st_mtime_ns) != str(b["mtime"])
-        ):
-            return self.send_json(
-                409,
-                {
-                    "error": "label.typ changed on disk",
-                    "content": typ.read_text("utf-8"),
-                    "mtime": str(typ.stat().st_mtime_ns),
-                },
-            )
         self.app.disk.touch(slug, uuid)
-        typ.write_text(str(b.get("content", "")), encoding="utf-8")
-        self.app.watcher.watch(typ, slug, uuid)
-        self.app.watcher.mark_seen(typ)
-        logger.info("Saved %s of %s", typ.name, doc_name(d))
-        ok, msg = rebuild_labels(self.app.events, typ, slug, uuid)
-        self.send_json(
-            200,
-            {
-                "ok": ok,
-                "msg": msg,
-                "mtime": str(typ.stat().st_mtime_ns),
-                "labels": label_rows(d),
-            },
-        )
+        span = _span_from_body(d, b)
+        key = str(b.get("key") or "").strip()
+        if not key:
+            taken = {r["key"] for r in read(d)["labels"]}
+            key = suggest_key(span["text"], taken)
+        rec = add_label(d, span, key, str(b.get("note") or ""))
+        logger.info("Labelled %s of %s", rec["key"], doc_name(d))
+        self.send_json(200, _commit_view(d, f"+{rec['key']}"))
+
+    @route("POST", "/api/sets/{slug}/docs/{uuid}/labels/{key}/notes")
+    def post_label_note(self, slug: str, uuid: str, key: str):
+        from evid.core.labels import add_note
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.disk.touch(slug, uuid)
+        try:
+            add_note(d, key, str(self.body().get("text") or ""))
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Noted %s of %s", key, doc_name(d))
+        self.send_json(200, _commit_view(d, f"{key} note"))
+
+    @route("PUT", "/api/sets/{slug}/docs/{uuid}/labels/{key}")
+    def put_label(self, slug: str, uuid: str, key: str):
+        from evid.core.labels import rename_label
+
+        _, d = self.app.doc_dir(slug, uuid)
+        new = str(self.body().get("key") or "").strip()
+        if not new:
+            raise HTTPError(400, "missing key")
+        self.app.disk.touch(slug, uuid)
+        try:
+            rename_label(d, key, new)
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Renamed label %s to %s of %s", key, new, doc_name(d))
+        self.send_json(200, _commit_view(d, f"{key} -> {new}"))
+
+    @route("DELETE", "/api/sets/{slug}/docs/{uuid}/labels/{key}")
+    def delete_label(self, slug: str, uuid: str, key: str):
+        from evid.core.labels import remove_label
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.disk.touch(slug, uuid)
+        try:
+            remove_label(d, key)
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Removed label %s of %s", key, doc_name(d))
+        self.send_json(200, _commit_view(d, f"-{key}"))
+
+    @route("POST", "/api/sets/{slug}/docs/{uuid}/annotations-on-text")
+    def post_annotation_on_text(self, slug: str, uuid: str):
+        from evid.core.labels import add_annotation, span_at, span_of
+
+        _, d = self.app.doc_dir(slug, uuid)
+        b = self.body()
+        note = str(b.get("note") or b.get("text") or "")
+        self.app.disk.touch(slug, uuid)
+        if "start" in b and "end" in b:
+            span = span_at(d, int(b["start"]), int(b["end"]))
+        else:
+            passage = str(b.get("passage") or "")
+            if not passage.strip():
+                raise HTTPError(400, "select a passage")
+            span, _score, _how = span_of(d, passage)
+        rec = add_annotation(d, span, note)
+        logger.info("Annotated %s of %s", rec["id"], doc_name(d))
+        self.send_json(200, _commit_view(d, f"+annotation {rec['id']}"))
+
+    @route("PUT", "/api/sets/{slug}/docs/{uuid}/annotations-on-text/{ann_id}")
+    def put_annotation_on_text(self, slug: str, uuid: str, ann_id: str):
+        from evid.core.labels import annotate
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.disk.touch(slug, uuid)
+        try:
+            annotate(d, ann_id, str(self.body().get("text") or ""))
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Noted annotation %s of %s", ann_id, doc_name(d))
+        self.send_json(200, _commit_view(d, f"annotation {ann_id} note"))
+
+    @route("DELETE", "/api/sets/{slug}/docs/{uuid}/annotations-on-text/{ann_id}")
+    def delete_annotation_on_text(self, slug: str, uuid: str, ann_id: str):
+        from evid.core.labels import remove_annotation
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.disk.touch(slug, uuid)
+        try:
+            remove_annotation(d, ann_id)
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Removed annotation %s of %s", ann_id, doc_name(d))
+        self.send_json(200, _commit_view(d, f"-annotation {ann_id}"))
 
     # tags -----------------------------------------------------------------
 

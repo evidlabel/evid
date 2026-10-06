@@ -15,6 +15,7 @@
   --pill: #e7e7e3; --pill-active: #2f6fb3; --pill-carried: #c8e2c4; --mark: #ffe08a; --err: #b3261e; --ok: #2e7d32;
   --hl-lab: #8a2be2; --hl-key: #b4530a; --hl-quote: #0d6b3f; --hl-quote-bg: #e3f4e9; --hl-note: #6b6b66;
   --hl-head: #2f6fb3; --hl-hash: #a0306e; --hl-str: #7a5c00; --hl-com: #8c8c86;
+  --mk-h: #2e7d32; --mk-a: #c9a227; --mk-m: #7a3ff2;
   --mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
 }
 @media (prefers-color-scheme: dark) {
@@ -24,6 +25,7 @@
     --pill: #34353a; --pill-active: #4d86c4; --pill-carried: #35553a; --mark: #8a6d1d; --err: #ff8a80; --ok: #81c784;
     --hl-lab: #c792ea; --hl-key: #f0a35e; --hl-quote: #9be0b0; --hl-quote-bg: #203a2a; --hl-note: #9a9a95;
     --hl-head: #82aaff; --hl-hash: #f07178; --hl-str: #ddc27a; --hl-com: #6f6f6a;
+    --mk-h: #81c784; --mk-a: #e6c35c; --mk-m: #c9a6ff;
   }
 }
 * { box-sizing: border-box; }
@@ -221,36 +223,28 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 #label { flex-direction: column; padding: 8px; gap: 6px; min-width: 0; }
 #edhead { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 #edempty { color: var(--muted); padding: 20px 4px; }
-#edempty button { margin-top: 8px; }
-#edtitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#edtitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 #edpath { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 100%; order: 9; }
-#edtitle { flex: 1; }
-#edbox { flex: 1; position: relative; min-height: 0; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); overflow: hidden; }
-#ed, #edhl { position: absolute; inset: 0; margin: 0; border: 0; font: var(--edfs, 13px)/1.5 var(--mono); tab-size: 2; white-space: pre; padding: 8px; letter-spacing: 0; }
-#edbox.wrap #ed, #edbox.wrap #edhl { white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; }
-#edbox.wrap #ed { overflow-x: hidden; }
+#edmain { flex: 1; min-height: 0; display: flex; gap: 8px; }
+#edbox { flex: 1; min-width: 0; overflow: auto; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); font: var(--edfs, 13px)/1.5 var(--mono); padding: 8px; white-space: pre; }
+#edbox.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+#edbox:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 #ed-wrap.on { background: var(--sel); }
-#ed { resize: none; background: transparent; color: transparent; caret-color: var(--fg); z-index: 1; border-radius: 5px; overflow: auto; }
-#ed::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); color: transparent; }
-#ed:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
-#edhl { overflow: hidden; color: var(--fg); pointer-events: none; }
-#edhl .lab { color: var(--hl-lab); font-weight: 700; }
-#edhl .lab-p { color: var(--hl-lab); }
-#edhl .key { color: var(--hl-key); font-weight: 700; }
-#edhl .quote { color: var(--hl-quote); background: var(--hl-quote-bg); border-radius: 3px; }
-#edhl .note { color: var(--hl-note); font-style: italic; }
-#edhl .head { color: var(--hl-head); font-weight: 700; }
-#edhl .page { color: var(--hl-head); background: color-mix(in srgb, var(--hl-head) 10%, transparent); font-weight: 700; }
-#edhl .hash { color: var(--hl-hash); }
-#edhl .str { color: var(--hl-str); }
-#edhl .com { color: var(--hl-com); font-style: italic; }
-#edbanner { display: none; padding: 6px 8px; border-radius: 5px; background: color-mix(in srgb, var(--mark) 60%, transparent); align-items: center; gap: 8px; }
-#edbanner.on { display: flex; }
-#edmsg { font-size: 12px; color: var(--muted); }
+.pageband { user-select: none; display: block; text-align: center; color: var(--hl-head); font: 600 11px/1.6 system-ui, sans-serif; letter-spacing: .04em; margin: 10px 0 6px; }
+.mk-h { background: color-mix(in srgb, var(--mk-h) 34%, transparent); }
+.mk-a { background: color-mix(in srgb, var(--mk-a) 45%, transparent); }
+.mk-m { background: color-mix(in srgb, var(--mk-m) 28%, transparent); }
+.mk.on { outline: 1px solid var(--accent); }
+#edmsg { font-size: 12px; color: var(--muted); min-height: 1.2em; }
 #edmsg.err { color: var(--err); }
-#edside { flex: none; display: flex; flex-direction: column; gap: 4px; }
-#edside .list { max-height: 110px; }
-#edside h4 { margin: 0; }
+#edside { width: 260px; flex: none; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+#edside h4 { margin: 2px 0 0; }
+#edside .list { flex: 1; max-height: none; min-height: 48px; }
+#edside .item { display: flex; gap: 4px; align-items: center; }
+#edside .item b { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+#edside .item .meta { color: var(--muted); flex: none; font-size: 11px; }
+#edside .item .mini { flex: none; margin-left: auto; }
+#edside .pass { color: var(--muted); font-size: 11px; background: var(--panel2); }
 #logwrap { border-top: 1px solid var(--line); background: var(--panel2); }
 #loghead { display: flex; align-items: center; gap: 6px; padding: 2px 8px; color: var(--muted); font-size: 12px; user-select: none; }
 #log { height: 110px; overflow: auto; margin: 0; padding: 4px 8px; font: 11px/1.4 var(--mono); white-space: pre-wrap; background: var(--panel); border-top: 1px solid var(--line); }
@@ -323,7 +317,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
       </div>
       <div class="split-v" id="split"></div>
       <div id="rpane">
-      <div class="ptabs"><button data-p="detail">Detail</button><button data-p="label" id="ptab-label" title="Edit the selected document's label.typ here">Label</button><span class="hint" id="ptab-hint">Alt+↑/↓: next doc</span></div>
+      <div class="ptabs"><button data-p="detail">Detail</button><button data-p="label" id="ptab-label" title="Read the document and label passages">Label</button><span class="hint" id="ptab-hint">Alt+↑/↓: next doc</span></div>
       <div id="detail" class="pview">
         <div class="uuidrow"><span class="mono" id="d-uuid">—</span>
           <button id="d-view" title="Open the URL, or the folder if there is none">View</button>
@@ -356,22 +350,24 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
         <div class="hist" id="d-hist"></div>
       </div>
       <div id="label" class="pview">
-        <div id="edempty" hidden></div>
-        <div id="edhead"><span id="edtitle"></span>
-          <button id="ed-lab" title="Wrap the selected text in a #lab label (Ctrl+L)">+ Label</button>
+        <div id="edempty">Select a document to label it.</div>
+        <div id="edhead" hidden><span id="edtitle"></span>
+          <button id="ed-lab" title="Label the selected passage (Ctrl+L)">+ Label</button>
+          <button id="ed-ann" title="Annotate the selected passage (Ctrl+M)">+ Note</button>
           <button id="ed-zout" title="Smaller text (Ctrl+−)">A−</button><button id="ed-zin" title="Larger text (Ctrl++, Ctrl+0 resets, Ctrl+wheel)">A+</button>
           <button id="ed-wrap" title="Wrap long lines">Wrap</button>
           <button id="ed-reload" title="Reload from disk">↻</button>
-          <button id="ed-save" disabled title="Saved — labels up to date">Saved</button>
           <span id="edpath"></span></div>
-        <div id="edbanner"><span id="edbanner-msg">label.typ changed on disk.</span><span style="flex:1"></span><button id="ed-take">Load disk version</button><button id="ed-keep">Keep mine</button></div>
-        <div id="edbox"><pre id="edhl" aria-hidden="true"></pre><textarea id="ed" spellcheck="false"></textarea></div>
-        <div id="edmsg"></div>
-        <div id="edside">
-          <h4>Labels <span class="muted" id="ed-nlabels"></span></h4>
-          <div class="list" id="ed-labels"></div>
-          <div class="legend">Select a quote, <kbd>Ctrl+L</kbd> to label it · <kbd>Ctrl+S</kbd> save + extract labels · click a label to find it · <kbd>Alt+↑</kbd>/<kbd>Alt+↓</kbd> next doc (saves first)</div>
+        <div id="edmain" hidden>
+          <div id="edbox" tabindex="0"><div id="edtext"></div></div>
+          <div id="edside">
+            <h4>Human <span class="muted" id="ed-nlabels"></span></h4>
+            <div class="list" id="ed-labels"></div>
+            <h4>Machine <span class="muted" id="ed-nmachine"></span></h4>
+            <div class="list" id="ed-machine"></div>
+          </div>
         </div>
+        <div id="edmsg" hidden></div>
       </div>
       </div>
     </section>
@@ -504,32 +500,62 @@ function labKey(text, taken) {
   return `${base}-${i}`;
 }
 
-// The Typst call for one label. Line breaks in the selection become spaces.
-function labCall(key, text, note) {
-  const q = v => '"' + String(v || '').replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
-  return `#lab(${q(key)}, ${q(text)}, ${q(note)})`;
+function escHtml(t) { return String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function escAttr(t) { return escHtml(t).replace(/"/g, '&quot;'); }
+
+// The label reader as HTML. Page bands sit outside the offset space. Overlapping
+// spans nest outermost machine, then annotation, then human, so a click hits the human label.
+function labelHtml(text, pages, labels, annotations, quotes) {
+  text = String(text ?? '');
+  const n = text.length;
+  const spans = [];
+  const add = (kind, id, start, end) => {
+    start = Math.max(0, start | 0); end = Math.min(n, end | 0);
+    if (end > start && id != null && id !== '') spans.push({ kind, id: String(id), start, end });
+  };
+  for (const l of labels || []) add('h', l.key, l.start, l.end);
+  for (const a of annotations || []) add('a', a.id, a.start, a.end);
+  for (const q of quotes || []) if (!q.lost) add('m', q.key, q.start, q.end);
+  const bands = new Map();
+  for (const p of pages || []) {
+    const off = +p[0];
+    if (Number.isFinite(off) && off >= 0 && off <= n) bands.set(off, p[1]);
+  }
+  const cuts = new Set([0, n]);
+  for (const off of bands.keys()) cuts.add(off);
+  for (const s of spans) { cuts.add(s.start); cuts.add(s.end); }
+  const uniq = [...cuts].filter(x => x >= 0 && x <= n).sort((a, b) => a - b)
+    .filter((x, i, all) => i === 0 || x !== all[i - 1]);
+  const rank = { m: 0, a: 1, h: 2 };
+  const covering = pos => spans.filter(s => s.start <= pos && s.end > pos).sort((a, b) =>
+    (b.end - b.start) - (a.end - a.start) || rank[a.kind] - rank[b.kind] || (a.id < b.id ? -1 : 1));
+  let html = '', stack = [];
+  const open = s => `<span class="mk mk-${s.kind}" data-kind="${s.kind}" data-id="${escAttr(s.id)}">`;
+  for (let i = 0; i < uniq.length; i++) {
+    const a = uniq[i];
+    if (bands.has(a)) {
+      html += '</span>'.repeat(stack.length);
+      stack = [];
+      html += `<div class="pageband">— page ${escHtml(bands.get(a))} —</div>`;
+    }
+    const b = uniq[i + 1];
+    if (b == null) break;
+    const want = covering(a);
+    let k = 0;
+    while (k < stack.length && k < want.length && stack[k].kind === want[k].kind && stack[k].id === want[k].id) k++;
+    html += '</span>'.repeat(stack.length - k);
+    for (let j = k; j < want.length; j++) html += open(want[j]);
+    stack = want;
+    html += `<span data-start="${a}">${escHtml(text.slice(a, b))}</span>`;
+  }
+  return html + '</span>'.repeat(stack.length);
 }
 
-// Typst highlighting for the label editor, as escaped HTML. #lab("key", "quote", "note")
-// calls get their parts marked; headings, == Page N, #calls, strings and // comments too.
-const TYP_RX = /(#lab)(\s*\()(\s*)("(?:[^"\\\n]|\\.)*")(\s*,\s*)("(?:[^"\\]|\\.)*")(?:(\s*,\s*)("(?:[^"\\]|\\.)*"))?(\s*\))|(\/\/[^\n]*)|(^==\s*Page\s+\d+[^\n]*)|(^=+\s[^\n]*)|(#[A-Za-z_][\w-]*)|("(?:[^"\\\n]|\\.)*")/gm;
-function escHtml(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-function typHighlight(text) {
-  const span = (cls, t) => t ? `<span class="${cls}">${escHtml(t)}</span>` : '';
-  let out = '', last = 0, m;
-  TYP_RX.lastIndex = 0;
-  while ((m = TYP_RX.exec(text))) {
-    out += escHtml(text.slice(last, m.index));
-    if (m[1]) out += span('lab', m[1]) + span('lab-p', m[2]) + escHtml(m[3]) + span('key', m[4]) + span('lab-p', m[5]) + span('quote', m[6])
-      + span('lab-p', m[7] || '') + span('note', m[8] || '') + span('lab-p', m[9]);
-    else if (m[10]) out += span('com', m[10]);
-    else if (m[11]) out += span('page', m[11]);
-    else if (m[12]) out += span('head', m[12]);
-    else if (m[13]) out += span('hash', m[13]);
-    else out += span('str', m[14]);
-    last = m.index + m[0].length;
-  }
-  return out + escHtml(text.slice(last));
+// Page number of a character offset, from pages.json pairs [offset, page].
+function pageAt(pages, off) {
+  let p = 1;
+  for (const row of pages || []) if (+row[0] <= off) p = row[1];
+  return p;
 }
 
 // Re-order `docs` like `prevOrder` (uuids); docs that are new come first, in their own order.
@@ -551,7 +577,12 @@ function selectionText(c) {
   const docs = c.docs.map(d => `"${d.label}" (${d.uuid})`).join(', ');
   let t = `In evid set "${c.slug}" I selected ${c.docs.length > 1 ? 'the documents ' : ''}${docs}.`;
   if (c.labels && c.labels.length) t += ` Labels: ${c.labels.join(', ')}.`;
-  if (c.quote) t += ` In its ${c.file || 'label.typ'} (line ${c.line}) I selected: "${c.quote.length > 600 ? c.quote.slice(0, 600) + '…' : c.quote}".`;
+  if (c.labelKey) t += ` Label: ${c.labelKey}.`;
+  if (c.span) {
+    const q = String(c.span.text || '');
+    const shown = q.length > 600 ? q.slice(0, 600) + '…' : q;
+    t += ` Span on page ${c.span.page}, characters ${c.span.start}-${c.span.end}: "${shown}".`;
+  }
   return t + ' ';
 }
 
@@ -624,8 +655,9 @@ function historyChips(items) {
     else if (it.kind === 'details') out.push(['det', `✎ ${it.fields.join(', ')}`, 'info.yml fields changed']);
     else if (it.kind === 'notes') out.push(['note', `🗨 note on ${it.paths.join(', ')}`, 'annotations.yml']);
     else if (it.kind === 'labels') {
-      for (const k of it.added) out.push(['lab', `+ ${k}`, `label added in ${it.file}`]);
-      for (const k of it.removed) out.push(['lab rm', `− ${k}`, `label removed from ${it.file}`]);
+      for (const k of it.added || []) out.push(['lab', `+ ${k}`, `label added in ${it.file}`]);
+      for (const k of it.removed || []) out.push(['lab rm', `− ${k}`, `label removed from ${it.file}`]);
+      for (const k of it.notes || []) out.push(['note', `note on ${k}`, `note added to ${k}`]);
     } else if (it.kind === 'pass') out.push(['pass', `pass${it.job ? ': ' + it.job : ''} (${it.matched}/${it.tried})`, `machine-quote pass ${it.id}${it.model ? ' · ' + it.model : ''}`]);
     else if (it.kind === 'files') out.push(['', `${it.what} ${it.files.join(', ')}`, '']);
   }
@@ -884,10 +916,9 @@ function onEvent(e) {
     case 'docs_changed': if (e.slug === S.slug) scheduleReload(); else refreshSetCounts(); S.setTags.delete(e.slug); break;
     case 'labels_updated':
       if (e.slug === S.slug) { scheduleReload(); if (S.cur === e.uuid) { refreshLabels(); renderFiles(); } }
-      if (S.ed && S.ed.uuid === e.uuid && S.ed.slug === e.slug) { S.ed.stale = false; edMark(); edDiskChanged(); }
+      if (S.ed && S.ed.uuid === e.uuid && S.ed.slug === e.slug) edLoad(e.slug, e.uuid, false, true);
       status('Labels updated', 3000); break;
-    case 'label_error': status(`Labels: ${e.error}`, 8000, true);
-      if (S.ed && S.ed.uuid === e.uuid) { S.ed.stale = true; edMsg(e.error, true); edMark(); } break;
+    case 'label_error': status(`Labels: ${e.error}`, 8000, true); break;
     case 'open':
       (async () => {
         if (e.slug && e.slug !== S.slug) await selectSet(e.slug);
@@ -1472,7 +1503,7 @@ function renderLabels(labels) {
   S.labels = labels || []; labelSel = new Set(); labelAnchor = null;
   $('#d-nlabels').textContent = S.labels.length ? `(${S.labels.length})` : '';
   const box = $('#d-labels');
-  box.replaceChildren(...(S.labels.length ? S.labels.map(l => el('div', { 'data-key': l.key, title: l.text, text: l.key })) : [el('div', { class: 'empty', text: S.detail ? '(no labels — Label to add #lab marks)' : '' })]));
+  box.replaceChildren(...(S.labels.length ? S.labels.map(l => el('div', { 'data-key': l.key, title: l.text, text: l.key })) : [el('div', { class: 'empty', text: S.detail ? '(no labels — open Label and select a passage)' : '' })]));
   showLabelText();
 }
 function showLabelText() {
@@ -1648,90 +1679,67 @@ async function indexDocs() {
   } catch (e) { alertDlg('Index failed', e.message); }
 }
 
-// ── in-page label.typ editor ─────────────────────────────────────────────────
+// ── label reader (spans over label/text.txt) ────────────────────────────────
 
-const ed = $('#ed');
 function edMsg(m, err) { const e = $('#edmsg'); e.textContent = m || ''; e.className = err ? 'err' : ''; }
-const edDirty = () => !!S.ed && ed.value !== S.ed.orig;
-function edMark() { $('#ptab-label').textContent = edDirty() ? 'Label •' : 'Label'; edPaint(); edSaveBtn(); }
-// Save is bright when there is something to save (edits, or labels that failed to extract), grey when up to date.
-function edSaveBtn() {
-  const b = $('#ed-save');
-  if (S.edSaving) { b.disabled = true; b.textContent = 'Saving…'; return; }
-  const need = !!S.ed && (edDirty() || !!S.ed.stale);
-  b.disabled = !need; b.classList.toggle('primary', need);
-  b.textContent = need ? 'Save' : 'Saved';
-  b.title = need ? 'Save and extract the labels (Ctrl+S)' : 'Saved — labels up to date (Ctrl+S extracts them again)';
-}
-const edhl = $('#edhl');
-let edPaintReq = 0;
-function edPaint() {  // re-highlight on the next frame (coalesces fast typing)
-  if (edPaintReq) return;
-  edPaintReq = requestAnimationFrame(() => { edPaintReq = 0; edhl.innerHTML = typHighlight(ed.value) + '\n '; edFit(); });
-}
-function edSync() { edhl.scrollTop = ed.scrollTop; edhl.scrollLeft = ed.scrollLeft; }
-// The highlight layer must wrap exactly where the textarea does: give it the same content
-// width by padding it on the right by the textarea's scrollbar.
-function edFit() {
-  const sb = ed.offsetWidth - ed.clientWidth;
-  edhl.style.paddingRight = `${8 + sb}px`;
-  edhl.style.paddingBottom = `${8 + (ed.offsetHeight - ed.clientHeight)}px`;
-  edSync();
-}
-function setWrap(on) {
-  $('#edbox').classList.toggle('wrap', on); $('#ed-wrap').classList.toggle('on', on);
-  ed.setAttribute('wrap', on ? 'soft' : 'off'); store('wrap', on); edFit();
-}
-new ResizeObserver(edFit).observe(ed);
-// Pixel offset of character `i` inside the editor (works with wrapped lines): measure it in the layer.
-function edOffsetTop(i) {
-  const keep = edhl.innerHTML;
-  edhl.innerHTML = escHtml(ed.value.slice(0, i)) + '<span id="edprobe">\u200b</span>';
-  const top = $('#edprobe').offsetTop;
-  edhl.innerHTML = keep;
-  return top;
-}
-// The label pane follows the selected doc. Leaving a doc with unsaved edits saves them.
-async function edLeave() {
-  if (!edDirty()) return true;
-  await edSave(false);
-  if (edDirty()) { status('label.typ not saved — resolve it before moving on', 6000, true); return false; }
-  return true;
-}
-function edShow(on, msg, gen) {
-  for (const id of ['#edhead', '#edbox', '#edmsg', '#edside']) $(id).hidden = !on;
-  if (!on) $('#edbanner').classList.remove('on');
+const edDirty = () => false;  // a label is committed as soon as it is made
+async function edLeave() { return true; }
+function edShow(on, msg) {
+  for (const id of ['#edhead', '#edmain', '#edmsg']) $(id).hidden = !on;
   const e = $('#edempty'); e.hidden = on;
-  if (!on) e.replaceChildren(el('div', { text: msg }), gen ? el('button', { class: 'primary', text: 'Generate label.typ from the PDF', onclick: gen }) : null);
+  if (!on) e.textContent = msg || '';
+}
+function flatQuotes(passes) {
+  const out = [];
+  for (const p of passes || []) for (const q of p.quotes || []) if (!q.lost) out.push(q);
+  return out;
+}
+function textSel() {
+  const root = $('#edtext');
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || sel.isCollapsed || !root) return null;
+  const range = sel.getRangeAt(0);
+  const off = (node, offset) => {
+    const eln = node.nodeType === 1 ? node : node.parentElement;
+    const host = eln && eln.closest('[data-start]');
+    if (!host || !root.contains(host)) return null;
+    const r = document.createRange();
+    r.setStart(host, 0); r.setEnd(node, offset);
+    return (+host.dataset.start) + r.toString().length;
+  };
+  if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
+  const a = off(range.startContainer, range.startOffset);
+  const b = off(range.endContainer, range.endOffset);
+  if (a == null || b == null || a === b) return null;
+  return { start: Math.min(a, b), end: Math.max(a, b) };
 }
 let edSeq = 0;
-async function edLoad(slug, uuid, focus) {
-  const seq = ++edSeq;
-  if (!uuid) { S.ed = null; edShow(false, 'Select a document to label it.'); edMark(); return; }
-  if (S.ed && S.ed.uuid === uuid && S.ed.slug === slug) { if (focus) ed.focus(); return; }
-  let r;
-  try { r = await api('GET', docUrl(slug, uuid, '/typ')); } catch (e) { if (seq === edSeq) edShow(false, e.message); return; }
-  if (seq !== edSeq) return;  // moved on to another doc meanwhile
-  const doc = S.byUuid.get(uuid) || { label: uuid };
-  if (!r.exists) {
-    S.ed = null; edMark();
-    edShow(false, `${doc.label} has no label.typ yet.`, async () => {
-      status('Generating label.typ…');
-      try { const { job } = await api('POST', docUrl(slug, uuid, '/label'), { editor: false }); await waitJob(job); status('', 0); }
-      catch (e) { status(e.message, 8000, true); return; }
-      edLoad(slug, uuid, true);
-    });
-    return;
-  }
-  S.ed = { slug, uuid, mtime: r.mtime, orig: r.content, path: r.path };
+function showText(slug, uuid, r, focus) {
+  const box = $('#edbox');
+  const same = S.ed && S.ed.uuid === uuid && S.ed.slug === slug;
+  const top = same ? box.scrollTop : 0;
+  const rec = same ? S.ed.rec : null;
+  S.ed = { slug, uuid, text: r.text, pages: r.pages || [], labels: r.labels || [], annotations: r.annotations || [], passes: r.passes || [], rec };
   edShow(true);
-  ed.value = r.content; ed.scrollTop = 0; ed.setSelectionRange(0, 0);
-  $('#edtitle').textContent = doc.label; $('#edtitle').title = doc.label; $('#edpath').textContent = r.path; $('#edpath').title = r.path;
-  $('#edbanner').classList.remove('on'); edMsg(''); edMark();
-  if (focus) ed.focus();
-  edLabels();
+  const doc = S.byUuid.get(uuid) || { label: uuid };
+  $('#edtitle').textContent = doc.label; $('#edtitle').title = doc.label;
+  $('#edpath').textContent = 'label/text.txt'; $('#edpath').title = 'label/text.txt';
+  $('#edtext').innerHTML = labelHtml(r.text, r.pages, r.labels, r.annotations, flatQuotes(r.passes));
+  edSide(); markRec();
+  box.scrollTop = top;
+  if (focus) box.focus();
+  edMsg('');
 }
-// Open the label pane on a doc (from a menu, the toolbar or after ingest).
+async function edLoad(slug, uuid, focus, force) {
+  const seq = ++edSeq;
+  if (!uuid) { S.ed = null; edShow(false, 'Select a document to label it.'); return; }
+  if (!force && S.ed && S.ed.uuid === uuid && S.ed.slug === slug) { if (focus) $('#edbox').focus(); return; }
+  let r;
+  try { r = await api('GET', docUrl(slug, uuid, '/text')); }
+  catch (e) { if (seq === edSeq) edShow(false, e.message); return; }
+  if (seq !== edSeq) return;
+  showText(slug, uuid, r, focus);
+}
 async function openEditor(slug, uuid) {
   if (S.view !== 'docs') switchView('docs');
   if (S.cur !== uuid) await showInDocs(uuid);
@@ -1745,62 +1753,87 @@ function switchPane(p) {
   if (p === 'label') edLoad(S.slug, S.cur, false);
 }
 $$('.ptabs button').forEach(b => b.onclick = () => switchPane(b.dataset.p));
-async function edLabels() {
-  if (!S.ed) return;
-  const r = await api('GET', docUrl(S.ed.slug, S.ed.uuid));
-  const box = $('#ed-labels');
-  $('#ed-nlabels').textContent = r.labels.length ? `(${r.labels.length})` : '';
-  box.replaceChildren(...(r.labels.length ? r.labels.map(l => el('div', { title: labelPreview(l), text: l.key, onclick: () => edFind(l) })) : [el('div', { class: 'empty', text: '(none yet)' })]));
-}
-function edFind(l) {
-  const v = ed.value; let i = v.indexOf(l.key);
-  if (i < 0 && l.text) i = v.indexOf(l.text.slice(0, 40));
-  if (i < 0) { edMsg(`'${l.key}' not found in the text`, true); return; }
-  ed.focus(); ed.setSelectionRange(i, i + l.key.length);
-  ed.scrollTop = Math.max(0, edOffsetTop(i) - 4 * parseFloat(getComputedStyle(ed).lineHeight));
-}
-// Save label.typ and extract its labels (label.json / label.bib). Also runs when nothing changed,
-// so Ctrl+S re-extracts on demand.
-async function edSave(force) {
-  if (!S.ed || S.edSaving) return;
-  const was = edDirty(), ed0 = S.ed;
-  S.edSaving = true; edSaveBtn(); edMsg('Saving…');
-  try {
-    const r = await api('PUT', docUrl(ed0.slug, ed0.uuid, '/typ'), { content: ed.value, mtime: ed0.mtime, force: !!force });
-    ed0.mtime = r.mtime; ed0.orig = ed.value; ed0.stale = !r.ok; $('#edbanner').classList.remove('on');
-    const n = `${r.labels.length} label(s)`;
-    if (r.ok) { edMsg(was ? `Saved — ${n} extracted` : `Labels extracted — ${n}`); status(`Saved label.typ — ${n}`, 3000); }
-    else { edMsg(`Saved, but the labels were not extracted: ${r.msg}`, true); status('Labels not extracted — see the message under the editor', 6000, true); }
-    edLabels(); if (ed0.slug === S.slug) { scheduleReload(); if (S.cur === ed0.uuid) refreshLabels(); }
-  } catch (e) {
-    if (e.status === 409) { ed0.disk = e.data; $('#edbanner-msg').textContent = 'label.typ changed on disk since you opened it.'; $('#edbanner').classList.add('on'); edMsg(''); }
-    else { edMsg(e.message, true); status(e.message, 6000, true); }
-  } finally {
-    S.edSaving = false; edMark();
+
+function findRec(kind, id) {
+  if (!S.ed) return null;
+  if (kind === 'h') return (S.ed.labels || []).find(l => l.key === id) || null;
+  if (kind === 'a') return (S.ed.annotations || []).find(a => a.id === id) || null;
+  for (const p of S.ed.passes || []) {
+    const q = (p.quotes || []).find(x => x.key === id);
+    if (q) return q;
   }
+  return null;
 }
-async function edDiskChanged() {
-  const r = await api('GET', docUrl(S.ed.slug, S.ed.uuid, '/typ'));
-  if (!r.exists || r.mtime === S.ed.mtime) return;
-  if (r.content === S.ed.orig) { S.ed.mtime = r.mtime; return; }  // touched, not changed
-  const pos = ed.selectionStart, top = ed.scrollTop;
-  const take = text => { S.ed.mtime = r.mtime; S.ed.orig = r.content; ed.value = text; ed.setSelectionRange(Math.min(pos, text.length), Math.min(pos, text.length)); ed.scrollTop = top; edMark(); edLabels(); };
-  if (!edDirty()) { take(r.content); edMsg('Updated from disk (changed outside the app)'); return; }
-  const merged = merge3(S.ed.orig, ed.value, r.content);
-  if (merged !== null) { take(merged); edMsg('Merged the change from disk into your unsaved edits — Save when ready'); return; }
-  S.ed.disk = r; $('#edbanner-msg').textContent = 'label.typ changed outside the app where you are editing too.'; $('#edbanner').classList.add('on');
+function markRec() {
+  const rec = S.ed && S.ed.rec;
+  const on = n => rec && n.dataset.kind === rec.kind && n.dataset.id === rec.id;
+  $$('#edtext [data-kind]').forEach(n => n.classList.toggle('on', on(n)));
+  $$('#edside [data-kind]').forEach(n => n.classList.toggle('sel', on(n)));
 }
-$('#ed-save').onclick = () => edSave(false);
-$('#ed-keep').onclick = () => edSave(true);
-$('#ed-take').onclick = () => { const d = S.ed.disk; if (!d) return; S.ed.mtime = d.mtime; S.ed.orig = d.content; ed.value = d.content; edMark(); $('#edbanner').classList.remove('on'); edLabels(); };
-// Ctrl+L: wrap the selection in #lab("key", "text", "note"); with no selection, insert an empty one.
+function edGo(kind, id) {
+  if (!S.ed) return;
+  S.ed.rec = { kind, id };
+  markRec();
+  const node = $(`#edtext [data-kind="${CSS.escape(kind)}"][data-id="${CSS.escape(id)}"]`);
+  if (node) node.scrollIntoView({ block: 'center' });
+}
+function edSide() {
+  if (!S.ed) return;
+  const labels = S.ed.labels || [], anns = S.ed.annotations || [], passes = S.ed.passes || [];
+  const nq = passes.reduce((n, p) => n + (p.quotes || []).filter(q => !q.lost).length, 0);
+  $('#ed-nlabels').textContent = (labels.length + anns.length) ? `(${labels.length + anns.length})` : '';
+  $('#ed-nmachine').textContent = nq ? `(${nq})` : '';
+  const human = [];
+  for (const l of labels) human.push(sideRow('h', l.key, l.key, `p${l.page ?? '?'} · ${(l.notes || []).length}`, l.text, () => addNote(l.key)));
+  for (const a of anns) {
+    const preview = ((a.notes || [])[0] || {}).text || a.text || a.id;
+    const short = preview.length > 32 ? preview.slice(0, 31) + '…' : preview;
+    human.push(sideRow('a', a.id, short, `p${a.page ?? '?'} · ${(a.notes || []).length}`, (a.notes || []).map(n => n.text).filter(Boolean).join('\n') || a.text, () => addAnnNote(a.id)));
+  }
+  $('#ed-labels').replaceChildren(...(human.length ? human : [el('div', { class: 'empty', text: '(none yet)' })]));
+  const machine = [];
+  for (const p of passes) {
+    const head = [p.job || p.id, p.model].filter(Boolean).join(' · ');
+    machine.push(el('div', { class: 'pass', text: `${head} (${p.matched}/${p.tried})` }));
+    for (const q of p.quotes || []) if (!q.lost) machine.push(sideRow('m', q.key, q.key, `p${q.page ?? '?'}`, q.text, null));
+  }
+  $('#ed-machine').replaceChildren(...(machine.length ? machine : [el('div', { class: 'empty', text: '(none yet)' })]));
+}
+function sideRow(kind, id, title, meta, tip, noteFn) {
+  const row = el('div', { class: 'item', 'data-kind': kind, 'data-id': id, title: tip || '', onclick: () => edGo(kind, id),
+    oncontextmenu: e => edMenu(e, kind, id) },
+    el('b', { text: title }), el('span', { class: 'meta', text: meta }));
+  if (noteFn) row.append(el('button', { class: 'mini', text: '+ note', title: 'Add a note', onclick: ev => { ev.stopPropagation(); noteFn(); } }));
+  return row;
+}
+function edMenu(e, kind, id) {
+  e.preventDefault();
+  edGo(kind, id);
+  const items = [];
+  if (kind === 'h') items.push(
+    { label: 'Rename', fn: () => renameLabel(id) },
+    { label: 'Delete', fn: () => deleteLabel(id) },
+    { label: 'Copy as YAML', fn: () => copyLabelYaml([id]) });
+  else if (kind === 'a') items.push({ label: 'Delete', fn: () => deleteAnn(id) });
+  else items.push({ label: 'Copy as YAML', fn: () => copyLabelYaml([id]) });
+  showMenu(e.clientX, e.clientY, items);
+}
+async function afterWrite(r, msg) {
+  if (!S.ed) return;
+  showText(S.ed.slug, S.ed.uuid, r, true);
+  if (msg) status(msg, 3000);
+  if (S.ed.slug === S.slug) { scheduleReload(); if (S.cur === S.ed.uuid) refreshLabels(); }
+}
 async function addLabel() {
-  const a = ed.selectionStart, b = ed.selectionEnd, text = ed.value.slice(a, b);
-  const taken = [...ed.value.matchAll(/#lab\(\s*"((?:[^"\\]|\\.)*)"/g)].map(m => m[1]);
-  const key = el('input', { value: labKey(text, taken), style: 'width:100%' });
+  if (!S.ed) return;
+  const sel = textSel();
+  if (!sel) { status('Select a passage first', 4000, true); return; }
+  const passage = S.ed.text.slice(sel.start, sel.end);
+  const taken = (S.ed.labels || []).map(l => l.key);
+  const key = el('input', { value: labKey(passage, taken), style: 'width:100%' });
   const note = el('input', { style: 'width:100%', placeholder: 'optional' });
   const res = await dialog('Add label', [
-    el('pre', { class: 'box', text: text || '(no text selected — an empty label is inserted)' }),
+    el('pre', { class: 'box', text: passage }),
     el('label', { text: 'Key:' }), key, el('label', { text: 'Note:' }), note],
     [{ label: 'Cancel', value: () => null }, { label: 'Add label', primary: true, value: () => {
       const k = key.value.trim();
@@ -1808,40 +1841,106 @@ async function addLabel() {
       if (taken.includes(k)) { key.setCustomValidity('key already used'); key.reportValidity(); return undefined; }
       return { key: k, note: note.value.trim() };
     } }]);
-  ed.focus();
-  if (!res) { ed.setSelectionRange(a, b); return; }
-  const call = labCall(res.key, text, res.note);
-  ed.setRangeText(call, a, b, 'end');
-  if (!text) { const i = a + call.indexOf('", "') + 4; ed.setSelectionRange(i, i); }
-  edMark(); edMsg(`Added '${res.key}' — save (Ctrl+S) to rebuild the labels`);
+  $('#edbox').focus();
+  if (!res) return;
+  try {
+    const r = await api('POST', docUrl(S.ed.slug, S.ed.uuid, '/labels'), { start: sel.start, end: sel.end, key: res.key, note: res.note });
+    S.ed.rec = { kind: 'h', id: res.key };
+    await afterWrite(r, `Labelled ${res.key}`);
+  } catch (e) { status(e.message, 6000, true); }
+}
+async function addAnn() {
+  if (!S.ed) return;
+  const sel = textSel();
+  if (!sel) { status('Select a passage to annotate', 4000, true); return; }
+  const note = await promptDlg('Annotate', 'Note on the selected passage:', '');
+  if (!note) return;
+  try {
+    const r = await api('POST', docUrl(S.ed.slug, S.ed.uuid, '/annotations-on-text'), { start: sel.start, end: sel.end, text: note });
+    await afterWrite(r, 'Annotated');
+  } catch (e) { status(e.message, 6000, true); }
+}
+async function addNote(key) {
+  const text = await promptDlg('Note', `Note on ${key}:`, '');
+  if (!text || !S.ed) return;
+  try {
+    const r = await api('POST', docUrl(S.ed.slug, S.ed.uuid, `/labels/${enc(key)}/notes`), { text });
+    await afterWrite(r, `Noted ${key}`);
+  } catch (e) { status(e.message, 6000, true); }
+}
+async function addAnnNote(id) {
+  const text = await promptDlg('Note', 'Note on this annotation:', '');
+  if (!text || !S.ed) return;
+  try {
+    const r = await api('PUT', docUrl(S.ed.slug, S.ed.uuid, `/annotations-on-text/${enc(id)}`), { text });
+    await afterWrite(r, 'Noted');
+  } catch (e) { status(e.message, 6000, true); }
+}
+async function renameLabel(key) {
+  const neu = await promptDlg('Rename label', `New key for ${key}:`, key);
+  if (!neu || neu === key || !S.ed) return;
+  try {
+    const r = await api('PUT', docUrl(S.ed.slug, S.ed.uuid, `/labels/${enc(key)}`), { key: neu });
+    S.ed.rec = { kind: 'h', id: neu };
+    await afterWrite(r, `Renamed ${key} to ${neu}`);
+  } catch (e) { status(e.message, 6000, true); }
+}
+async function deleteLabel(key) {
+  if (!S.ed) return;
+  try {
+    const r = await api('DELETE', docUrl(S.ed.slug, S.ed.uuid, `/labels/${enc(key)}`));
+    if (S.ed.rec && S.ed.rec.id === key) S.ed.rec = null;
+    await afterWrite(r, `Deleted ${key}`);
+  } catch (e) { status(e.message, 6000, true); }
+}
+async function deleteAnn(id) {
+  if (!S.ed) return;
+  try {
+    const r = await api('DELETE', docUrl(S.ed.slug, S.ed.uuid, `/annotations-on-text/${enc(id)}`));
+    if (S.ed.rec && S.ed.rec.id === id) S.ed.rec = null;
+    await afterWrite(r, 'Deleted the annotation');
+  } catch (e) { status(e.message, 6000, true); }
+}
+async function copyLabelYaml(keys) {
+  if (!S.ed || !keys.length) return;
+  const r = await api('POST', docUrl(S.ed.slug, S.ed.uuid, '/labels-yaml'), { keys });
+  copyText(r.text, keys.length > 1 ? `${keys.length} labels as YAML` : 'label as YAML');
 }
 $('#ed-lab').onclick = addLabel;
-$('#ed-reload').onclick = async () => { if (!S.ed) return; if (edDirty() && !(await confirmDlg('Reload', 'Discard your unsaved changes?', 'Discard'))) return; const s = S.ed; S.ed = null; edLoad(s.slug, s.uuid, true); };
-ed.addEventListener('input', edMark);
-ed.addEventListener('scroll', edSync);
+$('#ed-ann').onclick = addAnn;
+$('#ed-reload').onclick = () => { if (S.ed) edLoad(S.ed.slug, S.ed.uuid, true, true); };
+$('#edtext').addEventListener('click', e => {
+  const mk = e.target.closest('[data-kind]');
+  if (!mk || !S.ed) return;
+  S.ed.rec = { kind: mk.dataset.kind, id: mk.dataset.id };
+  markRec();
+});
+$('#edtext').addEventListener('contextmenu', e => {
+  const mk = e.target.closest('[data-kind]');
+  if (!mk) return;
+  edMenu(e, mk.dataset.kind, mk.dataset.id);
+});
+function setWrap(on) {
+  $('#edbox').classList.toggle('wrap', on); $('#ed-wrap').classList.toggle('on', on); store('wrap', on);
+}
 $('#ed-wrap').onclick = () => setWrap(!$('#edbox').classList.contains('wrap'));
 setWrap(load('wrap', true));
-// text zoom in the label editor (both layers share --edfs, so they stay aligned)
 const ZOOM = [10, 11, 12, 13, 14, 16, 18, 20, 22, 24, 28];
 function edZoom(step) {
+  const box = $('#edbox');
   const cur = load('edfs', 13), i = ZOOM.indexOf(cur);
   const next = step === 0 ? 13 : ZOOM[Math.max(0, Math.min(ZOOM.length - 1, (i < 0 ? 3 : i) + step))];
-  const caret = ed.selectionStart, rel = ed.scrollHeight ? ed.scrollTop / ed.scrollHeight : 0;
-  $('#edbox').style.setProperty('--edfs', `${next}px`); store('edfs', next);
-  edFit(); ed.scrollTop = rel * ed.scrollHeight; edSync();
+  const rel = box.scrollHeight ? box.scrollTop / box.scrollHeight : 0;
+  box.style.setProperty('--edfs', `${next}px`); store('edfs', next);
+  box.scrollTop = rel * box.scrollHeight;
   $('#ed-zout').disabled = next === ZOOM[0]; $('#ed-zin').disabled = next === ZOOM[ZOOM.length - 1];
   edMsg(`Text size ${next}px`);
-  ed.setSelectionRange(caret, caret);
 }
 $('#ed-zin').onclick = () => edZoom(1);
 $('#ed-zout').onclick = () => edZoom(-1);
 $('#edbox').addEventListener('wheel', e => { if (e.ctrlKey) { e.preventDefault(); edZoom(e.deltaY < 0 ? 1 : -1); } }, { passive: false });
 $('#edbox').style.setProperty('--edfs', `${load('edfs', 13)}px`);
 $('#ed-zout').disabled = load('edfs', 13) === ZOOM[0]; $('#ed-zin').disabled = load('edfs', 13) === ZOOM[ZOOM.length - 1];
-ed.addEventListener('keydown', e => {
-  if (isSaveKey(e)) { e.preventDefault(); e.stopPropagation(); edSave(false); return; }
-  if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) { e.preventDefault(); const s = ed.selectionStart; ed.setRangeText('  ', s, ed.selectionEnd, 'end'); edMark(); }
-});
 
 // ── search ───────────────────────────────────────────────────────────────────
 
@@ -1950,7 +2049,7 @@ function switchView(v) {
 $$('.tab').forEach(t => t.onclick = () => switchView(t.dataset.view));
 
 const HELP = `<p>Humans and agents share one legal document set. Cited wording is always verbatim.</p>
-<p><b>Tabs</b><br>Docs — ingest, label, tags; the right pane has <i>Detail</i> and <i>Label</i> (edit the selected doc's label.typ; it follows the selection, so you can label doc after doc)<br>Search — vector, meta, full-text</p>
+<p><b>Tabs</b><br>Docs — ingest, label, tags; the right pane has <i>Detail</i> and <i>Label</i> (read the selected doc and mark passages; it follows the selection, so you can label doc after doc)<br>Search — vector, meta, full-text</p>
 <p><b>Keys</b></p><table>
 <tr><td><kbd>Ctrl+PgUp</kbd> / <kbd>Ctrl+PgDn</kbd></td><td>cycle tabs</td></tr>
 <tr><td><kbd>/</kbd></td><td>filter documents</td></tr>
@@ -1958,16 +2057,17 @@ const HELP = `<p>Humans and agents share one legal document set. Cited wording i
 <tr><td><kbd>Enter</kbd> / double-click (table)</td><td>label the document</td></tr>
 <tr><td><kbd>Delete</kbd></td><td>delete the selected documents</td></tr>
 <tr><td><kbd>Alt+↑</kbd> / <kbd>Alt+↓</kbd></td><td>previous / next document (also while labelling)</td></tr>
-<tr><td><kbd>Ctrl+L</kbd> (Label pane)</td><td>label the selected text</td></tr>
+<tr><td><kbd>Ctrl+L</kbd> (Label pane)</td><td>label the selected passage (saved at once)</td></tr>
+<tr><td><kbd>Ctrl+M</kbd> (Label pane)</td><td>annotate the selected passage</td></tr>
 <tr><td><kbd>Ctrl++</kbd> / <kbd>Ctrl+−</kbd> / <kbd>Ctrl+0</kbd>, Ctrl+wheel (Label pane)</td><td>text size</td></tr>
-<tr><td><kbd>Ctrl+S</kbd></td><td>Label pane: save label.typ and extract the labels · Detail pane: save the detail</td></tr>
+<tr><td><kbd>Ctrl+S</kbd></td><td>Detail pane: save the detail. The Label pane saves as you label.</td></tr>
 ${CFG.app ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr>' : ''}
 <tr><td><kbd>Ctrl+B</kbd></td><td>fold the set tree away / show it</td></tr>
 <tr><td><kbd>F1</kbd></td><td>help</td></tr>
 <tr><td>Agent (top right)</td><td>terminals running your agent or a shell for the selected set (marked <i>agent</i> in the set tree): they start in the set's folder, and <span class="mono">evid</span> there uses this data dir and set. Selection types what you selected into the terminal. Ctrl+Shift+C / V copy and paste.</td></tr>
 <tr><td>drag rows onto a set</td><td>copy the documents there</td></tr>
 <tr><td>drag a tag pill onto a row</td><td>tag that document</td></tr></table>
-<p><b>Docs</b> — Ingest PDF · Add from URL · Index · Label (<span class="mono">#lab</span>, in the Label pane) · Open dir</p>
+<p><b>Docs</b> — Ingest PDF · Add from URL · Index · Label (select a passage in the Label pane) · Open dir</p>
 <p class="muted">Data: ${CFG.data_dir.replace(/&/g, '&amp;').replace(/</g, '&lt;')}<br>Editor: ${String(CFG.editor).replace(/</g, '&lt;')} (set <span class="mono">editor:</span> in evid.yml)</p>`;
 function help() { const d = el('div', { class: 'help' }); d.innerHTML = HELP; dialog('evid help', d, [{ label: 'Close', primary: true }]); }
 $('#b-help').onclick = help;
@@ -1988,11 +2088,13 @@ document.addEventListener('keydown', e => {
     switchView(tabs[(i + (e.key === 'PageDown' ? 1 : -1) + tabs.length) % tabs.length]);
   } else if ((e.ctrlKey || e.metaKey) && ['+', '=', '-', '0'].includes(e.key) && S.view === 'docs' && S.pane === 'label' && S.ed) {
     e.preventDefault(); edZoom(e.key === '0' ? 0 : e.key === '-' ? -1 : 1);
-  } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l' && S.view === 'docs' && S.pane === 'label' && S.ed) {
+  } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'l' && S.view === 'docs' && S.pane === 'label' && S.ed) {
     e.preventDefault(); addLabel();
+  } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'm' && S.view === 'docs' && S.pane === 'label' && S.ed) {
+    e.preventDefault(); addAnn();
   } else if (isSaveKey(e)) {
     e.preventDefault();
-    if (S.view === 'docs' && S.pane === 'label') edSave(false); else if (S.view === 'docs' && curDoc()) saveDetail();
+    if (S.view === 'docs' && S.pane === 'detail' && curDoc()) saveDetail();
   } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && S.view === 'docs') {
     e.preventDefault(); stepDoc(e.key === 'ArrowDown' ? 1 : -1);
   } else if (CFG.app && e.ctrlKey && (e.key === 'w' || e.key === 'q')) {
@@ -2005,10 +2107,11 @@ async function stepDoc(d) {
   const order = visibleDocs().map(x => x.uuid); if (!order.length) return;
   const i = order.indexOf(S.cur), u = order[Math.max(0, Math.min(order.length - 1, i < 0 ? 0 : i + d))];
   if (u === S.cur) return;
-  const keep = document.activeElement === ed;
+  const box = $('#edbox');
+  const keep = document.activeElement === box;
   S.sel = new Set([u]); S.anchor = u;
   await setCur(u);
-  if (keep && S.ed) ed.focus();
+  if (keep && S.ed) box.focus();
 }
 
 async function quitApp() {
@@ -2048,21 +2151,22 @@ function ago(at) {
   const m = Math.round((Date.now() / 1000 - at) / 60);
   return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
 }
-const WHAT = { 'info.yml': 'details', 'annotations.yml': 'notes', 'label.typ': 'label.typ', 'label.json': 'labels', 'evid_meta.yml': 'metadata', folder: 'files' };
+const WHAT = { 'info.yml': 'details', 'annotations.yml': 'notes', 'label/labels.json': 'labels', pass: 'quotes', folder: 'files' };
 function onDisk(e) {
   if (e.slug !== S.slug) { S.setTags.delete(e.slug); refreshSetCounts(); return; }
   const now = Date.now() / 1000, outside = [];
   for (const c of [...e.changed, ...e.added]) {
     if (c.by !== 'outside') continue;
     const what = c.files ? [...new Set(c.files.map(f => WHAT[f] || f))].join(', ') : 'new document';
-    if (c.files && c.files.every(f => f === 'label.json' || f === 'evid_meta.yml')) continue;  // bookkeeping, not an edit
+    if (c.files && c.files.every(f => f === 'evid_meta.yml')) continue;  // indexing, not an edit
     S.changes.set(c.uuid, { at: now, what }); outside.push(c);
   }
   for (const c of e.removed) S.changes.delete(c.uuid);
   const cur = e.changed.find(c => c.uuid === S.cur);
   if (cur) detailFromDisk();  // only the fields that changed light up; your unsaved edits stay
   scheduleReload(true);  // the list; rows stay in place
-  if (S.ed && S.ed.slug === e.slug && e.changed.some(c => c.uuid === S.ed.uuid && c.files.includes('label.typ'))) edDiskChanged();
+  const labelled = f => f === 'label/labels.json' || f === 'pass';
+  if (S.ed && S.ed.slug === e.slug && e.changed.some(c => c.uuid === S.ed.uuid && (c.files || []).some(labelled))) edLoad(S.ed.slug, S.ed.uuid, false, true);
   if (S.cur && e.changed.some(c => c.uuid === S.cur)) { renderFiles(); renderHistory(); }
   if (e.removed.some(c => c.uuid === S.cur)) status('The selected document was removed outside the app', 6000, true);
   if (outside.length) status(`${outside.length} document(s) changed outside the app`, 4000);
@@ -2213,10 +2317,14 @@ function currentSelection() {  // documents (Docs table, else Search results), l
   const uuids = S.view === 'search' && S.ssel.size ? sUuids() : selectedUuids();
   const docs = uuids.map(u => ({ uuid: u, label: (S.byUuid.get(u) || S.sres.find(r => r.uuid === u) || { label: u }).label }));
   const c = { slug: S.slug, docs, labels: S.view === 'docs' && S.pane === 'detail' ? [...labelSel] : [] };
-  if (S.view === 'docs' && S.pane === 'label' && S.ed && ed.selectionEnd > ed.selectionStart) {
-    c.quote = ed.value.slice(ed.selectionStart, ed.selectionEnd);
-    c.line = ed.value.slice(0, ed.selectionStart).split('\n').length;
-    c.file = (S.ed.path || '').split('/').pop();
+  if (S.view === 'docs' && S.pane === 'label' && S.ed) {
+    const sel = textSel();
+    if (sel) c.span = { page: pageAt(S.ed.pages, sel.start), start: sel.start, end: sel.end, text: S.ed.text.slice(sel.start, sel.end) };
+    else if (S.ed.rec && S.ed.rec.kind === 'h') c.labelKey = S.ed.rec.id;
+    else if (S.ed.rec) {
+      const rec = findRec(S.ed.rec.kind, S.ed.rec.id);
+      if (rec) c.span = { page: rec.page, start: rec.start, end: rec.end, text: rec.text || '' };
+    }
   }
   return c;
 }

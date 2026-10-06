@@ -9,7 +9,7 @@ import subprocess
 import pytest
 import yaml
 
-from evid.services.doc_history import doc_history, lab_keys
+from evid.services.doc_history import doc_history, summarise
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
 
@@ -31,8 +31,23 @@ def _git(cwd, *args):
     )
 
 
-def test_lab_keys():
-    assert lab_keys('x #lab("a", "t", "") y #lab( "b\\"q", "t", "")') == ["a", 'b\\"q']
+def _labels(keys, notes=None):
+    notes = notes or {}
+    return json.dumps(
+        {
+            "labels": [
+                {"key": k, "notes": [{"text": "n"}] * notes.get(k, 0)} for k in keys
+            ]
+        }
+    )
+
+
+def test_label_json_notes():
+    old = _labels(["k1"])
+    new = _labels(["k1"], {"k1": 1})
+    got = summarise("label/labels.json", "M", old, new)
+    assert got["added"] == [] and got["removed"] == [] and got["notes"] == ["k1"]
+    assert summarise("label/labels.json", "M", old, old) is None
 
 
 def test_not_tracked(tmp_path):
@@ -48,16 +63,17 @@ def test_history_summarises_commits(tmp_path):
         yaml.safe_dump({"uuid": "u1", "title": "Old", "tags": ""})
     )
     (d / "original.pdf").write_bytes(b"%PDF")
-    (d / "label.typ").write_text("text\n")
+    (d / "label").mkdir()
+    (d / "label" / "labels.json").write_text(_labels([]))
     _git(root, "add", "-A")
     _git(root, "commit", "-qm", "add u1")
     (d / "info.yml").write_text(
         yaml.safe_dump({"uuid": "u1", "title": "Cleaned", "tags": "x"})
     )
-    (d / "label.typ").write_text('text #lab("k1", "q", "")\n')
+    (d / "label" / "labels.json").write_text(_labels(["k1"]))
     _git(root, "commit", "-qam", "tidy titles, label k1")
-    (d / "machine").mkdir()
-    (d / "machine" / "p1.json").write_text(
+    (d / "pass").mkdir()
+    (d / "pass" / "p1.json").write_text(
         json.dumps(
             {
                 "id": "p1",
@@ -69,13 +85,18 @@ def test_history_summarises_commits(tmp_path):
     (d / "annotations.yml").write_text(yaml.safe_dump({"original.pdf": "Signed."}))
     _git(root, "add", "-A")
     _git(root, "commit", "-qm", "quote pass")
-    (d / "label.typ").write_text('text #lab("k2", "q", "")\n')  # uncommitted: k1 -> k2
+    (d / "label" / "labels.json").write_text(_labels(["k2"]))  # uncommitted: k1 -> k2
 
     h = doc_history(d)
     assert h["tracked"] is True
     wip, c3, c2, c1 = h["entries"]
     assert wip["uncommitted"] and wip["items"] == [
-        {"kind": "labels", "file": "label.typ", "added": ["k2"], "removed": ["k1"]}
+        {
+            "kind": "labels",
+            "file": "label/labels.json",
+            "added": ["k2"],
+            "removed": ["k1"],
+        }
     ]
     assert c3["subject"] == "quote pass" and c3["author"] == "Agent"
     kinds = {i["kind"]: i for i in c3["items"]}

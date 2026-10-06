@@ -6,8 +6,8 @@ the folder becomes an entry saying what happened to the document:
 
 - ``details``: info.yml fields that changed (title, tags, …)
 - ``notes``: annotations added, changed or removed (per path)
-- ``labels``: ``#lab`` keys added / removed in label.typ
-- ``passes``: machine-quote passes added (machine/*.json: job, matched/tried)
+- ``labels``: keys added or removed in label/labels.json, and notes added
+- ``passes``: machine-quote passes added (pass/*.json: job, matched/tried)
 - ``added`` / ``files``: the document appearing, other files touched
 
 Uncommitted changes in the folder come first, as an entry without a commit.
@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -27,7 +26,6 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-LAB_KEY = re.compile(r'#lab\(\s*"((?:[^"\\]|\\.)*)"')
 DETAIL_FILES = {"info.yml"}
 NOTE_FILES = {"annotations.yml"}
 QUIET = {
@@ -56,8 +54,8 @@ def _wanted(name: str) -> bool:
     return (
         name in DETAIL_FILES
         or name in NOTE_FILES
-        or name.endswith(".typ")
-        or (name.startswith("machine/") and name.endswith(".json"))
+        or name == "label/labels.json"
+        or (name.startswith("pass/") and name.endswith(".json"))
     )
 
 
@@ -73,8 +71,23 @@ def _read(p: Path) -> str | None:
         return None
 
 
-def lab_keys(text: str | None) -> list[str]:
-    return LAB_KEY.findall(text or "")
+def _label_state(text: str | None) -> tuple[list[str], dict[str, int]]:
+    """Label keys in file order, and how many notes each key has."""
+    try:
+        data = json.loads(text or "")
+    except ValueError:
+        return [], {}
+    if not isinstance(data, dict):
+        return [], {}
+    keys: list[str] = []
+    notes: dict[str, int] = {}
+    for rec in data.get("labels") or []:
+        if not isinstance(rec, dict) or not rec.get("key"):
+            continue
+        key = str(rec["key"])
+        keys.append(key)
+        notes[key] = len(rec.get("notes") or [])
+    return keys, notes
 
 
 def _yaml(text: str | None) -> dict:
@@ -111,15 +124,24 @@ def summarise(
             if paths
             else None
         )
-    if base.endswith(".typ"):
-        before, after = lab_keys(old), lab_keys(new)
+    if name == "label/labels.json":
+        before, before_n = _label_state(old)
+        after, after_n = _label_state(new)
         added = [k for k in after if k not in before]
         removed = [k for k in before if k not in after]
-        if added or removed:
-            return {"kind": "labels", "file": name, "added": added, "removed": removed}
-        word = {"A": "added", "D": "removed"}.get(status[:1], "edited")
-        return {"kind": "files", "files": [name], "what": word}
-    if name.startswith("machine/") and name.endswith(".json") and status == "A":
+        noted = [k for k in after if k in before_n and after_n[k] > before_n[k]]
+        if not (added or removed or noted):
+            return None
+        item: dict[str, Any] = {
+            "kind": "labels",
+            "file": name,
+            "added": added,
+            "removed": removed,
+        }
+        if noted:
+            item["notes"] = noted
+        return item
+    if name.startswith("pass/") and name.endswith(".json") and status[:1] == "A":
         try:
             p = json.loads(new or "{}")
         except ValueError:

@@ -210,39 +210,111 @@ def test_copy_and_delete(server, doc):
     assert len(call(server, "GET", "/api/sets/case/docs")[1]) == 1
 
 
-def test_label_typ_editor(server, doc, app):
-    for f in (app.data_dir / "sets" / "case" / "docs" / doc).glob("*.typ"):
-        f.unlink()  # ingest made one; regenerate it from the PDF
-    assert call(server, "GET", f"/api/sets/case/docs/{doc}/typ")[1]["exists"] is False
-    _, r = call(server, "POST", f"/api/sets/case/docs/{doc}/label", {"editor": False})
-    e = wait_job(server, r["job"])
-    assert e["state"] == "done", e
-    t = call(server, "GET", f"/api/sets/case/docs/{doc}/typ")[1]
-    assert t["exists"] and "Hello" in t["content"]
+def test_label_reader(server, doc, app):
+    d = app.data_dir / "sets" / "case" / "docs" / doc
+    assert call(server, "GET", "/api/sets/case/docs")[1][0]["has_json"] is False
+    assert call(server, "GET", f"/api/sets/case/docs/{doc}/typ")[0] == 404
+    assert call(server, "POST", f"/api/sets/case/docs/{doc}/label", {})[0] == 404
+    status, view = call(server, "GET", f"/api/sets/case/docs/{doc}/text")
+    assert status == 200 and "Hello" in view["text"] and view["labels"] == []
+    start = view["text"].index("Hello")
+    end = start + len("Hello")
+    (d / "pass").mkdir()
+    (d / "pass" / "p1.json").write_text(
+        json.dumps(
+            {
+                "id": "p1",
+                "timestamp": "2026-01-01T00:00:00Z",
+                "schema": 1,
+                "model": "m",
+                "evid_version": "0.6.1",
+                "job": "find dates",
+                "results": [
+                    {
+                        "candidate": "Hello",
+                        "matched": True,
+                        "score": 1,
+                        "key": "q1",
+                        "page": 1,
+                    }
+                ],
+                "found": [
+                    {
+                        "key": "q1",
+                        "start": start,
+                        "end": end,
+                        "page": 1,
+                        "text": "Hello",
+                    }
+                ],
+            }
+        )
+    )
+    status, out = call(
+        server,
+        "POST",
+        f"/api/sets/case/docs/{doc}/labels",
+        {"start": start, "end": end, "note": "why"},
+    )
+    assert status == 200, out
+    assert (
+        out["labels"][0]["key"] == "hello"
+        and out["labels"][0]["notes"][0]["text"] == "why"
+    )
+    assert (
+        out["passes"][0]["job"] == "find dates"
+        and out["passes"][0]["quotes"][0]["key"] == "q1"
+    )
+    assert (d / "label" / "labels.json").exists()
+    assert call(server, "GET", "/api/sets/case/docs")[1][0]["has_json"] is True
+    status, out = call(
+        server,
+        "POST",
+        f"/api/sets/case/docs/{doc}/labels/hello/notes",
+        {"text": "second"},
+    )
+    assert status == 200 and len(out["labels"][0]["notes"]) == 2
+    status, out = call(
+        server, "PUT", f"/api/sets/case/docs/{doc}/labels/hello", {"key": "greeting"}
+    )
+    assert status == 200 and out["labels"][0]["key"] == "greeting"
+    status, out = call(
+        server,
+        "POST",
+        f"/api/sets/case/docs/{doc}/annotations-on-text",
+        {"start": start, "end": end, "text": "check"},
+    )
+    assert status == 200 and out["annotations"][0]["notes"][0]["text"] == "check"
+    aid = out["annotations"][0]["id"]
     status, out = call(
         server,
         "PUT",
-        f"/api/sets/case/docs/{doc}/typ",
-        {"content": t["content"] + "\n", "mtime": t["mtime"]},
+        f"/api/sets/case/docs/{doc}/annotations-on-text/{aid}",
+        {"text": "more"},
     )
-    assert status == 200 and out["ok"], out
-    # stale base -> 409 with the disk copy; force overwrites
-    status, out = call(
-        server,
-        "PUT",
-        f"/api/sets/case/docs/{doc}/typ",
-        {"content": "x", "mtime": t["mtime"]},
+    assert status == 200 and len(out["annotations"][0]["notes"]) == 2
+    assert (
+        call(server, "DELETE", f"/api/sets/case/docs/{doc}/annotations-on-text/{aid}")[
+            1
+        ]["annotations"]
+        == []
     )
-    assert status == 409 and "Hello" in out["content"]
+    assert (
+        call(server, "DELETE", f"/api/sets/case/docs/{doc}/labels/greeting")[1][
+            "labels"
+        ]
+        == []
+    )
     assert (
         call(
             server,
-            "PUT",
-            f"/api/sets/case/docs/{doc}/typ",
-            {"content": t["content"], "mtime": 0, "force": True},
+            "POST",
+            f"/api/sets/case/docs/{doc}/labels",
+            {"text": "not in this document zzz"},
         )[0]
-        == 200
+        == 400
     )
+    assert call(server, "DELETE", f"/api/sets/case/docs/{doc}/labels/missing")[0] == 404
 
 
 def test_quotes_and_labels(server, doc, app):

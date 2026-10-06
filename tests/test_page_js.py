@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from importlib import resources
@@ -24,9 +25,10 @@ FUNCS = [
     "highlight",
     "openTarget",
     "labKey",
-    "labCall",
     "escHtml",
-    "typHighlight",
+    "escAttr",
+    "labelHtml",
+    "pageAt",
     "keepOrder",
     "isSaveKey",
     "selectionText",
@@ -55,8 +57,6 @@ def js_function(src: str, name: str) -> str:
 def js():
     src = (resources.files("evid.web") / "page.html").read_text("utf-8")
     lib = "\n".join(js_function(src, n) for n in FUNCS)
-    rx = src[src.index("const TYP_RX") :]
-    lib = rx[: rx.index("\n") + 1] + lib
 
     def run(expr: str):
         prog = lib + f"\nprocess.stdout.write(JSON.stringify((() => {{ {expr} }})()));"
@@ -211,41 +211,27 @@ def test_lab_key(js):
     assert js("return labKey('', []);") == "label"
 
 
-def test_lab_call_escapes(js):
-    assert (
-        js("""return labCall('k', 'He said "no"\\nback\\\\slash', '');""")
-        == '#lab("k", "He said \\"no\\" back\\\\slash", "")'
+def test_label_html_layers_pages_and_escapes(js):
+    html = js(
+        """return labelHtml('Hello <world>. Page two is here.', [[0, 1], [15, 2]],
+        [{key: 'hw', start: 0, end: 5}],
+        [{id: 'a1', start: 2, end: 8}],
+        [{key: 'q1', start: 0, end: 20}]);"""
     )
-
-
-def test_typ_highlight_marks_lab_parts(js):
-    html = js("""return typHighlight('x #lab("k-1", "a \\\\"q\\\\" <b>", "n") y');""")
-    assert '<span class="lab">#lab</span>' in html
-    assert '<span class="key">"k-1"</span>' in html
-    assert '<span class="quote">"a \\"q\\" &lt;b&gt;"</span>' in html
-    assert '<span class="note">"n"</span>' in html
-    assert html.startswith("x ") and html.endswith(" y")
-
-
-def test_typ_highlight_other_tokens(js):
-    src = '#import "@preview/labtyp:0.1.0": lab\\n= Title\\n== Page 3\\n// c\\n#lab("k", "two-arg")'
-    html = js(f"return typHighlight('{src}');")
+    assert html.startswith('<div class="pageband">— page 1 —</div>')
+    assert '<div class="pageband">— page 2 —</div>' in html
+    plain = re.sub(r"<[^>]+>", "", html)
+    assert "Hello &lt;world&gt;." in plain and "— page 2 —" in plain
+    assert '<span data-start="0">' in html and '<span data-start="15">' in html
+    # the band is not inside a data-start span, and a crossing quote closes around it
+    assert '</span><div class="pageband">— page 2 —</div><span class="mk mk-m"' in html
+    # overlap nests machine, then annotation, then human
     assert (
-        '<span class="hash">#import</span>' in html
-        and '<span class="str">"@preview/labtyp:0.1.0"</span>' in html
+        'data-kind="a" data-id="a1"><span class="mk mk-h" data-kind="h" data-id="hw"'
+        in html
     )
-    assert (
-        '<span class="head">= Title</span>' in html
-        and '<span class="page">== Page 3</span>' in html
-    )
-    assert (
-        '<span class="com">// c</span>' in html
-        and '<span class="quote">"two-arg"</span>' in html
-    )
-    assert (
-        js("return typHighlight('plain <text> & more');")
-        == "plain &lt;text&gt; &amp; more"
-    )
+    assert js("return pageAt([[0, 1], [15, 2]], 15);") == 2
+    assert js("return pageAt([[0, 1], [15, 2]], 3);") == 1
 
 
 def test_keep_order_on_reload(js):
@@ -275,9 +261,13 @@ def test_selection_text(js):
     )
     assert one == 'In evid set "case" I selected "Ruling" (u1). Labels: k1. '
     q = js(
-        "return selectionText({slug: 'case', docs: [{uuid: 'u1', label: 'R'}], quote: 'the words', line: 12, file: 'label.typ'});"
+        "return selectionText({slug: 'case', docs: [{uuid: 'u1', label: 'R'}], span: {page: 3, start: 10, end: 19, text: 'the words'}});"
     )
-    assert q.endswith('In its label.typ (line 12) I selected: "the words". ')
+    assert 'Span on page 3, characters 10-19: "the words".' in q
+    named = js(
+        "return selectionText({slug: 'case', docs: [{uuid: 'u1', label: 'R'}], labelKey: 'the-words'});"
+    )
+    assert "Label: the-words." in named
     two = js(
         "return selectionText({slug: 'c', docs: [{uuid: 'a', label: 'A'}, {uuid: 'b', label: 'B'}]});"
     )
@@ -329,7 +319,12 @@ def test_history_chips(js):
     items = json.dumps(
         [
             {"kind": "details", "fields": ["title", "tags"]},
-            {"kind": "labels", "file": "label.typ", "added": ["k1"], "removed": ["k0"]},
+            {
+                "kind": "labels",
+                "file": "label/labels.json",
+                "added": ["k1"],
+                "removed": ["k0"],
+            },
             {
                 "kind": "pass",
                 "id": "p1",

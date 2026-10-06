@@ -8,8 +8,9 @@ events for the page, which updates in place and merges into unsaved edits.
 Writes the GUI makes itself are *touched* first, so the page can tell "you"
 from "outside" (an agent cleaning up titles shows as outside).
 
-When an outside change leaves a ``label.typ`` newer than its ``label.json``,
-the labels are extracted again, so the Labels lists never go stale.
+An agent's ``evid label add`` shows up as a ``disk`` event on
+``label/labels.json`` (or ``pass/`` for a quote pass). The page tells "you"
+from "outside" by the touch the GUI makes before its own writes.
 """
 
 from __future__ import annotations
@@ -20,14 +21,13 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from evid.web.jobs import rebuild_labels
-
 if TYPE_CHECKING:
     from evid.web.jobs import Events
 
 logger = logging.getLogger(__name__)
 
-WATCHED = ("info.yml", "evid_meta.yml", "annotations.yml", "label.typ", "label.json")
+# ``pass`` is the folder: a new or edited pass changes its mtime.
+WATCHED = ("info.yml", "annotations.yml", "label/labels.json", "pass")
 MINE_FOR = 6.0  # seconds a GUI write counts as "you"
 
 
@@ -141,7 +141,6 @@ class DiskWatch:
                 changed.append(
                     {"uuid": uuid, "by": self._by(slug, uuid), "files": files}
                 )
-                self._maybe_extract(slug, uuid, sig)
             added = [{"uuid": u, "by": self._by(slug, u)} for u in new if u not in old]
             removed = [
                 {"uuid": u, "by": self._by(slug, u)} for u in old if u not in new
@@ -156,25 +155,6 @@ class DiskWatch:
             self.events.emit(
                 "disk", slug=slug, changed=changed, added=added, removed=removed
             )
-
-    def _maybe_extract(self, slug: str, uuid: str, sig: tuple) -> None:
-        """label.typ edited outside and newer than label.json: extract the labels again."""
-        typ_m, json_m = (
-            sig[1 + WATCHED.index("label.typ")],
-            sig[1 + WATCHED.index("label.json")],
-        )
-        if (
-            typ_m is None
-            or (json_m is not None and json_m >= typ_m)
-            or self._by(slug, uuid) == "you"
-        ):
-            return
-        doc_dir = self.data_dir / "sets" / slug / "docs" / uuid
-        self.touch(slug, uuid)
-        rebuild_labels(self.events, doc_dir / "label.typ", slug, uuid)
-        self._docs[slug][uuid] = doc_signature(
-            doc_dir
-        )  # our own rebuild is not a change
 
     # thread ------------------------------------------------------------------
 
