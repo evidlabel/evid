@@ -28,6 +28,7 @@ FUNCS = [
     "typHighlight",
     "keepOrder",
     "isSaveKey",
+    "selectionText",
 ]
 
 
@@ -237,3 +238,19 @@ def test_is_save_key(js):
     ]
     for ev, want in cases:
         assert js(f"return isSaveKey({ev});") is want, ev
+
+
+def test_selection_text(js):
+    assert js("return selectionText({slug: 'case', docs: []});") == ""
+    one = js(
+        "return selectionText({slug: 'case', docs: [{uuid: 'u1', label: 'Ruling'}], labels: ['k1']});"
+    )
+    assert one == 'In evid set "case" I selected "Ruling" (u1). Labels: k1. '
+    q = js(
+        "return selectionText({slug: 'case', docs: [{uuid: 'u1', label: 'R'}], quote: 'the words', line: 12, file: 'label.typ'});"
+    )
+    assert q.endswith('In its label.typ (line 12) I selected: "the words". ')
+    two = js(
+        "return selectionText({slug: 'c', docs: [{uuid: 'a', label: 'A'}, {uuid: 'b', label: 'B'}]});"
+    )
+    assert 'the documents "A" (a), "B" (b)' in two

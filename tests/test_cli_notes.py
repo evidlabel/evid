@@ -65,3 +65,16 @@ def test_notes_listing_json_and_doc_list(setdir, capsys):
     assert "- document: Key exhibit." in capsys.readouterr().out
     cb.list_docs_callback(dataset="case", format="json")
     assert json.loads(capsys.readouterr().out)[0]["note"] == "Key exhibit."
+
+
+def test_evid_db_env_selects_the_data_dir(tmp_path, monkeypatch):
+    """Inside the GUI's Agent pane EVID_DB points `evid` at the GUI's data dir."""
+    import sys
+
+    import evid.cli.main as m
+
+    monkeypatch.setenv("EVID_DB", str(tmp_path / "db"))
+    monkeypatch.setattr(sys, "argv", ["evid", "set", "list"])
+    monkeypatch.setattr(type(m.app), "run", lambda _self: None)
+    m.main()
+    assert tmp_path / "db" == cb.DIRECTORY and cb.DIRECTORY_EXPLICIT is True

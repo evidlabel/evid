@@ -828,6 +828,7 @@ def gui_callback(
     port: int = 8790,
     browser: bool = False,
     headless: bool = False,
+    agent: str = None,
 ):
     """Launch the GUI (evid-app window, else the browser).
 
@@ -844,7 +845,9 @@ def gui_callback(
 
     config = EvidConfig.load()
     config.data_dir = Path(DIRECTORY)
-    serve_gui(config, port=port or 8790, browser=browser, headless=headless)
+    serve_gui(
+        config, port=port or 8790, browser=browser, headless=headless, agent=agent or ""
+    )
 
 
 def update_callback(db: str = None):

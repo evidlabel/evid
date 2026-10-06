@@ -45,6 +45,7 @@ from evid.web.jobs import (
     LabelWatcher,
     rebuild_labels,
 )
+from evid.web.term import Sessions, ws_accept
 
 logger = logging.getLogger(__name__)
 
@@ -237,6 +238,11 @@ def list_dir(path: str, pdf_only: bool) -> dict:
 
 PAGE = (resources.files(__package__) / "page.html").read_text("utf-8")
 ASSETS = {"evid.svg": "image/svg+xml", "evid.png": "image/png"}
+VENDOR = {
+    "xterm.js": "text/javascript; charset=utf-8",
+    "xterm.css": "text/css; charset=utf-8",
+    "addon-fit.js": "text/javascript; charset=utf-8",
+}
 
 Route = tuple[str, re.Pattern, str]
 ROUTES: list[Route] = []
@@ -260,6 +266,10 @@ class Handler(BaseHTTPRequestHandler):
     url = ""
     raise_file: Path | None = None
     server_version = "evid"
+    # proves a terminal connection comes from the page we served
+    token = secrets.token_urlsafe(18)
+    terms: Sessions | None = None  # the agent pane's terminals
+    agent = ""  # what the first terminal runs (empty: a shell)
 
     def log_message(self, *args):
         pass
@@ -357,6 +367,16 @@ class Handler(BaseHTTPRequestHandler):
             "text/html; charset=utf-8",
         )
 
+    @route("GET", "/vendor/{name}")
+    def vendor(self, name: str):
+        if name not in VENDOR:
+            raise HTTPError(404, "no such file")
+        self.send(
+            200,
+            (resources.files("evid.web") / "vendor" / name).read_bytes(),
+            VENDOR[name],
+        )
+
     @route("GET", "/assets/{name}")
     def asset(self, name: str):
         if name not in ASSETS:
@@ -377,6 +397,10 @@ class Handler(BaseHTTPRequestHandler):
             "has_vec": a.has_vec,
             "vec_install": extras.VEC_INSTALL,
             "version": _version(),
+            "token": self.token,
+            "term": self.terms is not None,
+            "agent": self.agent,
+            "ptyxis": bool(shutil.which("ptyxis") or shutil.which("gnome-terminal")),
         }
 
     @route("GET", "/api/config")
@@ -936,6 +960,66 @@ class Handler(BaseHTTPRequestHandler):
         raise_window()
         self.send_json(200, {"ok": True})
 
+    # agent pane --------------------------------------------------------------
+
+    def sessions(self) -> Sessions:
+        if self.terms is None:
+            raise HTTPError(404, "the agent pane is off")
+        return self.terms
+
+    @route("GET", "/api/terms")
+    def list_terms(self):
+        self.send_json(200, {"terms": self.sessions().list()})
+
+    @route("POST", "/api/term/new")
+    def new_term(self):
+        terms = self.sessions()
+        sid = terms.add(str(self.body().get("agent") or ""))
+        logger.info("Agent pane: new terminal %s", terms.get(sid).label())
+        self.send_json(200, {"id": sid, "terms": terms.list()})
+
+    @route("POST", "/api/term/close")
+    def close_term(self):
+        terms = self.sessions()
+        if not terms.close(str(self.body().get("id", ""))):
+            raise HTTPError(404, "no such terminal")
+        self.send_json(200, {"terms": terms.list()})
+
+    @route("POST", "/api/term/external")
+    def external_term(self):
+        terms = self.sessions()
+        cmd = external_terminal(Path(terms.cwd), terms.env, self.agent)
+        self.send_json(200, {"ok": True, "cmd": cmd})
+
+    @route("GET", "/api/term")
+    def terminal(self):
+        """Upgrade to a WebSocket onto one of the agent pane's terminals (?id=, default the first)."""
+        terms = self.sessions()
+        term = terms.get(self.q.get("id") or next(iter(terms.terms), ""))
+        if term is None:
+            raise HTTPError(404, "no such terminal")
+        if not secrets.compare_digest(self.q.get("token", ""), self.token):
+            raise HTTPError(403, "bad terminal token")
+        if self.headers.get("Origin") != f"http://{self.headers.get('Host')}":
+            raise HTTPError(403, "terminal connections must come from the evid page")
+        key = self.headers.get("Sec-WebSocket-Key")
+        if not key or "websocket" not in (self.headers.get("Upgrade") or "").lower():
+            raise HTTPError(400, "expected a WebSocket upgrade")
+        self.protocol_version = (
+            "HTTP/1.1"  # WebKit (the app window) rejects a 101 sent as HTTP/1.0
+        )
+        self.send_response(101, "Switching Protocols")
+        self.send_header("Upgrade", "websocket")
+        self.send_header("Connection", "Upgrade")
+        self.send_header("Sec-WebSocket-Accept", ws_accept(key))
+        self.end_headers()
+        self.wfile.flush()
+        self.close_connection = True
+        with contextlib.suppress(
+            OSError
+        ):  # the page went away; never answer an upgraded socket with HTTP
+            term.serve(self.connection, self.rfile)
+
     @route("POST", "/api/quit")
     def quit(self):
         self.send_json(200, {"ok": True})
@@ -943,6 +1027,50 @@ class Handler(BaseHTTPRequestHandler):
             Handler.window.terminate()  # serve_gui() then stops the server
         else:
             threading.Thread(target=self.server.shutdown, daemon=True).start()
+
+
+def external_terminal(cwd: Path, env: dict, agent: str) -> str:
+    """Open the agent (or a shell) in Ptyxis / GNOME Terminal. The env goes on the command line,
+    because these terminals hand new windows to an already running instance."""
+    shell = env.get("SHELL") or "/bin/sh"
+    keep = [
+        f"{k}={v}"
+        for k, v in env.items()
+        if k.startswith("EVID_") and k != "EVID_IN_APP"
+    ]
+    inner = [shell, "-ic", f"{agent}; exec {shell}"] if agent else [shell, "-i"]
+    run = ["env", *keep, *inner]
+    if shutil.which("ptyxis"):
+        cmd = ["ptyxis", "--new-window", "--working-directory", str(cwd), "--", *run]
+    elif shutil.which("gnome-terminal"):
+        cmd = ["gnome-terminal", f"--working-directory={cwd}", "--", *run]
+    else:
+        raise HTTPError(404, "neither ptyxis nor gnome-terminal is installed")
+    subprocess.Popen(
+        cmd,
+        cwd=str(cwd),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    return " ".join(cmd[:4])
+
+
+def terminal_env(data_dir: Path, url: str) -> dict:
+    """The environment of the agent pane: `evid` there uses this GUI's data dir (EVID_DB)."""
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("EVID_IN_APP", "EVID_RAISE_FILE")
+    }
+    env.update(
+        TERM="xterm-256color",
+        COLORTERM="truecolor",
+        EVID_DB=str(data_dir),
+        EVID_URL=url,
+    )
+    return env
 
 
 def raise_window() -> None:
@@ -1051,8 +1179,12 @@ def serve_gui(
     port: int = 8790,
     browser: bool = False,
     headless: bool = False,
+    agent: str = "",
 ) -> None:
     """Serve the GUI on 127.0.0.1 and show it in evid-app (else the browser).
+
+    The agent pane's first terminal runs *agent* (or $EVID_AGENT; empty: a shell)
+    in the current directory, with ``EVID_DB`` set to the data dir.
 
     Closing the window stops the server. With *headless* nothing is opened (the
     server runs until Ctrl+C or ``/api/quit``).
@@ -1086,8 +1218,14 @@ def serve_gui(
     )
 
     app.attach_log()
+    Handler.agent = agent or os.environ.get("EVID_AGENT", "")
+    Handler.terms = Sessions(
+        str(Path.cwd()), terminal_env(config.data_dir, url), Handler.agent
+    )
 
-    print(f"evid  {config.data_dir}\n  open {url}")
+    print(
+        f"evid  {config.data_dir}\n  open {url}\n  agent {Handler.agent or 'shell'} (Agent pane)"
+    )
     exe = None if headless or browser else find_app()
     Handler.in_app = bool(exe) or os.environ.get("EVID_IN_APP") == "1"
     try:
@@ -1117,6 +1255,8 @@ def serve_gui(
         with contextlib.suppress(KeyboardInterrupt):
             srv.serve_forever()
     finally:
+        if Handler.terms is not None:
+            Handler.terms.stop()
         app.shutdown()
         srv.server_close()
         with contextlib.suppress(OSError):

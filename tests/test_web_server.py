@@ -599,3 +599,111 @@ def test_actions_reach_the_log_pane(server, doc):
     assert any("Added a.pdf to 'case'" in m for m in logs)
     assert any("Tagged 1 document(s) with case.psych" in m for m in logs)
     assert any("failed: path outside the document folder" in m for m in logs)
+
+
+# ── agent pane ───────────────────────────────────────────────────────────────
+
+
+def test_vendor_files(server):
+    assert call(server, "GET", "/vendor/xterm.js")[0] == 200
+    assert call(server, "GET", "/vendor/nope.js")[0] == 404
+
+
+def test_terminal_websocket(server, monkeypatch, tmp_path):
+    import base64
+    import os
+    import socket
+
+    from evid.web.term import Sessions, ws_frame
+
+    terms = Sessions(
+        str(tmp_path),
+        {"SHELL": "/bin/sh", "PATH": os.environ.get("PATH", ""), "PS1": "$ "},
+        "echo hi-there",
+    )
+    monkeypatch.setattr(web.Handler, "terms", terms)
+    term = terms.get("1")
+    host, port = server.removeprefix("http://").split(":")
+    token = web.Handler.token
+    assert call(server, "GET", "/api/config")[1]["term"] is True
+
+    def handshake(origin, tok=token):
+        s = socket.create_connection((host, int(port)), timeout=5)
+        key = base64.b64encode(os.urandom(16)).decode()
+        s.sendall(
+            (
+                f"GET /api/term?token={tok} HTTP/1.1\r\nHost: {host}:{port}\r\nOrigin: {origin}\r\n"
+                f"Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\n\r\n"
+            ).encode()
+        )
+        return s
+
+    s = handshake("http://evil.example")
+    assert b"403" in s.recv(1024)
+    s.close()
+    s = handshake(f"http://{host}:{port}", tok="wrong")
+    assert b"403" in s.recv(1024)
+    s.close()
+    s = handshake(f"http://{host}:{port}")
+    data, deadline = b"", time.time() + 10
+    while (
+        b"hi-there" not in data.split(b"echo hi-there")[-1] and time.time() < deadline
+    ):
+        data += s.recv(65536)
+    assert b"101 Switching Protocols" in data and b'"hello"' in data
+
+    def send(op, payload):
+        frame = ws_frame(op, payload)
+        s.sendall(
+            frame[:1]
+            + bytes([frame[1] | 0x80])
+            + frame[2 : 2 + (len(frame) - 2 - len(payload))]
+            + b"\0\0\0\0"
+            + payload
+        )
+
+    send(1, json.dumps({"t": "resize", "rows": 30, "cols": 100}).encode())
+    send(1, json.dumps({"t": "in", "d": "echo $EVID_DB-again\r"}).encode())
+    data, deadline = b"", time.time() + 10
+    while (
+        b"-again" not in data.split(b"echo $EVID_DB-again")[-1]
+        and time.time() < deadline
+    ):
+        data += s.recv(65536)
+    assert term.size == (30, 100)
+    send(8, b"")
+    s.close()
+    terms.stop()
+    assert not term.alive
+
+
+def test_terminal_sessions_routes(server, monkeypatch, tmp_path):
+    import os
+
+    from evid.web.term import Sessions
+
+    terms = Sessions(
+        str(tmp_path), {"SHELL": "/bin/sh", "PATH": os.environ.get("PATH", "")}, ""
+    )
+    monkeypatch.setattr(web.Handler, "terms", terms)
+    assert [t["id"] for t in call(server, "GET", "/api/terms")[1]["terms"]] == ["1"]
+    r = call(server, "POST", "/api/term/new", {"agent": "claude"})[1]
+    assert r["id"] == "2" and r["terms"][1]["label"] == "claude"
+    assert [
+        t["id"]
+        for t in call(server, "POST", "/api/term/close", {"id": "2"})[1]["terms"]
+    ] == ["1"]
+    assert call(server, "POST", "/api/term/close", {"id": "9"})[0] == 404
+    terms.stop()
+    monkeypatch.setattr(web.Handler, "terms", None)
+    assert call(server, "GET", "/api/terms")[0] == 404
+
+
+def test_terminal_env_points_evid_at_the_data_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("EVID_IN_APP", "1")
+    env = web.terminal_env(tmp_path, "http://127.0.0.1:1/")
+    assert (
+        env["EVID_DB"] == str(tmp_path)
+        and "EVID_IN_APP" not in env
+        and env["TERM"] == "xterm-256color"
+    )

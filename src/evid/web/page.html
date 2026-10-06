@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Evidence Manager</title>
 <link rel="icon" href="/assets/evid.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/vendor/xterm.css">
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
 <style>
 :root {
   --bg: #f6f6f4; --panel: #ffffff; --panel2: #efefec; --fg: #1d1d1b; --muted: #6b6b66;
@@ -36,7 +39,8 @@ input[type=text], input[type=number], input:not([type]), textarea, select {
   background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; min-width: 0;
 }
 input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-#app { display: grid; grid-template-columns: 230px 1fr; height: 100vh; }
+#app { display: flex; height: 100vh; }
+#side { width: 230px; flex: none; }
 #side { background: var(--panel2); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
 #brand { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
 #brand img { width: 22px; height: 22px; }
@@ -55,7 +59,28 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 .subtag:hover { background: var(--hover); color: var(--fg); }
 .subtag.on { color: var(--accent); font-weight: 600; }
 #sidebtns { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
-#main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#main { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 1; }
+/* agent pane (terminals), from treedit */
+#divider2 { width: 5px; cursor: col-resize; flex: none; background: var(--line); opacity: .6; }
+#divider2:hover { opacity: 1; }
+#termpane { width: var(--term-w, 520px); min-width: 280px; max-width: 72vw; flex: none; display: flex; flex-direction: column; background: var(--bg); border-left: 1px solid var(--line); }
+.tbar { display: flex; gap: 6px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel2); font-size: 12.5px; flex-wrap: wrap; }
+.tbar b { margin-right: auto; }
+.tbar button { padding: 2px 8px; font-size: 12px; }
+#t-close, #t-add { font-size: 15px; line-height: 1; padding: 1px 9px 3px; }
+#terms { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#terms:empty::after { content: 'No terminals — + adds a shell or an agent'; color: var(--muted); font-size: 12.5px; padding: 12px; }
+.tsess { flex: 1 1 0; min-height: 90px; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.tsess:first-child { border-top: 0; }
+.thead { display: flex; gap: 6px; align-items: center; padding: 2px 6px 2px 10px; font-size: 12px; background: var(--panel2); border-bottom: 1px solid var(--line); }
+.thead b { font-family: var(--mono); font-weight: normal; color: var(--muted); margin-right: auto; }
+.tsess.active .thead b { color: var(--accent); font-weight: bold; }
+.thead button { padding: 0 7px; font-size: 12px; border-color: transparent; background: none; }
+.thead button:hover { border-color: var(--line); }
+.tdot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
+.tdot.live { background: var(--ok); } .tdot.ended { background: #c9a227; }
+.tbody { flex: 1; min-height: 0; padding: 4px 0 0 8px; }
+#b-term.on { border-color: var(--accent); color: var(--accent); }
 #tabs { display: flex; align-items: center; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); background: var(--panel2); }
 .tab { border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; background: transparent; padding: 5px 14px; }
 .tab.on { background: var(--bg); border-color: var(--line); margin-bottom: -1px; font-weight: 600; }
@@ -65,11 +90,11 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 .view { flex: 1; min-height: 0; display: none; }
 .view.on { display: flex; }
 #docs { flex-direction: row; }
-#docsleft { width: 480px; flex: none; display: flex; flex-direction: column; min-width: 0; padding: 8px; gap: 6px; }
+#docsleft { width: 480px; flex: 0 1 auto; min-width: 260px; display: flex; flex-direction: column; min-width: 0; padding: 8px; gap: 6px; }
 .toolbar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .split-v { width: 5px; cursor: col-resize; background: transparent; flex: none; }
 .split-v:hover { background: var(--line); }
-#rpane { flex: 1; min-width: 300px; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
+#rpane { flex: 1; min-width: 340px; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--panel); }
 .ptabs { display: flex; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); background: var(--panel2); flex: none; }
 .ptabs button { border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; background: transparent; padding: 3px 12px; }
 .ptabs button.on { background: var(--panel); border-color: var(--line); margin-bottom: -1px; font-weight: 600; }
@@ -217,6 +242,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
       <button class="tab on" data-view="docs">Docs</button>
       <button class="tab" data-view="search">Search</button>
       <span id="status"></span>
+      <button id="b-term" hidden title="Agent pane: a terminal running your agent (or a shell) next to the documents">Agent</button>
       <button id="b-help" title="Help (F1)">Help</button>
     </div>
 
@@ -309,6 +335,15 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
 
     <div id="logwrap" class="fold"><div id="loghead"><span id="logtw">▸</span> Log <span id="loglast" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span></div><pre id="log"></pre></div>
   </div>
+  <div id="divider2" hidden></div>
+  <aside id="termpane" hidden>
+    <div class="tbar"><b>Agents</b>
+      <button id="t-sel" title="Type a reference to what you selected (documents, labels, text in the label editor) into the terminal">Selection</button>
+      <button id="t-ext" title="Open the agent in a separate Ptyxis window">Ptyxis</button>
+      <button id="t-add" title="Add a terminal below: a shell, or an agent such as claude">+</button>
+      <button id="t-close" title="Hide the pane (the sessions keep running)">›</button></div>
+    <div id="terms"></div>
+  </aside>
 </div>
 <dialog id="dlg"><div class="dhead" id="dlg-title"></div><div class="dbody" id="dlg-body"></div><div class="dfoot" id="dlg-foot"></div></dialog>
 <div class="menu" id="menu" hidden></div>
@@ -433,6 +468,16 @@ function keepOrder(prevOrder, docs) {
 // Ctrl/Cmd+S, whatever Caps Lock, Shift or the keyboard layout say.
 function isSaveKey(e) {
   return !!(e.ctrlKey || e.metaKey) && !e.altKey && (e.code === 'KeyS' || String(e.key || '').toLowerCase() === 's');
+}
+
+// What the Selection button types into the agent's terminal.
+function selectionText(c) {
+  if (!c || !c.docs || !c.docs.length) return '';
+  const docs = c.docs.map(d => `"${d.label}" (${d.uuid})`).join(', ');
+  let t = `In evid set "${c.slug}" I selected ${c.docs.length > 1 ? 'the documents ' : ''}${docs}.`;
+  if (c.labels && c.labels.length) t += ` Labels: ${c.labels.join(', ')}.`;
+  if (c.quote) t += ` In its ${c.file || 'label.typ'} (line ${c.line}) I selected: "${c.quote.length > 600 ? c.quote.slice(0, 600) + '…' : c.quote}".`;
+  return t + ' ';
 }
 
 function shortUuid(u) { return u.length > 16 ? u.slice(0, 8) + '…' + u.slice(-8) : u; }
@@ -1578,6 +1623,7 @@ const HELP = `<p>Humans and agents share one legal document set. Cited wording i
 <tr><td><kbd>Ctrl+S</kbd></td><td>Label pane: save label.typ and extract the labels · Detail pane: save the detail</td></tr>
 ${CFG.app ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr>' : ''}
 <tr><td><kbd>F1</kbd></td><td>help</td></tr>
+<tr><td>Agent (top right)</td><td>terminals running your agent or a shell, in the folder evid gui started in; <span class="mono">evid</span> there uses this data dir. Selection types what you selected into the terminal. Ctrl+Shift+C / V copy and paste.</td></tr>
 <tr><td>drag rows onto a set</td><td>copy the documents there</td></tr>
 <tr><td>drag a tag pill onto a row</td><td>tag that document</td></tr></table>
 <p><b>Docs</b> — Ingest PDF · Add from URL · Index · Label (<span class="mono">#lab</span>, in the Label pane) · Open dir</p>
@@ -1587,6 +1633,10 @@ $('#b-help').onclick = help;
 
 document.addEventListener('keydown', e => {
   if (dlg.open) return;
+  if (e.target.closest && e.target.closest('#termpane')) {  // keys belong to the shell / agent (Ctrl+W deletes a word there)
+    if (CFG.app && e.ctrlKey && !e.shiftKey && e.code === 'KeyQ') { e.preventDefault(); quitApp(); }
+    return;
+  }
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
   if (e.key === 'F1') { e.preventDefault(); help(); }
   else if (e.ctrlKey && (e.key === 'PageUp' || e.key === 'PageDown')) {
@@ -1646,6 +1696,159 @@ if (load('logopen', false)) $('#loghead').click();
     addEventListener('mousemove', mv); addEventListener('mouseup', up);
   });
 })();
+
+// ── agent pane: terminals on the right (from treedit) ────────────────────────
+
+const T = { open: false, list: [], active: null };  // one entry per server terminal, top to bottom
+const LIGHT_ANSI = { black: '#2e2b26', red: '#b23b2e', green: '#2f7d4f', yellow: '#946400', blue: '#3f6fb5', magenta: '#8a3ab9',
+  cyan: '#0f7b85', white: '#8a857b', brightBlack: '#6b665d', brightRed: '#cf4436', brightGreen: '#38945c', brightYellow: '#b07a00',
+  brightBlue: '#4f82cc', brightMagenta: '#a050d0', brightCyan: '#14909e', brightWhite: '#a9a397' };
+const darkMode = () => matchMedia('(prefers-color-scheme: dark)').matches;
+function termTheme() {
+  const cs = getComputedStyle(document.documentElement), v = k => cs.getPropertyValue(k).trim();
+  return { background: v('--bg'), foreground: v('--fg'), cursor: v('--accent'), cursorAccent: v('--bg'),
+    selectionBackground: darkMode() ? 'rgba(127,167,224,.35)' : 'rgba(63,111,181,.25)', ...(darkMode() ? {} : LIGHT_ANSI) };
+}
+function termMake(info) {  // the pane, the xterm and (once shown) the socket of one server terminal
+  const P = { id: info.id, agent: info.agent, ws: null, retry: 0, queue: [], closed: false };
+  P.dot = el('span', { class: 'tdot' }); P.lab = el('b', { text: info.label }); P.body = el('div', { class: 'tbody' });
+  const restart = el('button', { text: '↻', title: 'End this session and start a new one',
+    onclick: async () => { if (await confirmDlg('Restart terminal', `End "${P.lab.textContent}" and start it again?`, 'Restart')) termSend(P, { t: 'restart' }); } });
+  const close = el('button', { text: '×', title: 'Close this terminal (ends its session)', onclick: () => termClose(P) });
+  const head = el('div', { class: 'thead' }, P.dot, P.lab, restart, close);
+  head.onclick = e => { if (e.target === head || e.target === P.lab) { termActive(P); P.term.focus(); } };
+  P.el = el('div', { class: 'tsess' }, head, P.body);
+  P.el.addEventListener('focusin', () => termActive(P)); P.el.addEventListener('mousedown', () => termActive(P));
+  P.term = new Terminal({ fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mono'), fontSize: 13, lineHeight: 1.15,
+    cursorBlink: true, scrollback: 5000, theme: termTheme() });
+  P.fit = new FitAddon.FitAddon(); P.term.loadAddon(P.fit);
+  P.term.onData(d => termSend(P, { t: 'in', d }));
+  P.term.attachCustomKeyEventHandler(e => {  // Ctrl+Shift+C / V copy and paste, as in Ptyxis
+    if (CFG.app && e.ctrlKey && !e.shiftKey && !e.altKey && e.code === 'KeyQ') return false;  // quit, handled by the page
+    if (e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey) return true;
+    if (e.code === 'KeyC') { const t = P.term.getSelection(); if (t) navigator.clipboard?.writeText(t).catch(() => {}); return false; }
+    if (e.code === 'KeyV') { navigator.clipboard?.readText().then(t => P.term.paste(t)).catch(() => status('Paste blocked — try middle-click', 4000, true)); return false; }
+    return true;
+  });
+  new ResizeObserver(() => termFit(P)).observe(P.body);
+  return P;
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { for (const P of T.list) P.term.options.theme = termTheme(); });
+function termSync(infos) {  // match the panes to the server's terminals: add new ones below, drop closed ones
+  const ids = new Set(infos.map(i => i.id));
+  for (const P of T.list.filter(P => !ids.has(P.id))) termDrop(P);
+  for (const info of infos) {
+    if (T.list.some(P => P.id === info.id)) continue;
+    const P = termMake(info);
+    T.list.push(P); $('#terms').append(P.el); P.term.open(P.body);
+    if (T.open) termConnect(P);
+  }
+  if (!T.list.includes(T.active)) termActive(T.list[0] || null);
+  requestAnimationFrame(() => T.list.forEach(termFit));
+}
+function termDrop(P) {
+  P.closed = true; T.list = T.list.filter(x => x !== P);
+  try { P.ws?.close(); } catch {}
+  P.term.dispose(); P.el.remove();
+}
+function termActive(P) {  // the terminal the Selection button types into
+  T.active = P;
+  for (const x of T.list) x.el.classList.toggle('active', x === P && T.list.length > 1);
+}
+function termFit(P) {
+  if (!T.open || P.closed) return;
+  try { P.fit.fit(); } catch { return; }
+  termSend(P, { t: 'resize', rows: P.term.rows, cols: P.term.cols });
+}
+function termSend(P, m) { if (P && P.ws && P.ws.readyState === 1) { P.ws.send(JSON.stringify(m)); return true; } return false; }
+function termState(P, st) { P.dot.className = 'tdot ' + st; P.dot.title = { live: 'connected', ended: 'session ended', off: 'disconnected' }[st] || ''; }
+function termConnect(P) {
+  if (P.closed || (P.ws && P.ws.readyState <= 1)) return;
+  const ws = new WebSocket(`ws://${location.host}/api/term?token=${encodeURIComponent(CFG.token)}&id=${encodeURIComponent(P.id)}`);
+  ws.binaryType = 'arraybuffer'; P.ws = ws;
+  ws.onopen = () => { P.retry = 0; termState(P, 'live'); termFit(P); const q = P.queue; P.queue = []; q.forEach(f => f()); };
+  ws.onmessage = ev => {
+    if (typeof ev.data !== 'string') { P.term.write(new Uint8Array(ev.data)); return; }
+    const m = JSON.parse(ev.data);
+    if (m.t === 'hello') { P.term.reset(); P.lab.textContent = m.label; }
+    else if (m.t === 'reset') { P.term.reset(); termState(P, 'live'); }
+    else if (m.t === 'exit') termState(P, 'ended');
+    else if (m.t === 'closed') termLoad();  // closed in another window
+  };
+  ws.onclose = ev => {
+    if (P.ws !== ws) return;
+    P.ws = null; termState(P, 'off');
+    if (T.open && !P.closed) setTimeout(() => termConnect(P), Math.min(5000, 400 * 2 ** P.retry++));
+  };
+}
+async function termLoad() {
+  try { termSync((await api('GET', '/api/terms')).terms); } catch (e) { status(e.message, 6000, true); }
+}
+async function termAdd() {
+  const cmd = await promptDlg('New terminal', 'Command (empty for a shell), e.g. claude:', '');
+  if (cmd === null) return;
+  try {
+    const r = await api('POST', '/api/term/new', { agent: cmd });
+    termSync(r.terms);
+    const P = T.list.find(x => x.id === r.id);
+    if (P) { termActive(P); requestAnimationFrame(() => P.term.focus()); }
+  } catch (e) { status(e.message, 6000, true); }
+}
+async function termClose(P) {
+  if (!(await confirmDlg('Close terminal', `Close "${P.lab.textContent}"? Its session ends.`, 'Close'))) return;
+  try { termSync((await api('POST', '/api/term/close', { id: P.id })).terms); } catch (e) { status(e.message, 6000, true); }
+}
+async function openTerm(open) {
+  T.open = open; store('term', open);
+  $('#termpane').hidden = $('#divider2').hidden = !open;
+  $('#b-term').classList.toggle('on', open);
+  if (!open) return;
+  await termLoad();
+  T.list.forEach(termConnect);
+  requestAnimationFrame(() => { T.list.forEach(termFit); T.active?.term.focus(); });
+}
+async function sendToAgent(text, enter) {  // type into the active terminal (Enter separately, so TUIs don't take it as pasted)
+  if (!T.open) await openTerm(true);
+  const P = T.active;
+  if (!P) return status('No terminal: + adds one', 4000, true);
+  const go = () => {
+    termSend(P, { t: 'in', d: text });
+    if (enter) setTimeout(() => termSend(P, { t: 'in', d: '\r' }), 200);
+    P.term.focus();
+  };
+  if (!termSend(P, { t: 'resize', rows: P.term.rows, cols: P.term.cols })) P.queue.push(go); else go();
+}
+function currentSelection() {  // documents (Docs table, else Search results), labels, and text in the label editor
+  const uuids = S.view === 'search' && S.ssel.size ? sUuids() : selectedUuids();
+  const docs = uuids.map(u => ({ uuid: u, label: (S.byUuid.get(u) || S.sres.find(r => r.uuid === u) || { label: u }).label }));
+  const c = { slug: S.slug, docs, labels: S.view === 'docs' && S.pane === 'detail' ? [...labelSel] : [] };
+  if (S.view === 'docs' && S.pane === 'label' && S.ed && ed.selectionEnd > ed.selectionStart) {
+    c.quote = ed.value.slice(ed.selectionStart, ed.selectionEnd);
+    c.line = ed.value.slice(0, ed.selectionStart).split('\n').length;
+    c.file = (S.ed.path || '').split('/').pop();
+  }
+  return c;
+}
+if (CFG.term) {
+  $('#b-term').hidden = false;
+  $('#b-term').onclick = () => openTerm(!T.open);
+  $('#t-close').onclick = () => openTerm(false);
+  $('#t-add').onclick = termAdd;
+  $('#t-sel').onclick = () => { const t = selectionText(currentSelection()); if (!t) return status('Select a document first', 3000, true); sendToAgent(t, false); };
+  $('#t-ext').hidden = !CFG.ptyxis;
+  $('#t-ext').onclick = async () => { try { await api('POST', '/api/term/external', {}); status('Opened in a new terminal window', 3000); } catch (e) { status(e.message, 6000, true); } };
+  (() => {  // resizable from its left edge
+    const d = $('#divider2'), w = load('termw', null);
+    if (w) document.documentElement.style.setProperty('--term-w', w + 'px');
+    d.onmousedown = e => {
+      e.preventDefault(); const x0 = e.clientX, w0 = $('#termpane').offsetWidth; document.body.style.userSelect = 'none';
+      const mv = ev => { const nw = Math.max(280, w0 - (ev.clientX - x0)); document.documentElement.style.setProperty('--term-w', nw + 'px'); store('termw', nw); };
+      const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); document.body.style.userSelect = ''; };
+      document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
+    };
+  })();
+  if (load('term', !!CFG.agent) || CFG.agent) openTerm(true);
+}
 
 // ── start ────────────────────────────────────────────────────────────────────
 

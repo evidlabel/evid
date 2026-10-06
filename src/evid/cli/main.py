@@ -1,6 +1,7 @@
 """Main CLI entry point."""
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -62,6 +63,9 @@ def main():
 
     import evid.cli.callbacks
 
+    # EVID_DB: set inside the GUI's Agent pane, so `evid` there uses the GUI's data dir
+    if args.db is None and os.environ.get("EVID_DB"):
+        args.db = os.environ["EVID_DB"]
     evid.cli.callbacks.DIRECTORY_EXPLICIT = args.db is not None
     evid.cli.callbacks.DIRECTORY = (
         Path(args.db).expanduser()
@@ -130,6 +134,11 @@ app.commands.append(
                 flags=["--headless"],
                 flag=True,
                 help="Serve only; open nothing (stop with Ctrl+C)",
+            ),
+            option(
+                flags=["--agent"],
+                arg_type=str,
+                help="Command for the Agent pane's first terminal, e.g. claude (default $EVID_AGENT, else a shell)",
             ),
         ],
     )
