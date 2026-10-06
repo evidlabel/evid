@@ -29,6 +29,13 @@ def _seed(tmp_path):
         "= Judgment 2024\n\n#mset(values: (opage: 1))\n== Page 1\n"
         "The defendant was responsible for the safety inspections.\n",
         encoding="utf-8",
+    )  # an old file in the folder (annotated in a test below)
+    from evid.core.labels import _write_text
+
+    _write_text(
+        doc_dir,
+        "Judgment 2024\nThe defendant was responsible for the safety inspections.\n",
+        [[0, 1]],
     )
     return sm
 

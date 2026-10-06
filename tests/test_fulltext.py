@@ -1,6 +1,6 @@
 """Tests for full-text search over document bodies (substring + regex).
 
-Searches each doc's ``label.typ``; pages come from ``== Page N`` markers.
+Searches each doc's ``label/text.txt``; pages come from ``label/pages.json``.
 """
 
 from __future__ import annotations
@@ -17,23 +17,18 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def _typ(pages: list[str]) -> str:
-    """Build a minimal label.typ body with one ``== Page N`` block per page."""
-    parts = [
-        '#import "@preview/labtyp:0.1.0": lablist, lab, mset\n',
-        "= Title\n",
-    ]
-    for i, body in enumerate(pages, 1):
-        parts.append(f"#mset(values: (opage: {i}))\n== Page {i}\n{body}\n")
-    return "\n".join(parts)
-
-
 def _doc(set_path: Path, uuid: str, pages: list[str], title: str = "Doc") -> Path:
     d = set_path / "docs" / uuid
     d.mkdir(parents=True)
     with (d / "info.yml").open("w", encoding="utf-8") as f:
         yaml.safe_dump({"uuid": uuid, "title": title}, f)
-    (d / "label.typ").write_text(_typ(pages), encoding="utf-8")
+    from evid.core.labels import _write_text
+
+    text, offsets = "", []
+    for i, body in enumerate(pages, 1):
+        offsets.append([len(text), i])
+        text += body + "\n\n"
+    _write_text(d, text, offsets)
     return d
 
 
@@ -124,13 +119,13 @@ def test_python_fallback_matches_grepper(tmp_path, monkeypatch):
     assert hits[0].page == 1
 
 
-def test_docs_without_label_typ_are_skipped(tmp_path):
+def test_docs_without_text_are_skipped(tmp_path):
     sp = tmp_path / "set"
     d = sp / "docs" / "u1"
     d.mkdir(parents=True)
     with (d / "info.yml").open("w", encoding="utf-8") as f:
         yaml.safe_dump({"uuid": "u1", "title": "No body"}, f)
-    # No label.typ → nothing to search.
+    # No label/text.txt → nothing to search.
     assert search_fulltext(sp, "anything") == []
     assert search_fulltext(sp, "anything", regex=True) == []
 

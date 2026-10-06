@@ -182,7 +182,7 @@ def doc_row(doc) -> dict:
 
 
 def vec_preview(typ_path: Path, char_start: int, chunk: str) -> dict | None:
-    """The chunk in its label.typ context: before / match / after (plain text)."""
+    """The chunk in its context in the document's text (label/text.txt): before / match / after."""
     try:
         text = typ_path.read_text(encoding="utf-8")
     except OSError:
@@ -987,7 +987,7 @@ class Handler(BaseHTTPRequestHandler):
                     "chunk_idx": r.chunk_idx,
                     "chunk": r.chunk_text,
                     "preview": vec_preview(
-                        es.path / "docs" / r.doc.uuid / "label.typ",
+                        es.path / "docs" / r.doc.uuid / "label" / "text.txt",
                         r.char_start,
                         r.chunk_text,
                     ),

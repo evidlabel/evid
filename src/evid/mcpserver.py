@@ -127,7 +127,7 @@ def build_server(data_dir: Path, dataset: str):
 
     @mcp.tool()
     def search_text(query: str, regex: bool = False, n: int = 10) -> str:
-        """Full-text search over document *bodies* (their label.typ) in this
+        """Full-text search over document *bodies* (their plain text) in this
         dataset. Default is a case-insensitive substring match (one hit per
         document); set regex=True to return every regex match. Returns JSON:
         uuid, label, page, char_start, snippet."""

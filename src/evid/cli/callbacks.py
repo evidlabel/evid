@@ -898,8 +898,9 @@ def search_text_callback(
 def reindex_callback(db: str = None, dataset: str = None):
     """Rebuild the vector index for every document in a set.
 
-    Re-chunks each doc's label.typ and replaces its existing vecdb entries.
-    Needed after a chunking change so old chunks are refreshed.
+    Re-chunks each doc's canonical text (label/text.txt) and replaces its
+    existing vecdb entries. Needed after a chunking change, and after
+    migrating to evid 0.7 (chunk offsets now point into label/text.txt).
     """
     if not extras.has_vec():
         print(extras.VEC_INSTALL)

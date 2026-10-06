@@ -48,7 +48,8 @@ class VecService:
     def index_document(
         self, doc: Document, typ_text: str, evidence_set: EvidenceSet
     ) -> None:
-        """Chunk *typ_text* and upsert into the set's ChromaDB collection."""
+        """Chunk the document's text (label/text.txt) and upsert into the set's ChromaDB
+        collection; chunk offsets point into that text."""
         from evid.vec.chunking import chunk_text
         from evid.vec.embeddings import embed_documents, model_name
 

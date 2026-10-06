@@ -1,20 +1,19 @@
 """Full-text search over document *bodies* (not just info.yml metadata).
 
-Searches each document's generated ``label.typ`` (the Typst file produced at
-ingest, which carries the full body text inline under ``== Page N`` markers).
-This is fast — no PDF re-extraction — and a fast external grepper (``rg`` or
-``ugrep``) is used to narrow the candidate files before Python computes the
-precise hit. When no grepper is on PATH, a pure-Python scan is used instead.
+Searches each document's canonical plain text, ``label/text.txt`` (extracted
+once at ingest; the same text labels and quotes point into). This is fast — no
+PDF re-extraction — and a fast external grepper (``rg`` or ``ugrep``) narrows
+the candidate files before Python computes the precise hit. When no grepper is
+on PATH, a pure-Python scan is used instead.
 
 Two modes:
 
 * **literal** (default) — case-insensitive substring match; one hit per document.
 * **regex** — every ``re`` match across documents, each with a context snippet.
 
-Both report the page number of the match (read from the ``== Page N`` markers).
-Because the source is ``label.typ``, snippets may include Typst markup
-(``#lab(...)``, ``== Page N``, escaping) and any labels the user has added.
-Documents without a ``label.typ`` are skipped; the count is logged.
+Both report the page of the match (from ``label/pages.json``) and its offset
+in the text, so a hit can be turned into a label directly. Documents without a
+canonical text yet are skipped; the count is logged.
 """
 
 from __future__ import annotations
@@ -30,8 +29,7 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-# Marker lines emitted per page by ``textpdf_to_typst`` (typst_generation.py).
-_PAGE_RX = re.compile(r"^== Page (\d+)\s*$", re.MULTILINE)
+TEXT = ("label", "text.txt")
 
 # Greppers we know how to drive, in preference order.
 _GREPPERS = ("rg", "ugrep", "ug")
@@ -66,19 +64,19 @@ def _context(text: str, start: int, end: int, ctx: int) -> str:
     return (lead + text[a:b] + trail).replace("\n", " ").strip()
 
 
-def _page_for_typ_offset(text: str, offset: int) -> int:
-    """Map a char offset in a ``label.typ`` to its 1-based page number.
+def _pages(doc_dir: Path) -> list:
+    from evid.core.labels import read_text
 
-    Uses the ``== Page N`` marker lines; returns the page of the last marker at
-    or before *offset*, defaulting to 1 when no marker precedes it.
-    """
-    page = 1
-    for m in _PAGE_RX.finditer(text):
-        if m.start() <= offset:
-            page = int(m.group(1))
-        else:
-            break
-    return page
+    try:
+        return read_text(doc_dir)[1]
+    except (OSError, ValueError):
+        return [[0, 1]]
+
+
+def _page(doc_dir: Path, offset: int) -> int:
+    from evid.core.spans import page_for_offset
+
+    return page_for_offset(offset, _pages(doc_dir))
 
 
 def _grepper() -> str | None:
@@ -90,27 +88,27 @@ def _grepper() -> str | None:
 
 
 def _iter_typ_files(set_path: Path):
-    """Yield ``(doc_dir, label_typ_path)`` for every doc with a label.typ."""
+    """Yield ``(doc_dir, text_path)`` for every doc with a canonical text."""
     docs_dir = set_path / "docs"
     if not docs_dir.exists():
         return
     skipped = 0
     for doc_dir in sorted(d for d in docs_dir.iterdir() if d.is_dir()):
-        typ = doc_dir / "label.typ"
-        if typ.exists():
-            yield doc_dir, typ
+        txt = doc_dir.joinpath(*TEXT)
+        if txt.exists():
+            yield doc_dir, txt
         else:
             skipped += 1
     if skipped:
         logger.info(
-            "Full-text search skipped %d document(s) with no label.typ", skipped
+            "Full-text search skipped %d document(s) with no label/text.txt", skipped
         )
 
 
 def _candidate_dirs(set_path: Path, query: str) -> list[Path] | None:
-    """Use a grepper to find doc dirs whose label.typ contains *query* (literal).
+    """Use a grepper to find doc dirs whose label/text.txt contains *query* (literal).
 
-    Returns the matching doc dirs (parents of matching label.typ files), or None
+    Returns the matching doc dirs, or None
     when no grepper is available so the caller can fall back to a Python scan.
     """
     binary = _grepper()
@@ -122,10 +120,10 @@ def _candidate_dirs(set_path: Path, query: str) -> list[Path] | None:
     # ``-l`` files-with-matches, ``-i`` ignore case, ``-F`` literal, ``-e`` pattern.
     cmd = [binary, "-l", "-i", "-F", "-e", query]
     if binary == "rg":
-        # --no-ignore: don't let a .gitignore in the db tree hide label.typ files.
-        cmd += ["--no-ignore", "-g", "label.typ", str(docs_dir)]
+        # --no-ignore: don't let a .gitignore in the db tree hide the text files.
+        cmd += ["--no-ignore", "-g", "text.txt", str(docs_dir)]
     else:  # ugrep / ug
-        cmd += ["-r", "--include=label.typ", str(docs_dir)]
+        cmd += ["-r", "--include=text.txt", str(docs_dir)]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     except OSError:
@@ -140,8 +138,8 @@ def _candidate_dirs(set_path: Path, query: str) -> list[Path] | None:
     dirs = []
     for line in proc.stdout.splitlines():
         p = Path(line.strip())
-        if p.name == "label.typ" and p.parent.is_dir():
-            dirs.append(p.parent)
+        if p.name == TEXT[1] and p.parent.name == TEXT[0] and p.parent.parent.is_dir():
+            dirs.append(p.parent.parent)
     return sorted(dirs)
 
 
@@ -151,12 +149,12 @@ def _literal_search(
     needle = query.casefold()
     candidates = _candidate_dirs(set_path, query)
     if candidates is None:
-        # No grepper: scan every label.typ in Python.
+        # No grepper: scan every text in Python.
         candidates = [doc_dir for doc_dir, _ in _iter_typ_files(set_path)]
 
     hits: list[TextHit] = []
     for doc_dir in candidates:
-        typ = doc_dir / "label.typ"
+        typ = doc_dir.joinpath(*TEXT)
         try:
             text = typ.read_text(encoding="utf-8")
         except OSError:
@@ -169,7 +167,7 @@ def _literal_search(
             TextHit(
                 uuid=doc_dir.name,
                 label=_doc_label(doc_dir),
-                page=_page_for_typ_offset(text, idx),
+                page=_page(doc_dir, idx),
                 snippet=_context(text, idx, idx + len(query), context),
                 char_start=idx,
                 score=None,
@@ -189,7 +187,7 @@ def _regex_search(
         msg = f"Invalid regex '{pattern}': {exc}"
         raise ValueError(msg) from exc
 
-    # Python's `re` is authoritative; scan every label.typ to avoid grepper
+    # Python's `re` is authoritative; scan every text to avoid grepper
     # regex-dialect false negatives (reading files is cheap — no PDF work).
     hits: list[TextHit] = []
     for doc_dir, typ in _iter_typ_files(set_path):
@@ -204,7 +202,7 @@ def _regex_search(
                 TextHit(
                     uuid=doc_dir.name,
                     label=label,
-                    page=_page_for_typ_offset(text, m.start()),
+                    page=_page(doc_dir, m.start()),
                     snippet=_context(text, m.start(), m.end(), context),
                     char_start=m.start(),
                     score=None,
@@ -223,7 +221,7 @@ def search_fulltext(
     n: int = 10,
     context: int = 160,
 ) -> list[TextHit]:
-    """Search document bodies (their ``label.typ``) in *set_path*.
+    """Search document bodies (their ``label/text.txt``) in *set_path*.
 
     ``regex=True`` returns up to *n* regex matches (document then offset order);
     otherwise a case-insensitive substring match, one hit per document, up to *n*.

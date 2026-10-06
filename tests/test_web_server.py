@@ -282,8 +282,10 @@ def test_search_meta_and_text(server, doc, app):
         call(server, "POST", "/api/search/meta", {"slug": "case", "pattern": "zzz"})[1]
         == []
     )
-    (app.data_dir / "sets" / "case" / "docs" / doc / "label.typ").write_text(
-        "== Page 1\nthe needle is here\n"
+    from evid.core.labels import _write_text
+
+    _write_text(
+        app.data_dir / "sets" / "case" / "docs" / doc, "the needle is here\n", [[0, 1]]
     )
     hits = call(
         server, "POST", "/api/search/text", {"slug": "case", "query": "needle"}

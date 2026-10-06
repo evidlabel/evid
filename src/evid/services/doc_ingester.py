@@ -1,7 +1,7 @@
 """DocIngester — sole deep PDF ingest path for an EvidenceSet.
 
 Owns the full pipeline: source resolve (local path / URL) → content hash UUID →
-copy as original.pdf → info.yml / evidmgr_meta.yml → label.typ → bibtex →
+copy as original.pdf → info.yml / evid_meta.yml → label/text.txt (plain text) →
 vector index. CLI and GUI adapters only load the set, call the ingester, and
 handle optional UI (labeler, progress dialogs).
 """
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # Progress callback: (step: int, total: int, message: str) -> None
 ProgressCallback = Callable[[int, int, str], None]
 
-_TOTAL_STEPS = 7
+_TOTAL_STEPS = 6
 
 
 def _noop(step: int, total: int, msg: str) -> None:
@@ -218,7 +218,7 @@ class DocIngester:
         from PDF metadata.  *temp_dir* (a ``tempfile.TemporaryDirectory``) is
         cleaned up after the file is copied, if provided.
 
-        When *do_index* is False the slow step-6 vector index is skipped; the doc
+        When *do_index* is False the slow step-5 vector index is skipped; the doc
         is added but left ``indexed=False`` so it can be indexed later (e.g. via a
         background queue or ``index_existing``).
 
@@ -319,48 +319,28 @@ class DocIngester:
 
         write_meta(doc_dir, meta)
 
-        # ── 4. Generate .typ file ─────────────────────────────────────────────
-        p(4, n, "Extracting text to Typst")
-        typ_path = doc_dir / "label.typ"
+        # ── 4. The canonical plain text (label/text.txt) ──────────────────────
+        p(4, n, "Extracting the plain text")
         try:
-            from evid.core.typst_generation import textpdf_to_typst
+            from evid.core.labels import ensure_text
 
-            textpdf_to_typst(original_pdf, typ_path)
-            logger.debug(
-                "Generated label.typ (%d bytes)",
-                typ_path.stat().st_size if typ_path.exists() else 0,
-            )
+            text, _pages = ensure_text(doc_dir)
+            logger.debug("Extracted %d chars of text for %s", len(text), doc_uuid)
         except Exception as exc:
-            logger.exception("textpdf_to_typst failed for %s", doc_uuid)
-            self._errors.append((4, "extract typst text", str(exc)))
+            logger.exception("Text extraction failed for %s", doc_uuid)
+            self._errors.append((4, "extract text", str(exc)))
+            text = ""
 
-        # ── 5. typst query → label.json + label.bib ───────────────────────────
-        p(5, n, "Running typst query → label.json / label.bib")
-        try:
-            from evid.core.bibtex import generate_bib_from_typ
-
-            ok, msg = generate_bib_from_typ(typ_path)
-            if ok:
-                logger.debug("BibTeX generation succeeded for %s", doc_uuid)
-            else:
-                logger.warning("BibTeX generation issue for %s: %s", doc_uuid, msg)
-        except Exception as exc:
-            logger.exception("generate_bib_from_typ failed for %s", doc_uuid)
-            self._errors.append((5, "generate bib from typ", str(exc)))
-
-        # ── 6. Vector index ───────────────────────────────────────────────────
+        # ── 5. Vector index ───────────────────────────────────────────────────
         doc = self._make_document(doc_dir, doc_uuid, doc_label, tags, source_url)
         if not do_index:
             logger.debug("Skipping vector index for %s (do_index=False)", doc_uuid)
         elif self.vec_service is not None:
-            p(6, n, "Indexing into vector store")
+            p(5, n, "Indexing into vector store")
             try:
-                typ_text = (
-                    typ_path.read_text(encoding="utf-8") if typ_path.exists() else ""
-                )
-                logger.debug("Embedding %d chars for %s", len(typ_text), doc_uuid)
+                logger.debug("Embedding %d chars for %s", len(text), doc_uuid)
                 ok, msg = self.vec_service.index_document_isolated(  # type: ignore[attr-defined]
-                    doc, typ_text, evidence_set, pool=pool
+                    doc, text, evidence_set, pool=pool
                 )
                 if ok:
                     meta["indexed"] = True
@@ -371,7 +351,7 @@ class DocIngester:
                     close_vec_service(self.vec_service, evidence_set.slug)
             except Exception as exc:
                 logger.exception("VecService.index_document failed for %s", doc_uuid)
-                self._errors.append((6, "vector index", str(exc)))
+                self._errors.append((5, "vector index", str(exc)))
                 # Close the ChromaDB client on unexpected errors too.
                 close_vec_service(self.vec_service, evidence_set.slug)
         else:
@@ -385,8 +365,8 @@ class DocIngester:
                 "; ".join(f"[{step}] {label}" for step, label, _ in self._errors),
             )
 
-        # ── 7. Update evidmgr_meta.yml ────────────────────────────────────────
-        p(7, n, "Finalising metadata")
+        # ── 6. Update evid_meta.yml ───────────────────────────────────────────
+        p(6, n, "Finalising metadata")
         from evid.core.evid_meta import write_meta
 
         write_meta(doc_dir, meta)
@@ -400,7 +380,7 @@ class DocIngester:
         evidence_set: EvidenceSet,
         pool: object | None = None,
     ) -> bool:
-        """Index an already-imported document that has a .typ file but no vecdb entry.
+        """Index an already-imported document (its canonical text, label/text.txt).
 
         *pool* is an optional long-lived ``IndexWorkerPool`` reused across a
         batch so the embedding model loads once. Returns True if indexing
@@ -415,21 +395,16 @@ class DocIngester:
         # Load the document
         doc = load_document(doc_dir, doc_dir.name)
 
-        # Find the typ file (evid uses label.typ; fallback to any *.typ)
-        typ_path = doc_dir / "label.typ"
-        if not typ_path.exists():
-            candidates = list(doc_dir.glob("*.typ"))
-            typ_path = candidates[0] if candidates else None
+        from evid.core.labels import ensure_text
 
-        typ_text = typ_path.read_text(encoding="utf-8") if typ_path else ""
-        if not typ_text:
-            logger.warning(
-                "No .typ text for %s; indexing with empty content", doc_dir.name
-            )
-        else:
-            logger.debug(
-                "Embedding %d chars for existing doc %s", len(typ_text), doc_dir.name
-            )
+        try:
+            typ_text, _pages = ensure_text(doc_dir)
+        except (FileNotFoundError, ValueError) as exc:
+            logger.warning("No text to index for %s: %s", doc_dir.name, exc)
+            typ_text = ""
+        logger.debug(
+            "Embedding %d chars for existing doc %s", len(typ_text), doc_dir.name
+        )
 
         logger.debug(
             "Indexing existing doc %s into '%s'", doc_dir.name, evidence_set.slug
