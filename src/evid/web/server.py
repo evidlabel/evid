@@ -45,6 +45,7 @@ from evid.web.jobs import (
     LabelWatcher,
     rebuild_labels,
 )
+from evid.web.live import DiskWatch
 from evid.web.term import Sessions, ws_accept
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,12 @@ class EvidApp:
         self.has_vec = extras.has_vec()
         self._vec = None
         self._vec_lock = threading.Lock()
-        self.index = IndexQueue(self.events, before_index=self._release_vec)
+        self.disk = DiskWatch(
+            self.data_dir, self.events
+        )  # live mode: changes made outside the app
+        self.index = IndexQueue(
+            self.events, before_index=self._release_vec, on_write=self.disk.touch
+        )
         self.temps: dict[str, object] = {}  # fetch token -> TemporaryDirectory
         self._log_handler: logging.Handler | None = None
 
@@ -133,6 +139,7 @@ class EvidApp:
             logging.getLogger("evid").removeHandler(self._log_handler)
             self._log_handler = None
         self.watcher.stop()
+        self.disk.stop()
         self.index.stop()
         for tmp in self.temps.values():
             with contextlib.suppress(Exception):
@@ -491,6 +498,7 @@ class Handler(BaseHTTPRequestHandler):
         for u in uuids:
             _, d = self.app.doc_dir(slug, u)
             name = doc_name(d)
+            self.app.disk.touch(slug, u)
             doc_ops.delete_doc(d)
             logger.info("Deleted %s from '%s'", name, slug)
         self.app.events.emit("docs_changed", slug=slug)
@@ -505,6 +513,7 @@ class Handler(BaseHTTPRequestHandler):
         copied = 0
         for u in list(b.get("uuids") or []):
             _, src = self.app.doc_dir(slug, u)
+            self.app.disk.touch(dest.slug, u)
             dest_dir, new = doc_ops.copy_doc(src, dest)
             if new:
                 copied += 1
@@ -537,6 +546,7 @@ class Handler(BaseHTTPRequestHandler):
         n = 0
         for u in list(b.get("uuids") or []):
             _, d = self.app.doc_dir(slug, u)
+            self.app.disk.touch(es.slug, u)
             n += bool(fn(self.app.tags, es.slug, u, d / "info.yml", tag))
         verb = (
             "Removed tag %s from %d document(s)"
@@ -558,6 +568,7 @@ class Handler(BaseHTTPRequestHandler):
     def put_doc(self, slug: str, uuid: str):
         _, d = self.app.doc_dir(slug, uuid)
         b = self.body()
+        self.app.disk.touch(slug, uuid)
         out = doc_ops.update_doc(d, b)
         logger.info("Saved details of %s", doc_name(d))
         self.send_json(200, {**out, "labels": label_rows(d)})
@@ -618,6 +629,7 @@ class Handler(BaseHTTPRequestHandler):
         _, d = self.app.doc_dir(slug, uuid)
         b = self.body()
         path = str(b.get("path", "."))
+        self.app.disk.touch(slug, uuid)
         notes = write_annotation(d, path, str(b.get("text", "")))
         target = "the document" if path in ("", ".") else path
         logger.info(
@@ -650,6 +662,7 @@ class Handler(BaseHTTPRequestHandler):
         def run(progress, _job):
             if not doc_ops.find_label_typ(d).exists():
                 progress("Generating label.typ…")
+            app.disk.touch(slug, uuid)
             typ = doc_ops.ensure_label_typ(d)
             app.watcher.watch(typ, slug, uuid)
             if want_editor:
@@ -701,6 +714,7 @@ class Handler(BaseHTTPRequestHandler):
                     "mtime": str(typ.stat().st_mtime_ns),
                 },
             )
+        self.app.disk.touch(slug, uuid)
         typ.write_text(str(b.get("content", "")), encoding="utf-8")
         self.app.watcher.watch(typ, slug, uuid)
         self.app.watcher.mark_seen(typ)
@@ -823,6 +837,7 @@ class Handler(BaseHTTPRequestHandler):
         )
 
         def run(progress, _job):
+            app.disk.touch(es.slug)  # the new doc's id is not known yet
             ing = DocIngester(vec_service=None)
             ing.progress = lambda _s, _n, msg: progress(f"{msg}…")
             doc = ing.ingest(
@@ -838,6 +853,7 @@ class Handler(BaseHTTPRequestHandler):
                 do_index=False,
                 source_name=str(b.get("source_name", "")),
             )
+            app.disk.touch(es.slug, doc.uuid)
             existing = bool(ing.last_was_existing)
             if not existing:
                 app.enqueue_index(es.path / "docs" / doc.uuid, es)
@@ -1272,6 +1288,7 @@ def serve_gui(
     )
 
     app.attach_log()
+    app.disk.start()
     Handler.agent = agent or os.environ.get("EVID_AGENT", "")
     Handler.agents = SetAgents(
         config.data_dir,

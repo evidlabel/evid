@@ -29,6 +29,11 @@ FUNCS = [
     "keepOrder",
     "isSaveKey",
     "selectionText",
+    "lineDiff",
+    "lineHunks",
+    "merge3",
+    "mergeFields",
+    "freshness",
 ]
 
 
@@ -254,3 +259,44 @@ def test_selection_text(js):
         "return selectionText({slug: 'c', docs: [{uuid: 'a', label: 'A'}, {uuid: 'b', label: 'B'}]});"
     )
     assert 'the documents "A" (a), "B" (b)' in two
+
+
+BASE = "# Notes\\n\\n- a\\n- b\\n\\n## Done\\n\\n- c\\n"
+
+
+def test_merge3_from_treedit(js):
+    # the same cases treedit tests: separate edits merge, an edit already on disk is not doubled,
+    # near-duplicate edits of the same lines are a conflict
+    assert js(
+        f"const B = '{BASE}'; return merge3(B, B.replace('- a', '- a, mine'), B.replace('- c', '- c, theirs'));"
+    ) == BASE.replace("\\n", "\n").replace("- a", "- a, mine").replace(
+        "- c", "- c, theirs"
+    )
+    assert (
+        js(f"const B = '{BASE}'; const m = B + '\\nNew.\\n'; return merge3(B, m, m);")
+        == BASE.replace("\\n", "\n") + "\nNew.\n"
+    )
+    assert (
+        js(f"const B = '{BASE}'; return merge3(B, B + '\\nteh\\n', B + '\\nthe\\n');")
+        is None
+    )
+
+
+def test_merge_fields(js):
+    out = js("""return mergeFields(
+        {title: 'T', authors: 'A', notes: 'n'},
+        {title: 'T', authors: 'A mine', notes: 'n mine'},
+        {title: 'T disk', authors: 'A', notes: 'n disk'},
+        ['title', 'authors', 'notes']);""")
+    assert out == {
+        "values": {"title": "T disk", "authors": "A mine", "notes": "n mine"},
+        "conflicts": ["notes"],
+    }
+    same = js("return mergeFields({t: 'x'}, {t: 'y'}, {t: 'y'}, ['t']);")
+    assert same == {"values": {"t": "y"}, "conflicts": []}
+
+
+def test_freshness(js):
+    assert js(
+        "return [freshness(100, 100, 900), freshness(100, 550, 900), freshness(100, 2000, 900)];"
+    ) == [1, 0.5, 0]

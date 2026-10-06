@@ -143,10 +143,14 @@ class IndexQueue:
     """
 
     def __init__(
-        self, events: Events, before_index: Callable[[str], None] | None = None
+        self,
+        events: Events,
+        before_index: Callable[[str], None] | None = None,
+        on_write: Callable[[str, str], None] | None = None,
     ) -> None:
         self._events = events
         self._before_index = before_index
+        self._on_write = on_write  # (slug, uuid): indexing rewrites evid_meta — that is the app, not an agent
         self._queue: queue.Queue = queue.Queue()
         self._lock = threading.Lock()
         self._pending = 0
@@ -200,6 +204,8 @@ class IndexQueue:
                     break
                 doc_dir, evidence_set = job
                 ok = False
+                if self._on_write:
+                    self._on_write(evidence_set.slug, doc_dir.name)
                 try:
                     if has_vec and pool is None:
                         pool = self._make_pool()
@@ -220,6 +226,8 @@ class IndexQueue:
                     logger.warning(
                         "Background index did not complete for %s", doc_dir.name
                     )
+                if self._on_write:
+                    self._on_write(evidence_set.slug, doc_dir.name)
                 with self._lock:
                     self._pending = max(0, self._pending - 1)
                     pending = self._pending

@@ -114,6 +114,12 @@ table.tbl { width: 100%; border-collapse: collapse; user-select: none; }
 .tbl tr.droptag td { background: color-mix(in srgb, var(--pill-carried) 70%, transparent); }
 .tbl tbody tr:hover:not(.sel) td { background: var(--hover); }
 .tbl .c { text-align: center; width: 26px; }
+.tbl tr.chg td { background-image: linear-gradient(var(--chgbg), var(--chgbg)); }
+.tbl .chgmark { color: var(--hl-lab); margin-right: 4px; font-size: 10px; }
+#d-merge { display: none; padding: 6px 8px; border-radius: 5px; background: color-mix(in srgb, var(--mark) 55%, transparent); gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+#d-merge.on { display: flex; }
+#d-merge span { flex: 1 1 100%; }
+.form .fromdisk { box-shadow: 0 0 0 2px color-mix(in srgb, var(--hl-lab) 55%, transparent); transition: box-shadow 1.5s; }
 .tbl .uuid, .mono { font-family: var(--mono); font-size: 12px; }
 .tbl .empty td { color: var(--muted); text-align: center; padding: 18px; }
 .legend { color: var(--muted); font-size: 11px; }
@@ -271,6 +277,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
         <div class="uuidrow"><span class="mono" id="d-uuid">—</span>
           <button id="d-view" title="Open the URL, or the folder if there is none">View</button>
           <button id="d-copy" title="Copy the UUID">Copy</button></div>
+        <div id="d-merge"><span id="d-merge-msg"></span><button id="d-merge-disk">Use the disk version</button><button id="d-merge-mine">Keep mine</button></div>
         <div class="muted" id="d-source" hidden style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
         <div class="form">
           <label for="d-title">Title</label><input id="d-title">
@@ -483,6 +490,67 @@ function selectionText(c) {
   return t + ' ';
 }
 
+// Three-way merge of text (from treedit): null when both sides change the same or touching lines differently.
+function lineDiff(a, b) {
+  const A = a.split('\n'), B = b.split('\n'), n = A.length, m = B.length;
+  if (n * m > 6e6) return null;
+  const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = A[i] === B[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const out = []; let i = 0, j = 0;
+  while (i < n && j < m) { if (A[i] === B[j]) { out.push([' ', A[i++]]); j++; } else if (dp[i + 1][j] >= dp[i][j + 1]) out.push(['-', A[i++]]); else out.push(['+', B[j++]]); }
+  while (i < n) out.push(['-', A[i++]]); while (j < m) out.push(['+', B[j++]]);
+  return out;
+}
+function lineHunks(o, x) {  // the changes from o to x as [{s, e, lines}]: line s..e-1 of o replaced by lines; null if too large
+  const d = lineDiff(o, x);
+  if (!d) return null;
+  const out = [];
+  let i = 0, cur = null;
+  for (const [t, l] of d) {
+    if (t === ' ') { cur = null; i++; continue; }
+    if (!cur) { cur = { s: i, e: i, lines: [] }; out.push(cur); }
+    if (t === '-') cur.e = ++i; else cur.lines.push(l);
+  }
+  return out;
+}
+function merge3(original, mine, theirs) {
+  if (mine === original || mine === theirs) return theirs;
+  if (theirs === original) return mine;
+  const O = original.split('\n'), ha = lineHunks(original, mine), hb = lineHunks(original, theirs);
+  if (!ha || !hb) return null;
+  const all = [...ha.map(h => ({ ...h, side: 0 })), ...hb.map(h => ({ ...h, side: 1 }))].sort((x, y) => x.s - y.s || x.e - y.e);
+  const out = [];
+  let pos = 0;
+  for (let k = 0; k < all.length;) {
+    const gs = all[k].s, grp = [all[k++]];
+    let ge = grp[0].e;
+    while (k < all.length && all[k].s <= ge) { ge = Math.max(ge, all[k].e); grp.push(all[k++]); }  // overlapping or touching
+    const render = hs => { const r = []; let p = gs; for (const h of hs) { r.push(...O.slice(p, h.s), ...h.lines); p = h.e; } return [...r, ...O.slice(p, ge)]; };
+    const a = grp.filter(h => h.side === 0), b = grp.filter(h => h.side === 1);
+    const ra = render(a), rb = render(b);
+    if (a.length && b.length && ra.join('\n') !== rb.join('\n')) return null;  // never keep both versions of a block
+    out.push(...O.slice(pos, gs), ...(a.length ? ra : rb));
+    pos = ge;
+  }
+  return [...out, ...O.slice(pos)].join('\n');
+}
+
+// Per-field three-way merge for the Detail pane: disk-only changes come in, your
+// edits stay, a field both changed differently is a conflict (yours is kept).
+function mergeFields(base, mine, disk, fields) {
+  const values = {}, conflicts = [];
+  for (const f of fields) {
+    const b = base[f] ?? '', m = mine[f] ?? '', d = disk[f] ?? '';
+    if (d === b || m === d) values[f] = m;
+    else if (m === b) values[f] = d;
+    else { values[f] = m; conflicts.push(f); }
+  }
+  return { values, conflicts };
+}
+
+// How fresh an outside change still looks (1 → 0 over `fade` seconds).
+function freshness(at, now, fade) { return Math.max(0, 1 - (now - at) / fade); }
+
 function shortUuid(u) { return u.length > 16 ? u.slice(0, 8) + '…' + u.slice(-8) : u; }
 
 // ── plumbing ─────────────────────────────────────────────────────────────────
@@ -541,7 +609,7 @@ const S = {
   tagFilter: new Set(), registry: [], detail: null, detailDirty: false, loadSeq: 0,
   expanded: new Set(load('expanded', [])), setTags: new Map(),
   view: 'docs', skind: CFG.has_vec ? 'vec' : 'meta', sq: { busy: false, queued: null }, sres: [], ssel: new Set(), scur: -1, sanchor: null,
-  ed: null, pane: load('pane', 'detail'), evSince: 0, waiters: new Map(), finished: new Map(),
+  ed: null, pane: load('pane', 'detail'), changes: new Map(), detailBase: null, detailConflict: null, evSince: 0, waiters: new Map(), finished: new Map(),
 };
 
 // ── dialogs ──────────────────────────────────────────────────────────────────
@@ -701,7 +769,7 @@ function addLog(e) {
 }
 
 let reloadT = null;
-function scheduleReload() { clearTimeout(reloadT); reloadT = setTimeout(() => loadDocs(true), 250); }
+function scheduleReload(keepDetail) { clearTimeout(reloadT); reloadT = setTimeout(() => loadDocs(true, keepDetail), 250); }
 
 function onEvent(e) {
   switch (e.kind) {
@@ -715,6 +783,9 @@ function onEvent(e) {
     case 'indexed': if (e.slug === S.slug) scheduleReload(); if (e.pending > 0) status(`Indexing in background (${e.pending} queued)…`); break;
     case 'index_idle': status('Indexing complete', 4000); break;
     case 'agents': refreshSetCounts(); break;
+    case 'disk': onDisk(e); break;
+    case 'sets_changed': loadSets(); break;
+    case 'tags_changed': api('GET', '/api/tags').then(t => { S.registry = t; renderPills(); }).catch(() => {}); break;
     case 'docs_changed': if (e.slug === S.slug) scheduleReload(); else refreshSetCounts(); S.setTags.delete(e.slug); break;
     case 'labels_updated':
       if (e.slug === S.slug) { scheduleReload(); if (S.cur === e.uuid) { refreshLabels(); renderFiles(); } }
@@ -823,7 +894,7 @@ async function importDir() {
 
 // ── docs table ───────────────────────────────────────────────────────────────
 
-async function loadDocs(keep) {
+async function loadDocs(keep, keepDetail) {
   const seq = ++S.loadSeq, slug = S.slug;
   if (!slug) return;
   if (!keep) { S.docs = []; renderDocs('Loading…'); }
@@ -840,7 +911,7 @@ async function loadDocs(keep) {
   if (S.cur && !S.byUuid.has(S.cur)) S.cur = null;
   renderDocs(); renderPills();
   if (S.expanded.has(slug)) renderSets();
-  if (!keep || (S.cur && !S.detailDirty)) loadDetail();
+  if (!keep || (S.cur && !S.detailDirty && !keepDetail)) loadDetail();
 }
 
 const visibleDocs = () => filterDocs(S.docs, $('#filter').value, S.tagFilter);
@@ -853,9 +924,13 @@ function renderDocs(msg) {
     tb.replaceChildren(el('tr', { class: 'empty' }, el('td', { colspan: 3, text: msg || (S.slug ? (S.docs.length ? '(No documents match the filter)' : '(No documents in this set)') : '(Create or pick a set)') })));
   } else {
     tb.replaceChildren(...docs.map(d => {
-      const tr = el('tr', { 'data-uuid': d.uuid, class: (S.sel.has(d.uuid) ? 'sel ' : '') + (S.cur === d.uuid ? 'cur' : ''), draggable: 'true', title: `${d.label}\n${d.uuid}` + (d.tags.length ? '\nTags: ' + d.tags.join(', ') : '') + (d.note ? `\n\nNote: ${d.note}` : '') },
-        el('td', { class: 'muted', text: d.authors }), el('td', { text: d.label + (d.note ? '  🗨' : '') }),
+      const ch = S.changes.get(d.uuid), f = ch ? freshness(ch.at, Date.now() / 1000, CHANGE_FADE) : 0;
+      const tr = el('tr', { 'data-uuid': d.uuid, class: (S.sel.has(d.uuid) ? 'sel ' : '') + (S.cur === d.uuid ? 'cur ' : '') + (f > 0 ? 'chg' : ''), draggable: 'true',
+        title: `${d.label}\n${d.uuid}` + (d.tags.length ? '\nTags: ' + d.tags.join(', ') : '') + (d.note ? `\n\nNote: ${d.note}` : '') + (f > 0 ? `\n\nChanged outside the app ${ago(ch.at)} (${ch.what})` : '') },
+        el('td', { class: 'muted', text: d.authors }),
+        el('td', {}, f > 0 ? el('span', { class: 'chgmark', style: `opacity:${(0.35 + 0.65 * f).toFixed(2)}`, text: '◆' }) : null, d.label + (d.note ? '  🗨' : '')),
         d.dates ? el('td', { text: d.dates }) : el('td', { class: 'muted', style: 'font-style:italic', text: d.added }));
+      if (f > 0) tr.style.setProperty('--chgbg', `color-mix(in srgb, var(--hl-lab) ${(4 + 14 * f).toFixed(1)}%, transparent)`);
       return tr;
     }));
   }
@@ -1016,6 +1091,34 @@ async function loadDetail() {
     S.detail = r; fillDetail(r);
   } catch (e) { status(e.message, 6000, true); }
 }
+const detailValues = () => Object.fromEntries(FIELDS.map(f => [f, $('#d-' + f).value]));
+// The selected doc changed on disk while you edit its details: bring in what you did not
+// touch, keep your edits, and ask only where both of you changed the same field.
+async function detailFromDisk() {
+  const d = curDoc(); if (!d || !S.detail || !S.detailBase) return;
+  let r;
+  try { r = await api('GET', docUrl(S.slug, d.uuid)); } catch { return; }
+  if (!S.detail || S.detail.uuid !== r.uuid) return;
+  const { values, conflicts } = mergeFields(S.detailBase, detailValues(), r, FIELDS);
+  for (const f of FIELDS) {
+    const i = $('#d-' + f);
+    if (i.value !== values[f]) { i.value = values[f]; i.classList.add('fromdisk'); setTimeout(() => i.classList.remove('fromdisk'), 1600); }
+  }
+  S.detail = { ...r, ...values }; S.detailBase = Object.fromEntries(FIELDS.map(f => [f, r[f] ?? '']));
+  renderLabels(r.labels); renderPills(); renderFiles();
+  if (conflicts.length) {
+    S.detailConflict = Object.fromEntries(conflicts.map(f => [f, r[f] ?? '']));
+    $('#d-merge-msg').textContent = `Changed outside the app while you were editing: ${conflicts.join(', ')}. Yours is kept for now.`;
+    $('#d-merge').classList.add('on');
+  } else status(`Merged changes from disk into your unsaved details`, 4000);
+}
+$('#d-merge-disk').onclick = () => {
+  for (const [f, v] of Object.entries(S.detailConflict || {})) $('#d-' + f).value = v;
+  S.detailConflict = null; $('#d-merge').classList.remove('on');
+  S.detailDirty = FIELDS.some(f => $('#d-' + f).value !== (S.detailBase[f] ?? ''));
+  $('#d-dirty').textContent = S.detailDirty ? 'unsaved' : ''; renderPills();
+};
+$('#d-merge-mine').onclick = () => { S.detailConflict = null; $('#d-merge').classList.remove('on'); };
 // ── file list of the selected doc's folder ───────────────────────────────────
 
 function fmtSize(n) {
@@ -1116,6 +1219,8 @@ $('#d-files-open').onclick = () => S.detail && openDoc(S.slug, S.detail.uuid, 'd
 $('#d-files-reload').onclick = renderFiles;
 
 function fillDetail(r) {
+  S.detailBase = r ? Object.fromEntries(FIELDS.map(f => [f, r[f] ?? ''])) : null;
+  S.detailConflict = null; $('#d-merge').classList.remove('on');
   $('#d-uuid').textContent = r ? (r.uuid.length > 16 ? r.uuid.slice(0, 16) + '…' : r.uuid) : '—';
   $('#d-uuid').title = r ? r.uuid : '';
   const src = r && r.source_name && r.source_name !== 'original.pdf' ? r.source_name : '';
@@ -1131,6 +1236,8 @@ async function saveDetail() {
   const body = Object.fromEntries(FIELDS.map(f => [f, $('#d-' + f).value]));
   try {
     S.detail = await api('PUT', docUrl(S.slug, d.uuid), body);
+    S.detailBase = Object.fromEntries(FIELDS.map(f => [f, S.detail[f] ?? '']));
+    S.detailConflict = null; $('#d-merge').classList.remove('on');
     S.detailDirty = false; $('#d-dirty').textContent = '';
     status('Saved', 2500); await afterTagChange();
   } catch (e) { await alertDlg('Save failed', e.message); }
@@ -1455,8 +1562,12 @@ async function edDiskChanged() {
   const r = await api('GET', docUrl(S.ed.slug, S.ed.uuid, '/typ'));
   if (!r.exists || r.mtime === S.ed.mtime) return;
   if (r.content === S.ed.orig) { S.ed.mtime = r.mtime; return; }  // touched, not changed
-  if (!edDirty()) { const pos = ed.selectionStart, top = ed.scrollTop; S.ed.mtime = r.mtime; S.ed.orig = r.content; ed.value = r.content; ed.setSelectionRange(pos, pos); ed.scrollTop = top; edMark(); edLabels(); edMsg('Reloaded (saved in your editor)'); return; }
-  S.ed.disk = r; $('#edbanner-msg').textContent = 'label.typ was saved elsewhere while you have unsaved changes here.'; $('#edbanner').classList.add('on');
+  const pos = ed.selectionStart, top = ed.scrollTop;
+  const take = text => { S.ed.mtime = r.mtime; S.ed.orig = r.content; ed.value = text; ed.setSelectionRange(Math.min(pos, text.length), Math.min(pos, text.length)); ed.scrollTop = top; edMark(); edLabels(); };
+  if (!edDirty()) { take(r.content); edMsg('Updated from disk (changed outside the app)'); return; }
+  const merged = merge3(S.ed.orig, ed.value, r.content);
+  if (merged !== null) { take(merged); edMsg('Merged the change from disk into your unsaved edits — Save when ready'); return; }
+  S.ed.disk = r; $('#edbanner-msg').textContent = 'label.typ changed outside the app where you are editing too.'; $('#edbanner').classList.add('on');
 }
 $('#ed-save').onclick = () => edSave(false);
 $('#ed-keep').onclick = () => edSave(true);
@@ -1704,6 +1815,35 @@ if (load('logopen', false)) $('#loghead').click();
     addEventListener('mousemove', mv); addEventListener('mouseup', up);
   });
 })();
+
+// ── live: changes made outside the app (an agent, the CLI, an editor) ────────
+
+const CHANGE_FADE = 900;  // seconds an outside change stays highlighted
+function ago(at) {
+  const m = Math.round((Date.now() / 1000 - at) / 60);
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
+}
+const WHAT = { 'info.yml': 'details', 'annotations.yml': 'notes', 'label.typ': 'label.typ', 'label.json': 'labels', 'evid_meta.yml': 'metadata', folder: 'files' };
+function onDisk(e) {
+  if (e.slug !== S.slug) { S.setTags.delete(e.slug); refreshSetCounts(); return; }
+  const now = Date.now() / 1000, outside = [];
+  for (const c of [...e.changed, ...e.added]) {
+    if (c.by !== 'outside') continue;
+    const what = c.files ? [...new Set(c.files.map(f => WHAT[f] || f))].join(', ') : 'new document';
+    if (c.files && c.files.every(f => f === 'label.json' || f === 'evid_meta.yml')) continue;  // bookkeeping, not an edit
+    S.changes.set(c.uuid, { at: now, what }); outside.push(c);
+  }
+  for (const c of e.removed) S.changes.delete(c.uuid);
+  const cur = e.changed.find(c => c.uuid === S.cur);
+  if (cur) detailFromDisk();  // only the fields that changed light up; your unsaved edits stay
+  scheduleReload(true);  // the list; rows stay in place
+  if (S.ed && S.ed.slug === e.slug && e.changed.some(c => c.uuid === S.ed.uuid && c.files.includes('label.typ'))) edDiskChanged();
+  if (S.cur && e.changed.some(c => c.uuid === S.cur)) renderFiles();
+  if (e.removed.some(c => c.uuid === S.cur)) status('The selected document was removed outside the app', 6000, true);
+  if (outside.length) status(`${outside.length} document(s) changed outside the app`, 4000);
+  refreshSetCounts();
+}
+setInterval(() => { if (S.changes.size && S.view === 'docs') renderDocs(); }, 30000);  // let the highlights fade
 
 // ── agent pane: terminals on the right (from treedit) ────────────────────────
 
