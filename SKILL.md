@@ -27,6 +27,7 @@ Rediscover after install or upgrade, and invoke from that output.
 - Tagging writes both `info.yml` and `tags.yml`.
 - Read the annotations before using a document: `evid --db evid doc notes --dataset <slug>` (MCP: `doc_notes`). They are notes from the people handling the set, on a document (path `.`) or a file in its folder (`original.pdf`, …): what it is, what to watch out for, what is missing.
 - Leave a note when you learn something the next reader needs: `evid --db evid doc note --dataset <slug> -u <uuid> [-p original.pdf] -t "…"`. State facts about the file, not what you did.
+- Work the requests people leave for you (the GUI's *To the agent*): `evid --db evid fb ls --dataset <slug>` (MCP: `feedback`), do each, then answer it with `evid --db evid fb reply <id> "what changed, or why not" --done`. Inside the GUI's Agent pane `--db` and `--dataset` are already set.
 
 ## Analysis passes
 

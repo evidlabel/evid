@@ -55,6 +55,7 @@ class DiskWatch:
         self._docs: dict[str, dict[str, tuple]] = {}
         self._sets: tuple = ()
         self._tags: int | None = None
+        self._fb: dict[str, int | None] = {}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self.snapshot_now()
@@ -102,6 +103,10 @@ class DiskWatch:
         self._sets = self._scan_sets()
         self._docs = {slug: self._scan_set(slug) for slug, _ in self._sets}
         self._tags = _mtime(self.data_dir / "tags.yml")
+        self._fb = {
+            slug: _mtime(self.data_dir / "sets" / slug / "feedback.yml")
+            for slug, _ in self._sets
+        }
 
     def poll(self) -> None:
         """Compare with the last scan and report what changed (the thread calls this; tests too)."""
@@ -114,6 +119,10 @@ class DiskWatch:
             self._tags = tags
             self.events.emit("tags_changed")
         for slug, _ in sets:
+            fb = _mtime(self.data_dir / "sets" / slug / "feedback.yml")
+            if fb != self._fb.get(slug):  # requests to the agent asked or answered
+                self._fb[slug] = fb
+                self.events.emit("feedback", slug=slug, by=self._by(slug, "feedback"))
             new = self._scan_set(slug)
             old = self._docs.get(slug, {})
             if new == old:

@@ -113,3 +113,19 @@ def test_indexing_is_not_an_outside_change(tmp_path, monkeypatch):
     w.poll()
     (disk,) = _events(ev, "disk")
     assert disk["changed"][0]["by"] == "you"
+
+
+def test_an_agents_reply_is_an_event(tmp_path):
+    from evid.core import feedback
+
+    sm = SetManager(tmp_path)
+    es = sm.create_set("Case")
+    _doc(es.path, "a" * 32)
+    ev = Events()
+    w = DiskWatch(tmp_path, ev)
+    feedback.add(
+        es.path, "a" * 32, "Check the date"
+    )  # the GUI would touch first; this is "outside"
+    w.poll()
+    (e,) = _events(ev, "feedback")
+    assert e["slug"] == "case" and e["by"] == "outside"

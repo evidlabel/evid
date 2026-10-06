@@ -59,6 +59,39 @@ def _resolve_set(data_dir: Path, dataset: str):
     raise ValueError(msg)
 
 
+def _doc_notes(set_path: Path, uuid: str) -> list[dict] | dict:
+    from evid.core.annotations import missing_targets, read_annotations
+
+    docs_root = set_path / "docs"
+    dirs = (
+        [docs_root / uuid]
+        if uuid
+        else sorted(p for p in docs_root.iterdir() if p.is_dir())
+    )
+    out = []
+    for d in dirs:
+        if not d.is_dir():
+            return {"error": f"no document {uuid} in this dataset"}
+        notes = read_annotations(d)
+        gone = set(missing_targets(d, notes))
+        out.extend(
+            {"uuid": d.name, "path": k, "note": v, "missing": k in gone}
+            for k, v in notes.items()
+        )
+    return out
+
+
+def _feedback_items(set_path: Path, uuid: str, include_done: bool) -> list[dict]:
+    from evid.core import feedback as fb
+
+    return [
+        x
+        for x in fb.read(set_path)
+        if (include_done or x.get("status") != "done")
+        and (not uuid or x["uuid"] == uuid)
+    ]
+
+
 def build_server(data_dir: Path, dataset: str):
     """Construct the FastMCP server bound to a single *dataset* in *data_dir*."""
     global _SET
@@ -143,25 +176,15 @@ def build_server(data_dir: Path, dataset: str):
         folder (e.g. "original.pdf"). Pass a uuid for one document, or nothing for
         all. Read these before using a document: they say what a file is, what to
         watch out for, and what is missing."""
-        from evid.core.annotations import missing_targets, read_annotations
+        return json.dumps(_doc_notes(_SET.path, uuid), ensure_ascii=False)
 
-        docs_root = _SET.path / "docs"
-        dirs = (
-            [docs_root / uuid]
-            if uuid
-            else sorted(p for p in docs_root.iterdir() if p.is_dir())
-        )
-        out = []
-        for d in dirs:
-            if not d.is_dir():
-                return json.dumps({"error": f"no document {uuid} in this dataset"})
-            notes = read_annotations(d)
-            gone = set(missing_targets(d, notes))
-            out.extend(
-                {"uuid": d.name, "path": k, "note": v, "missing": k in gone}
-                for k, v in notes.items()
-            )
-        return json.dumps(out, ensure_ascii=False)
+    @mcp.tool()
+    def feedback(uuid: str = "", all: bool = False) -> str:  # noqa: A002 — the tool's parameter name
+        """Requests to the agent about this dataset's documents, as JSON: id, uuid,
+        path ("." = the document, else a file in its folder), text, status, reply.
+        Open ones only unless all=True. Answer them with the CLI:
+        `evid fb reply ID "what you did" --done`."""
+        return json.dumps(_feedback_items(_SET.path, uuid, all), ensure_ascii=False)
 
     @mcp.tool()
     def doc_quotes(uuid: str) -> str:

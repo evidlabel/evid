@@ -195,6 +195,9 @@ label.tdo
 label.csv
 label.tex
 *.cache
+# Lock for feedback.yml writes (evid fb).
+.feedback.lock
+feedback.yml.tmp
 """
         with (dataset_path / ".gitignore").open("w", encoding="utf-8") as f:
             f.write(gitignore_content)

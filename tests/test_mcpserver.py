@@ -38,7 +38,14 @@ def test_tools_registered_no_list_sets(tmp_path):
     m = build_server(tmp_path, "my-case")
     names = {t.name for t in asyncio.run(m.list_tools())}
     # Scoped server: no list_sets discovery tool. search_vec needs evid[vec].
-    expected = {"search_text", "search_meta", "list_docs", "doc_quotes", "doc_notes"}
+    expected = {
+        "search_text",
+        "search_meta",
+        "list_docs",
+        "doc_quotes",
+        "doc_notes",
+        "feedback",
+    }
     if extras.has_vec():
         expected.add("search_vec")
     assert names == expected

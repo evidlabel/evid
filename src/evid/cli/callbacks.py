@@ -593,6 +593,127 @@ def notes_callback(
     Console().print(table)
 
 
+# ── requests to the agent (evid fb) ───────────────────────────────────────────
+
+
+def _fb_set(dataset: str | None) -> Path:
+    dataset = _resolve_dataset(dataset, "Select dataset", allow_create=False)
+    return set_dir(DIRECTORY, dataset)
+
+
+def fb_ls_callback(
+    db: str = None,
+    dataset: str = None,
+    uuid: str = None,
+    all: bool = False,
+    format: str = "table",
+):
+    """List requests to the agent: open ones, or all with --all."""
+    from evid.core import feedback
+
+    sdir = _fb_set(dataset)
+    titles = {d["uuid"]: d["title"] for d in get_evidence_list(DIRECTORY, sdir.name)}
+    items = [
+        x
+        for x in feedback.read(sdir)
+        if (all or x.get("status") != "done")
+        and (not uuid or x["uuid"].startswith(uuid))
+    ]
+    if format == "json":
+        print(
+            json.dumps(
+                [{**x, "title": titles.get(x["uuid"], "")} for x in items],
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return
+    if not items:
+        print("No open requests." if not all else "No requests.")
+        return
+    for x in items:
+        where = "" if x.get("path", ".") == "." else f"  file {x['path']}"
+        print(
+            f"#{x['id']}  {x.get('status', 'open')}  {titles.get(x['uuid'], '')} ({x['uuid']}){where}"
+        )
+        for line in x["text"].splitlines():
+            print(f"    {line}")
+        if x.get("reply"):
+            print("    reply: " + "\n           ".join(x["reply"].splitlines()))
+        print()
+
+
+def fb_reply_callback(
+    db: str = None,
+    dataset: str = None,
+    id: int = None,
+    text: str = None,
+    done: bool = False,
+):
+    """Answer request ID; --done also closes it."""
+    from evid.core import feedback
+
+    try:
+        feedback.update(
+            _fb_set(dataset), id, reply=text, status="done" if done else None
+        )
+    except (KeyError, ValueError) as exc:
+        sys.exit(str(exc).strip("'\""))
+    print(f"Answered #{id}" + (" and closed it" if done else ""))
+
+
+def fb_add_callback(
+    db: str = None,
+    dataset: str = None,
+    text: str = None,
+    uuid: str = None,
+    path: str = None,
+):
+    """Ask something about a document (or a file of it)."""
+    from evid.core import feedback
+
+    sdir = _fb_set(dataset)
+    if not uuid:
+        uuid = select_evidence(DIRECTORY, sdir.name)
+    doc_dir = _doc_dir_or_exit(sdir.name, uuid)
+    if path and path != "." and not (doc_dir / path).exists():
+        sys.exit(f"No file {path} in the document.")
+    try:
+        item = feedback.add(sdir, uuid, text or "", path or ".")
+    except ValueError as exc:
+        sys.exit(str(exc))
+    print(f"#{item['id']}")
+
+
+def _fb_status(dataset, id, status):
+    from evid.core import feedback
+
+    try:
+        feedback.update(_fb_set(dataset), id, status=status)
+    except KeyError as exc:
+        sys.exit(str(exc).strip("'\""))
+
+
+def fb_done_callback(db: str = None, dataset: str = None, id: int = None):
+    """Close request ID."""
+    _fb_status(dataset, id, "done")
+
+
+def fb_reopen_callback(db: str = None, dataset: str = None, id: int = None):
+    """Open request ID again."""
+    _fb_status(dataset, id, "open")
+
+
+def fb_rm_callback(db: str = None, dataset: str = None, id: int = None):
+    """Delete request ID."""
+    from evid.core import feedback
+
+    try:
+        feedback.delete(_fb_set(dataset), id)
+    except KeyError as exc:
+        sys.exit(str(exc).strip("'\""))
+
+
 # ── tag callbacks ──────────────────────────────────────────────────────────────
 
 

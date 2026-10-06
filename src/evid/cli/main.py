@@ -12,6 +12,12 @@ from evid.cli.callbacks import (
     add_callback,
     bibtex_callback,
     create_callback,
+    fb_add_callback,
+    fb_done_callback,
+    fb_ls_callback,
+    fb_reopen_callback,
+    fb_reply_callback,
+    fb_rm_callback,
     gather_callback,
     gui_callback,
     label_callback,
@@ -441,6 +447,59 @@ tag_group.commands.append(
 )
 
 # ── search ─────────────────────────────────────────────────────────────────────
+
+fb_group = group(
+    name="fb",
+    help="Requests to the agent about documents (from the GUI's To the agent), and answers",
+)
+app.subgroups.append(fb_group)
+_FB_ID = argument(name="id", arg_type=int, help="Request number (#N)")
+for _name, _help, _cb, _args, _opts in [
+    (
+        "ls",
+        "List open requests (all with --all): id, document, file, request, reply",
+        fb_ls_callback,
+        [],
+        [
+            option(flags=["-u", "--uuid"], arg_type=str, help="Only this document"),
+            option(flags=["--all"], flag=True, help="Also the done ones"),
+            _FORMAT_OPTION,
+        ],
+    ),
+    (
+        "reply",
+        "Answer request ID (what changed, or why not); --done also closes it",
+        fb_reply_callback,
+        [_FB_ID, argument(name="text", arg_type=str, help="The answer")],
+        [option(flags=["--done"], flag=True, help="Close the request")],
+    ),
+    (
+        "add",
+        "Ask something about a document (or a file of it with -p)",
+        fb_add_callback,
+        [argument(name="text", arg_type=str, help="The request")],
+        [
+            option(flags=["-u", "--uuid"], arg_type=str, help="Document UUID"),
+            option(
+                flags=["-p", "--path"],
+                arg_type=str,
+                help="A file in the document folder (default: the document)",
+            ),
+        ],
+    ),
+    ("done", "Close request ID", fb_done_callback, [_FB_ID], []),
+    ("reopen", "Open request ID again", fb_reopen_callback, [_FB_ID], []),
+    ("rm", "Delete request ID", fb_rm_callback, [_FB_ID], []),
+]:
+    fb_group.commands.append(
+        command(
+            name=_name,
+            help=_help,
+            callback=_cb,
+            arguments=_args,
+            options=[_DATASET_OPTION, *_opts],
+        )
+    )
 
 search_group = group(name="search", help="Search documents")
 app.subgroups.append(search_group)

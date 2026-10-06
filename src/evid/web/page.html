@@ -162,6 +162,21 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 .ftree .fe .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .ftree .fe .sz { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
 .ftree .empty { color: var(--muted); padding: 4px 8px; }
+#d-fb { display: flex; flex-direction: column; gap: 6px; }
+#d-fb .empty { color: var(--muted); font-size: 12px; }
+.fbi { border-left: 3px solid var(--hl-key); background: color-mix(in srgb, var(--hl-key) 7%, transparent); border-radius: 0 6px 6px 0; padding: 5px 9px; font-size: 12.5px; }
+.fbi.done { border-left-color: var(--line); background: transparent; color: var(--muted); }
+.fbh { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.fbh b { font-family: var(--mono); }
+.fbh .st { font-size: 10.5px; border-radius: 999px; padding: 0 6px; border: 1px solid var(--hl-key); color: var(--hl-key); }
+.fbi.done .st { border-color: var(--line); color: var(--muted); }
+.fbh .fp { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.fbh button { padding: 0 7px; font-size: 11.5px; }
+.fbt { white-space: pre-wrap; margin-top: 2px; }
+.fbr { white-space: pre-wrap; margin-top: 4px; padding: 3px 8px; border-radius: 4px; background: var(--panel2); }
+.fbr::before { content: 'agent: '; color: var(--muted); font-size: 11px; }
+#d-fb .more { color: var(--muted); font-size: 12px; cursor: pointer; }
+.tbl .fbadge { color: var(--hl-key); font-size: 10.5px; font-weight: 600; margin-left: 6px; }
 .hist { display: flex; flex-direction: column; gap: 0; border-left: 2px solid var(--line); margin-left: 6px; font-size: 12px; }
 .hist .he { position: relative; padding: 2px 0 8px 12px; }
 .hist .he::before { content: ''; position: absolute; left: -6px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--panel); border: 2px solid var(--muted); }
@@ -325,6 +340,8 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
           <label for="d-notes" title="Saved in annotations.yml; agents read it with evid doc notes / MCP doc_notes">Note</label><textarea id="d-notes" rows="3" placeholder="About this document, for the people and agents using the set"></textarea>
         </div>
         <div class="row"><span class="muted" id="d-dirty"></span><span style="flex:1"></span><button class="primary" id="d-save" title="Ctrl+S">Save changes</button></div>
+        <h4 class="row">To the agent <span class="muted" id="d-fb-n"></span><span style="flex:1"></span><button class="mini" id="d-fb-add" title="Ask the agent working on this set to do something with this document" disabled>+ Request</button></h4>
+        <div id="d-fb"></div>
         <h4>Labels <span class="muted" id="d-nlabels"></span></h4>
         <div class="list" id="d-labels" tabindex="0"></div>
         <div class="row"><span style="flex:1"></span><button id="d-copylabels" disabled>Copy label(s)</button></div>
@@ -676,7 +693,7 @@ const S = {
   tagFilter: new Set(), registry: [], detail: null, detailDirty: false, loadSeq: 0,
   expanded: new Set(load('expanded', [])), setTags: new Map(),
   view: 'docs', skind: CFG.has_vec ? 'vec' : 'meta', sq: { busy: false, queued: null }, sres: [], ssel: new Set(), scur: -1, sanchor: null,
-  ed: null, pane: load('pane', 'detail'), showNotes: load('shownotes', true), changes: new Map(), detailBase: null, detailConflict: null, evSince: 0, waiters: new Map(), finished: new Map(),
+  ed: null, fbShowDone: false, pane: load('pane', 'detail'), showNotes: load('shownotes', true), changes: new Map(), detailBase: null, detailConflict: null, evSince: 0, waiters: new Map(), finished: new Map(),
 };
 
 // ── dialogs ──────────────────────────────────────────────────────────────────
@@ -850,6 +867,7 @@ function onEvent(e) {
     case 'indexed': if (e.slug === S.slug) scheduleReload(); if (e.pending > 0) status(`Indexing in background (${e.pending} queued)…`); break;
     case 'index_idle': status('Indexing complete', 4000); break;
     case 'agents': refreshSetCounts(); break;
+    case 'feedback': if (e.slug === S.slug) { renderFeedback(); scheduleReload(true); if (e.by === 'outside') status('The agent updated its requests', 4000); } break;
     case 'disk': onDisk(e); break;
     case 'sets_changed': loadSets(); break;
     case 'tags_changed': api('GET', '/api/tags').then(t => { S.registry = t; renderPills(); }).catch(() => {}); break;
@@ -1013,7 +1031,8 @@ function renderDocs(msg) {
         title: `${d.label}\n${d.uuid}` + (d.tags.length ? '\nTags: ' + d.tags.join(', ') : '') + (d.note ? `\n\nNote: ${d.note}` : '') + (f > 0 ? `\n\nChanged outside the app ${ago(ch.at)} (${ch.what})` : '') },
         el('td', { class: 'muted', text: d.authors }),
         el('td', {}, el('div', { class: 'lt' }, f > 0 ? el('span', { class: 'chgmark', style: `opacity:${(0.35 + 0.65 * f).toFixed(2)}`, text: '◆' }) : null, d.label,
-            d.note && !S.showNotes ? el('span', { class: 'ndot', title: d.note, text: ' ●' }) : null),
+            d.note && !S.showNotes ? el('span', { class: 'ndot', title: d.note, text: ' ●' }) : null,
+            d.fb_open ? el('span', { class: 'fbadge', title: `${d.fb_open} open request(s) to the agent`, text: `● ${d.fb_open}` }) : null),
           d.note && S.showNotes ? el('div', { class: 'dnote', title: 'Click to edit the annotation', 'data-note': '1', text: noteLine(d.note) }) : null),
         d.dates ? el('td', { text: d.dates }) : el('td', { class: 'muted', style: 'font-style:italic', text: d.added }));
       if (f > 0) tr.style.setProperty('--chgbg', `color-mix(in srgb, var(--hl-lab) ${(4 + 14 * f).toFixed(1)}%, transparent)`);
@@ -1314,7 +1333,8 @@ $('#d-files').addEventListener('contextmenu', e => {
     return;
   }
   showMenu(e.clientX, e.clientY, [
-    { label: note ? 'Edit annotation…' : 'Annotate…', fn: () => annotate(p, note) }, '-',
+    { label: note ? 'Edit annotation…' : 'Annotate…', fn: () => annotate(p, note) },
+    { label: 'Ask the agent about this file…', fn: () => fbRequest(p) }, '-',
     row.dataset.dir ? { label: fileOpen.has(p) ? 'Collapse' : 'Expand', fn: () => { fileOpen.has(p) ? fileOpen.delete(p) : fileOpen.add(p); renderFiles(); } }
       : { label: 'Open', fn: () => openFile(p) },
     !row.dataset.dir && p.endsWith('.typ') && { label: 'Open in the Label pane', fn: () => openEditor(slug, uuid) },
@@ -1323,6 +1343,59 @@ $('#d-files').addEventListener('contextmenu', e => {
 });
 $('#d-files-open').onclick = () => S.detail && openDoc(S.slug, S.detail.uuid, 'dir');
 $('#d-files-reload').onclick = renderFiles;
+
+// ── requests to the agent (as treedit's feedback) ────────────────────────────
+
+let fbSeq = 0;
+async function renderFeedback() {
+  const box = $('#d-fb'), d = S.detail, seq = ++fbSeq;
+  $('#d-fb-add').disabled = !d;
+  if (!d) { box.replaceChildren(); $('#d-fb-n').textContent = ''; return; }
+  let items;
+  try { items = await api('GET', setUrl(S.slug, `/feedback?uuid=${enc(d.uuid)}`)); } catch (e) { if (seq === fbSeq) box.replaceChildren(el('div', { class: 'empty', text: e.message })); return; }
+  if (seq !== fbSeq) return;
+  items.sort((a, b) => (a.status === 'done') - (b.status === 'done') || a.id - b.id);
+  const open = items.filter(x => x.status !== 'done').length, done = items.length - open;
+  $('#d-fb-n').textContent = items.length ? `(${open} open${done ? `, ${done} done` : ''})` : '';
+  const shown = items.filter(x => S.fbShowDone || x.status !== 'done');
+  box.replaceChildren(
+    ...(items.length ? [] : [el('div', { class: 'empty', text: 'Nothing asked yet. + Request asks the agent on this set to do something with this document; it answers here.' })]),
+    ...shown.map(fbItem),
+    done ? el('div', { class: 'more', text: S.fbShowDone ? `hide ${done} done` : `show ${done} done`, onclick: () => { S.fbShowDone = !S.fbShowDone; renderFeedback(); } }) : null);
+}
+function fbItem(x) {
+  const slug = S.slug, put = body => api('PUT', setUrl(slug, `/feedback/${x.id}`), body).then(() => { renderFeedback(); scheduleReload(true); }).catch(e => status(e.message, 6000, true));
+  const head = el('div', { class: 'fbh' }, el('b', { text: `#${x.id}` }), el('span', { class: 'st', text: x.status }),
+    x.path && x.path !== '.' ? el('span', { class: 'fp', text: x.path, title: 'about this file of the document' }) : null,
+    el('span', { style: 'flex:1' }),
+    el('button', { text: x.status === 'done' ? 'Reopen' : 'Done', onclick: () => put({ status: x.status === 'done' ? 'open' : 'done' }) }),
+    CFG.term && x.status !== 'done' ? el('button', { text: '→ Agent', title: 'Ask the agent in the Agent pane to work on this now', onclick: () =>
+      sendToAgent(`Please address evid request #${x.id} (see \`evid fb ls\`), then answer with \`evid fb reply ${x.id} "…" --done\`.`, true) }) : null,
+    el('button', { text: 'Edit', onclick: async () => { const t = await fbDialog('Edit request', x.text); if (t) put({ text: t }); } }),
+    el('button', { text: '×', title: 'Delete', onclick: async () => {
+      if (!(await confirmDlg('Delete request', `Delete request #${x.id}?`, 'Delete'))) return;
+      api('POST', setUrl(slug, `/feedback/${x.id}/delete`), {}).then(() => { renderFeedback(); scheduleReload(true); }).catch(e => status(e.message, 6000, true));
+    } }));
+  return el('div', { class: 'fbi' + (x.status === 'done' ? ' done' : ''), title: `asked ${x.created.slice(0, 16).replace('T', ' ')}` }, head,
+    el('div', { class: 'fbt', text: x.text }), x.reply ? el('div', { class: 'fbr', text: x.reply }) : null);
+}
+function fbDialog(title, value, about) {
+  const ta = el('textarea', { rows: 5, style: 'width:100%;resize:vertical', placeholder: 'What should the agent do? e.g. "Check the date against the letterhead", "Label the findings on p. 4", "Is this the signed version?"' });
+  ta.value = value || '';
+  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('#dlg-foot [data-primary]').click(); } });
+  return dialog(title, [el('div', { class: 'muted', text: (about ? `About ${about}. ` : '') + 'The agent on this set lists open requests with evid fb ls and answers with evid fb reply.' }), ta],
+    [{ label: 'Cancel', value: () => null }, { label: 'Save', primary: true, value: () => ta.value.trim() || undefined }]);
+}
+async function fbRequest(path) {
+  const d = S.detail; if (!d) return;
+  const text = await fbDialog('Request to the agent', '', path && path !== '.' ? path : `“${d.title || d.label}”`);
+  if (!text) return;
+  try {
+    const x = await api('POST', setUrl(S.slug, '/feedback'), { uuid: d.uuid, path: path || '.', text });
+    status(`Request #${x.id} added — the agent sees it with evid fb ls`, 4000); renderFeedback(); scheduleReload(true);
+  } catch (e) { status(e.message, 6000, true); }
+}
+$('#d-fb-add').onclick = () => fbRequest('.');
 
 let histSeq = 0;
 async function renderHistory() {
@@ -1360,6 +1433,7 @@ function fillDetail(r) {
   renderPills();
   renderFiles();
   renderHistory();
+  renderFeedback();
 }
 for (const f of FIELDS) $('#d-' + f).addEventListener('input', () => { S.detailDirty = true; $('#d-dirty').textContent = 'unsaved'; if (f === 'tags') renderPills(); });
 async function saveDetail() {

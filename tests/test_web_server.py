@@ -770,3 +770,48 @@ def test_agent_name():
         "opencode",
         "shell",
     ]
+
+
+def test_feedback_routes(server, doc, app):
+    status, x = call(
+        server,
+        "POST",
+        "/api/sets/case/feedback",
+        {"uuid": doc, "text": "Check the date."},
+    )
+    assert status == 200 and x["id"] == 1 and x["path"] == "."
+    assert (
+        call(
+            server,
+            "POST",
+            "/api/sets/case/feedback",
+            {"uuid": doc, "path": "nope.pdf", "text": "x"},
+        )[0]
+        == 404
+    )
+    assert (
+        call(server, "POST", "/api/sets/case/feedback", {"uuid": doc, "text": " "})[0]
+        == 400
+    )
+    assert call(server, "GET", "/api/sets/case/docs")[1][0]["fb_open"] == 1
+    assert (
+        call(
+            server,
+            "PUT",
+            "/api/sets/case/feedback/1",
+            {"reply": "2024-06-03", "status": "done"},
+        )[1]["status"]
+        == "done"
+    )
+    assert call(server, "GET", "/api/sets/case/docs")[1][0]["fb_open"] == 0
+    assert [
+        i["reply"]
+        for i in call(server, "GET", f"/api/sets/case/feedback?uuid={doc}")[1]
+    ] == ["2024-06-03"]
+    assert (
+        call(server, "PUT", "/api/sets/case/feedback/9", {"status": "done"})[0] == 404
+    )
+    assert call(server, "POST", "/api/sets/case/feedback/1/delete", {})[1] == {
+        "ok": True
+    }
+    assert call(server, "GET", "/api/sets/case/feedback")[1] == []

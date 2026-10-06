@@ -473,9 +473,70 @@ class Handler(BaseHTTPRequestHandler):
 
     @route("GET", "/api/sets/{slug}/docs")
     def list_docs(self, slug: str):
-        self.app.evidence_set(slug)
+        from evid.core import feedback
+
+        es = self.app.evidence_set(slug)
         docs = doc_ops.collect_documents(self.app.sets, slug)
-        self.send_json(200, [doc_row(d) for d in docs])
+        open_fb = feedback.open_counts(feedback.read(es.path))
+        self.send_json(
+            200, [{**doc_row(d), "fb_open": open_fb.get(d.uuid, 0)} for d in docs]
+        )
+
+    # requests to the agent (as treedit's feedback) ------------------------------
+
+    @route("GET", "/api/sets/{slug}/feedback")
+    def list_feedback(self, slug: str):
+        from evid.core import feedback
+
+        es = self.app.evidence_set(slug)
+        items = feedback.read(es.path)
+        uuid = self.q.get("uuid")
+        self.send_json(200, [x for x in items if not uuid or x["uuid"] == uuid])
+
+    @route("POST", "/api/sets/{slug}/feedback")
+    def add_feedback(self, slug: str):
+        from evid.core import feedback
+
+        b = self.body()
+        es, d = self.app.doc_dir(slug, str(b.get("uuid", "")))
+        path = str(b.get("path") or ".")
+        if path != ".":
+            doc_ops.doc_path(d, path)  # must be a file of the document
+        self.app.disk.touch(slug, "feedback")
+        item = feedback.add(es.path, d.name, str(b.get("text", "")), path)
+        logger.info("Request #%d to the agent on %s", item["id"], doc_name(d))
+        self.send_json(200, item)
+
+    @route("PUT", "/api/sets/{slug}/feedback/{fid}")
+    def update_feedback(self, slug: str, fid: str):
+        from evid.core import feedback
+
+        es = self.app.evidence_set(slug)
+        b = self.body()
+        self.app.disk.touch(slug, "feedback")
+        try:
+            item = feedback.update(
+                es.path,
+                int(fid),
+                text=b.get("text"),
+                status=b.get("status"),
+                reply=b.get("reply"),
+            )
+        except KeyError as exc:
+            raise HTTPError(404, str(exc).strip("'\"")) from exc
+        self.send_json(200, item)
+
+    @route("POST", "/api/sets/{slug}/feedback/{fid}/delete")
+    def delete_feedback(self, slug: str, fid: str):
+        from evid.core import feedback
+
+        es = self.app.evidence_set(slug)
+        self.app.disk.touch(slug, "feedback")
+        try:
+            feedback.delete(es.path, int(fid))
+        except KeyError as exc:
+            raise HTTPError(404, str(exc).strip("'\"")) from exc
+        self.send_json(200, {"ok": True})
 
     @route("POST", "/api/sets/{slug}/index")
     def index_set(self, slug: str):

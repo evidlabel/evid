@@ -138,6 +138,7 @@ def test_mcp_omits_search_vec_without_extra(tmp_path, monkeypatch):
         "list_docs",
         "doc_quotes",
         "doc_notes",
+        "feedback",
     }
 
 
