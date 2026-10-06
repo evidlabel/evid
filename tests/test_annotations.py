@@ -68,3 +68,10 @@ def test_legacy_notes_string_is_the_document_note(doc):
     assert doc_note(doc) == "Rewritten."
     write_annotation(doc, ".", "")
     assert doc_note(doc) == ""
+
+
+def test_multiline_notes_are_yaml_blocks(doc):
+    write_annotation(doc, ".", "Final decision.\nAppeal deadline passed.")
+    text = (doc / ANNOTATIONS_FILE).read_text()
+    assert ".: |-\n  Final decision.\n  Appeal deadline passed.\n" in text
+    assert read_annotations(doc)["."] == "Final decision.\nAppeal deadline passed."

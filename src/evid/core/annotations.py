@@ -28,6 +28,18 @@ ANNOTATIONS_FILE = "annotations.yml"
 DOC = "."
 
 
+class _Dumper(yaml.SafeDumper):
+    """Multi-line notes as `|` blocks, so the file reads like the notes."""
+
+
+def _str(dumper: yaml.SafeDumper, data: str):
+    style = "|" if "\n" in data else None
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data, style=style)
+
+
+_Dumper.add_representer(str, _str)
+
+
 def _key(doc_dir: Path, path: str, *, must_exist: bool = True) -> str:
     """Normalise *path* to a key; refuse anything outside the document folder."""
     raw = (path or DOC).replace("\\", "/").strip()
@@ -81,7 +93,9 @@ def write_annotation(doc_dir: Path, path: str, text: str) -> dict[str, str]:
     p = doc_dir / ANNOTATIONS_FILE
     if notes:
         p.write_text(
-            yaml.safe_dump(notes, allow_unicode=True, sort_keys=False, width=2**20),
+            yaml.dump(
+                notes, Dumper=_Dumper, allow_unicode=True, sort_keys=False, width=2**20
+            ),
             encoding="utf-8",
         )
     elif p.exists():

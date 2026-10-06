@@ -120,6 +120,10 @@ table.tbl { width: 100%; border-collapse: collapse; user-select: none; }
 #d-merge.on { display: flex; }
 #d-merge span { flex: 1 1 100%; }
 .form .fromdisk { box-shadow: 0 0 0 2px color-mix(in srgb, var(--hl-lab) 55%, transparent); transition: box-shadow 1.5s; }
+.tbl .lt { overflow: hidden; text-overflow: ellipsis; }
+.tbl .dnote { overflow: hidden; text-overflow: ellipsis; font-style: italic; font-size: 11.5px; color: var(--hl-note); line-height: 1.3; }
+.tbl .dnote:hover { color: var(--fg); text-decoration: underline dotted; }
+.tbl .ndot { color: var(--hl-note); font-size: 9px; }
 .tbl .uuid, .mono { font-family: var(--mono); font-size: 12px; }
 .tbl .empty td { color: var(--muted); text-align: center; padding: 18px; }
 .legend { color: var(--muted); font-size: 11px; }
@@ -279,7 +283,8 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
           <button id="b-index" title="Vector-index every unindexed document">Index docs</button>
           <button id="b-label" title="Label the selected document (the Label pane; Enter or double-click a row)">Label</button>
           <button id="b-opendir" title="Open the document folder">Open dir</button>
-          <input id="filter" placeholder="Filter by title or UUID…  ( / )" style="flex:1; min-width:160px">
+          <input id="filter" placeholder="Filter by title, UUID or annotation…  ( / )" style="flex:1; min-width:160px">
+          <label class="muted" title="Show each document's annotation under its title"><input type="checkbox" id="shownotes"> annotations</label>
         </div>
         <div class="tblwrap"><table class="tbl" id="dtbl" tabindex="0">
           <colgroup><col style="width:28%"><col><col style="width:88px"></colgroup>
@@ -388,7 +393,7 @@ function splitTags(raw) { return String(raw || '').split(',').map(t => t.trim())
 function filterDocs(docs, text, active) {
   const q = String(text || '').trim().toLowerCase();
   const need = [...(active || [])];
-  return docs.filter(d => (!q || d.label.toLowerCase().includes(q) || d.uuid.toLowerCase().includes(q))
+  return docs.filter(d => (!q || d.label.toLowerCase().includes(q) || d.uuid.toLowerCase().includes(q) || String(d.note || '').toLowerCase().includes(q))
     && need.every(t => d.tags.includes(t)));
 }
 
@@ -593,6 +598,12 @@ function agentBadge(names) {
   return n.length === 1 ? n[0] : `${n[0]} +${n.length - 1}`;
 }
 
+// An annotation as one line for a row, as treedit shows it: the first line, (+n) more.
+function noteLine(note) {
+  const lines = String(note || '').trim().split('\n');
+  return lines[0] + (lines.length > 1 ? ` (+${lines.length - 1})` : '');
+}
+
 function shortUuid(u) { return u.length > 16 ? u.slice(0, 8) + '…' + u.slice(-8) : u; }
 
 // ── plumbing ─────────────────────────────────────────────────────────────────
@@ -651,7 +662,7 @@ const S = {
   tagFilter: new Set(), registry: [], detail: null, detailDirty: false, loadSeq: 0,
   expanded: new Set(load('expanded', [])), setTags: new Map(),
   view: 'docs', skind: CFG.has_vec ? 'vec' : 'meta', sq: { busy: false, queued: null }, sres: [], ssel: new Set(), scur: -1, sanchor: null,
-  ed: null, pane: load('pane', 'detail'), changes: new Map(), detailBase: null, detailConflict: null, evSince: 0, waiters: new Map(), finished: new Map(),
+  ed: null, pane: load('pane', 'detail'), showNotes: load('shownotes', true), changes: new Map(), detailBase: null, detailConflict: null, evSince: 0, waiters: new Map(), finished: new Map(),
 };
 
 // ── dialogs ──────────────────────────────────────────────────────────────────
@@ -970,7 +981,9 @@ function renderDocs(msg) {
       const tr = el('tr', { 'data-uuid': d.uuid, class: (S.sel.has(d.uuid) ? 'sel ' : '') + (S.cur === d.uuid ? 'cur ' : '') + (f > 0 ? 'chg' : ''), draggable: 'true',
         title: `${d.label}\n${d.uuid}` + (d.tags.length ? '\nTags: ' + d.tags.join(', ') : '') + (d.note ? `\n\nNote: ${d.note}` : '') + (f > 0 ? `\n\nChanged outside the app ${ago(ch.at)} (${ch.what})` : '') },
         el('td', { class: 'muted', text: d.authors }),
-        el('td', {}, f > 0 ? el('span', { class: 'chgmark', style: `opacity:${(0.35 + 0.65 * f).toFixed(2)}`, text: '◆' }) : null, d.label + (d.note ? '  🗨' : '')),
+        el('td', {}, el('div', { class: 'lt' }, f > 0 ? el('span', { class: 'chgmark', style: `opacity:${(0.35 + 0.65 * f).toFixed(2)}`, text: '◆' }) : null, d.label,
+            d.note && !S.showNotes ? el('span', { class: 'ndot', title: d.note, text: ' ●' }) : null),
+          d.note && S.showNotes ? el('div', { class: 'dnote', title: 'Click to edit the annotation', 'data-note': '1', text: noteLine(d.note) }) : null),
         d.dates ? el('td', { text: d.dates }) : el('td', { class: 'muted', style: 'font-style:italic', text: d.added }));
       if (f > 0) tr.style.setProperty('--chgbg', `color-mix(in srgb, var(--hl-lab) ${(4 + 14 * f).toFixed(1)}%, transparent)`);
       return tr;
@@ -1013,7 +1026,7 @@ async function setCur(uuid) {
 }
 
 const dtbody = $('#dtbl tbody');
-dtbody.addEventListener('click', e => { const tr = e.target.closest('tr[data-uuid]'); if (tr) { selectRow(tr.dataset.uuid, e); $('#dtbl').focus({ preventScroll: true }); } });
+dtbody.addEventListener('click', e => { const tr = e.target.closest('tr[data-uuid]'); if (tr && e.target.closest('.dnote') && !(e.ctrlKey || e.metaKey || e.shiftKey)) { selectRow(tr.dataset.uuid); annotateDoc(S.slug, tr.dataset.uuid); return; } if (tr) { selectRow(tr.dataset.uuid, e); $('#dtbl').focus({ preventScroll: true }); } });
 dtbody.addEventListener('dblclick', e => { const tr = e.target.closest('tr[data-uuid]'); if (tr) openEditor(S.slug, tr.dataset.uuid); });
 dtbody.addEventListener('contextmenu', e => {
   const tr = e.target.closest('tr[data-uuid]'); if (!tr) return;
@@ -1059,6 +1072,8 @@ $('#dtbl').addEventListener('keydown', e => {
   else if (e.key === 'ContextMenu' && S.cur) { e.preventDefault(); const r = $('#dtbl tr.cur').getBoundingClientRect(); showMenu(r.left + 40, r.bottom, docMenu(S.slug, selectedUuids(), true)); }
 });
 $('#filter').addEventListener('input', () => renderDocs());
+$('#shownotes').checked = S.showNotes;
+$('#shownotes').onchange = () => { S.showNotes = $('#shownotes').checked; store('shownotes', S.showNotes); renderDocs(); };
 $('#filter').addEventListener('keydown', e => { if (e.key === 'ArrowDown') { e.preventDefault(); $('#dtbl').focus(); } if (e.key === 'Escape') { $('#filter').value = ''; renderDocs(); } });
 
 // shared row menu (Docs and Search tabs)
@@ -1072,6 +1087,7 @@ function docMenu(slug, uuids, canDelete) {
     one && { label: 'Open PDF', off: !one.has_pdf, fn: () => openDoc(slug, uuids[0], 'pdf') },
     one && { label: 'Open URL', off: !one.url, fn: () => openDoc(slug, uuids[0], 'url') },
     one && '-',
+    one && { label: one.note ? 'Edit annotation…' : 'Annotate…', fn: () => annotateDoc(slug, uuids[0]) },
     { label: `Tag ${n} selected…`, fn: () => tagSelected(slug, uuids) },
     carried.length && { label: 'Remove tag', sub: carried.map(t => ({ label: t, fn: () => untag(slug, uuids, t) })) },
     '-',
@@ -1220,6 +1236,23 @@ async function setNote(path, text) {
     const r = await api('PUT', docUrl(slug, uuid, '/annotations'), { path, text });
     if (S.detail && S.detail.uuid === uuid) { S.detail.annotations = r.annotations; S.detail.missing_annotated = (S.detail.missing_annotated || []).filter(p => p in r.annotations); renderFiles(); }
     status(text.trim() ? `Annotated ${path}` : `Removed the note on ${path}`, 2500);
+  } catch (e) { status(e.message, 6000, true); }
+}
+// The note on the document as a whole (path "."), from the list.
+async function annotateDoc(slug, uuid) {
+  const d = S.byUuid.get(uuid); if (!d) return;
+  const ta = el('textarea', { rows: 6, style: 'width:100%;resize:vertical', placeholder: 'About this document, for the people and agents using the set (empty removes the note)' });
+  ta.value = d.note || '';
+  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('#dlg-foot [data-primary]').click(); } });
+  const text = await dialog(`Annotation: ${d.label}`, [el('div', { class: 'muted', text: 'Saved in annotations.yml next to the document. Agents read it (evid doc notes, MCP doc_notes).' }), ta],
+    [{ label: 'Cancel', value: () => null }, d.note ? { label: 'Remove', value: () => '' } : null, { label: 'Save', primary: true, value: () => ta.value }].filter(Boolean));
+  if (text === null || text === undefined) return;
+  try {
+    await api('PUT', docUrl(slug, uuid, '/annotations'), { path: '.', text });
+    status(text.trim() ? `Annotated ${d.label}` : `Removed the annotation on ${d.label}`, 2500);
+    if (S.cur === uuid && !S.detailDirty) loadDetail();
+    else if (S.cur === uuid) { $('#d-notes').value = text; S.detailBase.notes = text.trimEnd(); }
+    await loadDocs(true, true);
   } catch (e) { status(e.message, 6000, true); }
 }
 async function annotate(path, current) {

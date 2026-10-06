@@ -36,6 +36,7 @@ FUNCS = [
     "freshness",
     "historyChips",
     "agentBadge",
+    "noteLine",
 ]
 
 
@@ -336,3 +337,17 @@ def test_agent_badge(js):
     assert js(
         "return [agentBadge(['claude']), agentBadge(['claude', 'fish', 'codex']), agentBadge([]), agentBadge(undefined)];"
     ) == ["claude", "claude +2", "agent", "agent"]
+
+
+def test_note_line_and_filter_by_note(js):
+    assert js("return noteLine('one\\ntwo\\nthree');") == "one (+2)"
+    assert js("return noteLine('  single  ');") == "single"
+    docs = json.dumps(
+        [
+            {"uuid": "a", "label": "A", "tags": [], "note": "Signed by the board"},
+            {"uuid": "b", "label": "B", "tags": []},
+        ]
+    )
+    assert js(f"return filterDocs({docs}, 'board', new Set()).map(d => d.uuid);") == [
+        "a"
+    ]
