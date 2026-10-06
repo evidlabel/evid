@@ -314,14 +314,16 @@ def quote_callback(
     model: str = None,
     job: str = None,
 ):
-    """Machine-extract verbatim quotes from a document into machine.hayagriva.
+    """Machine-extract verbatim quotes from a document into a pass (``pass/``).
 
     Candidates come either from a JSON file (``--from``, deliberately not Hayagriva
     so the paraphrased input is never citable) or from a vector search over the set
     (``--from-search``, which seeds candidates from the top-``n`` matching chunks).
-    Only the verbatim, rapidfuzz-verified output is written as Hayagriva. Every
-    invocation also writes a pass record under ``machine/`` (timestamp, job
-    description, model, outcomes). Prints citation keys only — never quote text.
+    Only verbatim, rapidfuzz-verified passages are kept: each found quote is a
+    span over the document's canonical text (``label/text.txt``). Every invocation
+    writes one pass under ``pass/`` (timestamp, job description, model, outcomes,
+    the spans), committed when the set is in git. Gather turns passes into
+    Hayagriva. Prints citation keys only — never quote text.
     """
     dataset = _resolve_dataset(dataset, "Select dataset to quote", allow_create=False)
     if bool(from_path) == bool(from_search):
@@ -389,10 +391,15 @@ def quote_callback(
     console.print(table)
 
     n_matched = sum(1 for r in results if r.matched)
-    print(
-        f"\n{n_matched}/{len(results)} quotes added to {doc_dir / 'machine.hayagriva'}"
-    )
+    print(f"\n{n_matched}/{len(results)} quotes found")
     print(f"pass recorded at {pass_path}")
+    from evid.core.bibtex_utils import load_title
+    from evid.core.gitops import commit_labels
+
+    title = load_title(doc_dir / "info.yml") or uuid[:8]
+    commit_labels(
+        doc_dir, f"pass: {title} — {job_text or 'quotes'} (+{n_matched} quotes)"
+    )
     for r in results:
         if r.matched:
             print(f"  cite as @{r.key}")

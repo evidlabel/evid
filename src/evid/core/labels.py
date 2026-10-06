@@ -75,9 +75,33 @@ def _write_text(doc_dir: Path, text: str, pages: list) -> None:
 
 
 def ensure_text(doc_dir: Path) -> tuple[str, list[list[int]]]:
-    """The canonical text, extracting it from the document's PDF (or .txt) once."""
+    """The canonical text, extracting it from the document's PDF (or .txt) once.
+
+    A frozen text that still holds characters that are not text (unmapped
+    ligature glyphs from an older extractor) is extracted again when the new
+    extraction is clean, and every span is re-anchored.
+    """
     if has_text(doc_dir):
-        return read_text(doc_dir)
+        text, pages = read_text(doc_dir)
+        from evid.core.pdf_text import has_bad_chars
+
+        if has_bad_chars(text):
+            from evid.core.quote_extract import _read_source
+
+            try:
+                fresh, _ = _read_source(Path(doc_dir))
+            except (FileNotFoundError, ValueError):
+                fresh = text  # no source to extract from: keep what there is
+            if not has_bad_chars(fresh):
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "%s held characters that are not text; extracted it again and re-anchored the labels",
+                    label_dir(doc_dir) / TEXT_FILE,
+                )
+                refresh_text(doc_dir)
+                return read_text(doc_dir)
+        return text, pages
     from evid.core.quote_extract import _read_source
 
     text, pages = _read_source(Path(doc_dir))

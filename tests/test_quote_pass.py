@@ -53,7 +53,7 @@ def test_record_pass_writes_timestamped_json(tmp_path):
         results=[],
         now=when,
     )
-    assert path.parent == doc / "machine"
+    assert path.parent == doc / "pass"
     assert path.name.startswith("2026-08-14T10-22-03Z_")
     assert path.suffix == ".json"
 
@@ -94,7 +94,7 @@ def test_record_pass_includes_skipped_results_without_haya(tmp_path):
     assert data["results"][0]["matched"] is False
     assert data["results"][0]["key"] is None
     assert data["results"][0]["score"] == 0.12
-    assert not (doc / "machine.hayagriva").exists()
+    assert data["found"] == []
     # Verbatim quote body is not stored on the pass.
     assert "title" not in data["results"][0]
     assert "exact_quote" not in data["results"][0]
@@ -108,23 +108,14 @@ def test_extract_then_record_keeps_haya_citation_only(tmp_path):
         doc, job="appeal outcome", model="grok-4.6", quotes=cands, results=results
     )
 
-    haya = yaml.safe_load((doc / "machine.hayagriva").read_text())
-    dumped = yaml.safe_dump(haya)
-    assert "grok-4.6" not in dumped
-    assert "appeal outcome" not in dumped
-    assert "job" not in haya
-    assert "model" not in haya
-    for item in haya.values():
-        if isinstance(item, dict):
-            assert "job" not in item
-            assert "model" not in item
-
     passes = list_passes(doc)
     assert len(passes) == 1
     assert passes[0].job == "appeal outcome"
     assert passes[0].model == "grok-4.6"
     assert passes[0].results[0].matched is True
     assert passes[0].results[0].key == "1a2b:q1"
+    (q,) = passes[0].found  # the quote, as a span over the canonical text
+    assert q["key"] == "q1" and q["text"] in SOURCE and "job" not in q
 
 
 def test_list_passes_ordered_by_timestamp(tmp_path):
@@ -270,4 +261,4 @@ def test_extract_alone_does_not_write_a_pass(tmp_path):
     extract_quotes(
         doc, [QuoteCandidate(candidate="the appeal was dismissed")], min_ratio=0.6
     )
-    assert not (doc / "machine").exists()
+    assert not (doc / "pass").exists()

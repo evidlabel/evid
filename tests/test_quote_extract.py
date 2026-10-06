@@ -1,4 +1,4 @@
-"""Tests for machine quote extraction into machine.hayagriva."""
+"""Machine quote extraction: verbatim spans over label/text.txt."""
 
 import json
 from types import SimpleNamespace
@@ -13,6 +13,7 @@ from evid.core.quote_extract import (
     extract_quotes,
     load_quotes_json,
 )
+from evid.core.quote_pass import record_pass
 
 SOURCE = (
     "Page one introduction text about the dispute between the parties.\n"
@@ -37,7 +38,7 @@ def _make_doc(tmp_path):
     return doc
 
 
-def test_extract_writes_labquote_hayagriva(tmp_path):
+def test_extract_finds_verbatim_spans(tmp_path):
     doc = _make_doc(tmp_path)
     cands = [
         QuoteCandidate(candidate="the committee found the evidence conclusive"),
@@ -47,38 +48,23 @@ def test_extract_writes_labquote_hayagriva(tmp_path):
 
     assert all(r.matched for r in results)
     assert [r.key for r in results] == ["1a2b:q1", "1a2b:q2"]
-
-    mfile = doc / "machine.hayagriva"
-    text = mfile.read_text(encoding="utf-8")
-    assert "# verbatim, rapidfuzz-verified" in text
-    assert "serial-number:" in text
-
-    data = yaml.safe_load(text)
-    assert "1a2b:main" in data
-    assert "1a2b:q1" in data
-    assert "1a2b:q2" in data
-    # Verbatim quote lives in title and is a real substring of the source.
-    q1 = data["1a2b:q1"]["title"]
-    assert q1 in SOURCE
-    # Page locator uses Hayagriva's standard `page-range` (a .txt source = page 1).
-    assert data["1a2b:q1"]["page-range"] == "1"
-    # text.txt cache was written.
-    assert (doc / "text.txt").exists()
+    text = (doc / "label" / "text.txt").read_text(encoding="utf-8")
+    for r in results:
+        sp = r.span
+        assert sp["key"] == r.key.split(":")[1]
+        assert text[sp["start"] : sp["end"]] == sp["text"] and sp["text"] in SOURCE
+        assert sp["page"] == 1 == r.page  # a .txt source is page 1
+    assert not (doc / "machine.hayagriva").exists()  # Hayagriva is made at gather time
 
 
-def test_extract_appends_monotonically(tmp_path):
+def test_numbering_continues_across_passes(tmp_path):
     doc = _make_doc(tmp_path)
-    extract_quotes(doc, [QuoteCandidate(candidate="the appeal was dismissed")], 0.6)
-    extract_quotes(
-        doc, [QuoteCandidate(candidate="committee found that the evidence")], 0.6
+    c1 = [QuoteCandidate(candidate="the appeal was dismissed")]
+    record_pass(
+        doc, job="a", model=None, quotes=c1, results=extract_quotes(doc, c1, 0.6)
     )
-    data = yaml.safe_load((doc / "machine.hayagriva").read_text())
-    # main written once, q numbering continues.
-    assert "1a2b:main" in data
-    assert "1a2b:q1" in data
-    assert "1a2b:q2" in data
-    mains = [k for k in data if k.endswith(":main")]
-    assert mains == ["1a2b:main"]
+    c2 = [QuoteCandidate(candidate="committee found that the evidence")]
+    assert [r.key for r in extract_quotes(doc, c2, 0.6)] == ["1a2b:q2"]
 
 
 def test_low_confidence_candidate_skipped(tmp_path):
@@ -90,7 +76,7 @@ def test_low_confidence_candidate_skipped(tmp_path):
     )
     assert results[0].matched is False
     assert results[0].key is None
-    assert not (doc / "machine.hayagriva").exists()
+    assert not (doc / "pass").exists()
 
 
 def test_load_quotes_json_rejects_yaml(tmp_path):
@@ -124,8 +110,10 @@ def test_extract_document_text_dehyphenates(tmp_path):
     )
     text, _ = extract_document_text(doc)
     assert "markant frasortering" in text
-    # Cached text.txt is the de-hyphenated text (stable offsets for serial-number).
-    assert "markant frasortering" in (doc / "text.txt").read_text(encoding="utf-8")
+    # The canonical text is the de-hyphenated text (stable offsets for spans).
+    assert "markant frasortering" in (doc / "label" / "text.txt").read_text(
+        encoding="utf-8"
+    )
 
 
 def _vr(uuid, chunk):

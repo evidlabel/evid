@@ -174,31 +174,27 @@ def doc_dir(tmp_path, lig_pdf):
 
 
 def test_quotes_get_the_letters_not_a_control_character(doc_dir):
-    from evid.core.quote_extract import MACHINE_FILE, QuoteCandidate, extract_quotes
+    from evid.core.quote_extract import QuoteCandidate, extract_quotes
 
     results = extract_quotes(doc_dir, [QuoteCandidate(candidate="lfil")], refresh=True)
-    assert results[0].matched
-    text = (doc_dir / "text.txt").read_text()
+    assert results[0].matched and results[0].span["text"] == "lfil"
+    text = (doc_dir / "label" / "text.txt").read_text()
     assert "lfil" in text and not has_bad_chars(text) and "rebuttal" not in text
-    data = yaml.safe_load((doc_dir / MACHINE_FILE).read_text())
-    assert data["abcd:q1"]["title"] == "lfil"
-    assert str(data["abcd:main"]["date"]) == "2018-02-20"  # Hayagriva wants ISO
-    assert data["abcd:main"]["author"] == "Ann Berg and Carl Dahl and Eva Fisk"
 
 
-def test_a_stale_cache_with_control_characters_is_extracted_again(doc_dir):
-    from evid.core.quote_extract import extract_document_text
+def test_a_frozen_text_with_control_characters_is_extracted_again(doc_dir):
+    from evid.core import labels
 
-    (doc_dir / "text.txt").write_text(
-        "l\x04l\ni\x05i\n"
-    )  # what the old extractor cached
-    text, _ = extract_document_text(doc_dir)
+    labels._write_text(
+        doc_dir, "l\x04l\ni\x05i\n", [[0, 1]]
+    )  # what an old extractor wrote
+    text, _ = labels.ensure_text(doc_dir)
     assert text.split() == ["lfil", "ifli"]
-    assert (doc_dir / "text.txt").read_text() == text
+    assert (doc_dir / "label" / "text.txt").read_text() == text
 
 
 def test_a_quote_over_an_unknown_glyph_is_refused(tmp_path):
-    from evid.core.quote_extract import MACHINE_FILE, QuoteCandidate, extract_quotes
+    from evid.core.quote_extract import QuoteCandidate, extract_quotes
 
     d = tmp_path / "docs" / "beef0000"
     d.mkdir(parents=True)
@@ -207,8 +203,7 @@ def test_a_quote_over_an_unknown_glyph_is_refused(tmp_path):
     results = extract_quotes(
         d, [QuoteCandidate(candidate="llXll", min_ratio=0.5)], refresh=True
     )
-    assert results[0].matched is False
-    assert not (d / MACHINE_FILE).exists() or "�" not in (d / MACHINE_FILE).read_text()
+    assert results[0].matched is False and results[0].span is None
 
 
 # ── Hayagriva fields ─────────────────────────────────────────────────────────
@@ -248,8 +243,7 @@ def test_typst_generation_expands_too(tmp_path, lig_pdf):
 
 
 def test_second_line_quote(doc_dir):
-    from evid.core.quote_extract import MACHINE_FILE, QuoteCandidate, extract_quotes
+    from evid.core.quote_extract import QuoteCandidate, extract_quotes
 
-    extract_quotes(doc_dir, [QuoteCandidate(candidate="ifli")], refresh=True)
-    data = yaml.safe_load((doc_dir / MACHINE_FILE).read_text())
-    assert data["abcd:q1"]["title"] == "ifli"
+    (r,) = extract_quotes(doc_dir, [QuoteCandidate(candidate="ifli")], refresh=True)
+    assert r.key == "abcd:q1" and r.span["text"] == "ifli"

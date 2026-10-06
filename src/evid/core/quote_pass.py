@@ -1,4 +1,12 @@
-"""Machine-pass ledger: persist and load non-citable quote-job records.
+"""Machine passes: one JSON file per ``evid doc quote`` run, under ``pass/``.
+
+A pass holds the job (description, model, time), every candidate's outcome,
+and the quotes it found — as spans over the document's canonical text
+(``label/text.txt``), in the same shape as human labels, keyed ``qN``.
+Hayagriva for labquote is produced from these at gather time.
+
+(Before evid 0.7 the ledger lived in ``machine/`` and the quotes in
+``machine.hayagriva``; ``evid set migrate-labels`` moves them here.)
 
 Each ``evid doc quote`` invocation writes one JSON file under ``machine/``
 next to ``machine.hayagriva``. Hayagriva stays the citation store; these
@@ -13,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import secrets
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,7 +32,7 @@ from evid.core.quote_extract import QuoteCandidate, QuoteResult
 
 logger = logging.getLogger(__name__)
 
-MACHINE_DIR = "machine"
+MACHINE_DIR = "pass"
 SCHEMA = 1
 MODEL_ENV = "EVID_QUOTE_MODEL"
 
@@ -49,6 +58,9 @@ class QuotePass(BaseModel):
     job: str | None = None
     quotes: list[QuoteCandidate] = Field(default_factory=list)
     results: list[PassResult] = Field(default_factory=list)
+    found: list[dict] = Field(
+        default_factory=list
+    )  # quotes as spans: key qN, start, end, page, text, score
 
     model_config = {"populate_by_name": True}
 
@@ -114,6 +126,7 @@ def record_pass(
             )
             for r in results
         ],
+        found=[r.span for r in results if r.matched and r.span],
     )
     dest = doc_dir / MACHINE_DIR
     dest.mkdir(parents=True, exist_ok=True)
@@ -159,3 +172,45 @@ def pass_summaries(doc_dir: Path) -> list[dict]:
         }
         for qp in list_passes(doc_dir)
     ]
+
+
+def next_quote_number(doc_dir: Path) -> int:
+    """1 + the highest ``qN`` among the document's passes."""
+    n = 0
+    for qp in list_passes(doc_dir):
+        for q in qp.found:
+            m = re.fullmatch(r"q(\d+)", str(q.get("key", "")))
+            if m:
+                n = max(n, int(m.group(1)))
+    return n + 1
+
+
+def found_quotes(doc_dir: Path) -> list[dict]:
+    """Every quote of every pass, oldest pass first, each with its pass id and job."""
+    out = []
+    for qp in list_passes(doc_dir):
+        out.extend(
+            {**q, "pass": qp.id, "job": qp.job, "model": qp.model} for q in qp.found
+        )
+    return out
+
+
+def reanchor_passes(doc_dir: Path) -> dict[str, int]:
+    """Re-anchor every pass quote on the (re-extracted) canonical text."""
+    from evid.core import labels
+    from evid.core.spans import reanchor
+
+    text, pages = labels.read_text(doc_dir)
+    counts: dict[str, int] = {}
+    for path in sorted((doc_dir / MACHINE_DIR).glob("*.json")):
+        qp = load_pass(path)
+        kept = []
+        for q in qp.found:
+            new, how = reanchor(q, text, pages)
+            counts[how] = counts.get(how, 0) + 1
+            kept.append(new or {**q, "lost": True})
+        qp.found = kept
+        path.write_text(
+            qp.model_dump_json(indent=2, by_alias=True) + "\n", encoding="utf-8"
+        )
+    return counts

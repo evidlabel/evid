@@ -44,7 +44,6 @@ logger = logging.getLogger(__name__)
 
 TITLE_TRUNCATE = 240
 MACHINE_FILE = "machine.hayagriva"
-TEXT_CACHE = "text.txt"
 
 
 # ── candidate input model (JSON, deliberately not Hayagriva) ─────────────────
@@ -97,6 +96,9 @@ class QuoteResult:
     score: float
     key: str | None = None
     page: int | None = None
+    span: dict | None = (
+        None  # the matched passage (see evid.core.spans), with key and score
+    )
 
 
 def candidates_from_search(results, uuid: str, n: int) -> list[QuoteCandidate]:
@@ -159,7 +161,9 @@ def _read_source(doc_dir: Path) -> tuple[str, list[tuple[int, int]]]:
 
     txts = sorted(doc_dir.glob("*.txt"))
     # text.txt is our own cache — never treat it as the source document.
-    txts = [t for t in txts if t.name != TEXT_CACHE]
+    txts = [
+        t for t in txts if t.name != "text.txt"
+    ]  # an old text cache, never the source
     if txts:
         return _dehyphenate(txts[0].read_text(encoding="utf-8")), [(0, 1)]
 
@@ -169,37 +173,19 @@ def _read_source(doc_dir: Path) -> tuple[str, list[tuple[int, int]]]:
 def extract_document_text(
     doc_dir: Path, refresh: bool = False
 ) -> tuple[str, list[tuple[int, int]]]:
-    """Return the doc's flat plain text and page index, caching to ``text.txt``.
+    """The document's canonical text and page index (``label/text.txt``).
 
-    Extraction is deterministic, so the cached ``text.txt`` is authoritative for
-    character offsets (keeping ``serial-number`` spans stable across runs). The
-    page index is always derived from the live source.
+    Extracted once and then frozen, so spans into it stay put. ``refresh``
+    extracts it again and re-anchors every label, annotation and pass quote.
     """
-    from evid.core.pdf_text import has_bad_chars
+    from evid.core import labels
 
-    computed_text, page_index = _read_source(doc_dir)
-    cache = doc_dir / TEXT_CACHE
-    cached = (
-        cache.read_text(encoding="utf-8") if cache.exists() and not refresh else None
-    )
-    if (
-        cached is not None
-        and has_bad_chars(cached)
-        and not has_bad_chars(computed_text)
-    ):
-        # Written by an extractor that left unexpanded ligatures (U+0001 / U+FFFD):
-        # keeping it would bring them back. Offsets of quotes taken from it change.
-        logger.warning(
-            "%s holds characters that are not text (unexpanded ligatures); extracting it again",
-            cache,
-        )
-        cached = None
-    if cached is not None:
-        full_text = cached
-    else:
-        full_text = computed_text
-        cache.write_text(full_text, encoding="utf-8")
-    return full_text, page_index
+    if refresh and labels.has_text(doc_dir):
+        labels.refresh_text(doc_dir)
+        from evid.core.quote_pass import reanchor_passes
+
+        reanchor_passes(doc_dir)
+    return labels.ensure_text(doc_dir)
 
 
 def _page_for_offset(offset: int, page_index: list[tuple[int, int]]) -> int:
@@ -318,48 +304,31 @@ def extract_quotes(
     refresh: bool = False,
     source_type: str = "article",
 ) -> list[QuoteResult]:
-    """Locate each candidate verbatim and append matches to ``machine.hayagriva``.
+    """Locate each candidate verbatim in the document's canonical text.
 
-    Returns a :class:`QuoteResult` per candidate (in input order). Low-confidence
-    candidates are skipped (``matched=False``, ``key=None``) and logged.
+    Returns a :class:`QuoteResult` per candidate (in input order); a match carries
+    its span over ``label/text.txt`` and a key ``<prefix>:qN`` (N unique across
+    the document's passes). Nothing is written here: :func:`record_pass` stores
+    the pass, spans included, under ``pass/``. Low-confidence candidates, and
+    matches over characters that are not text (an unmapped glyph), are skipped
+    (``matched=False``) and logged.
     """
+    from evid.core.pdf_text import has_bad_chars
+    from evid.core.quote_pass import next_quote_number
+    from evid.core.spans import make_span
+
     info_path = doc_dir / "info.yml"
     prefix = load_uuid_prefix(info_path)
     if not prefix:
         raise ValueError(f"Could not read uuid prefix from {info_path}")
 
-    title = load_title(info_path) or None
-    author = load_authors(info_path) or None
-    url = load_url(info_path) or None
-    date = load_dates(info_path) or None
-
-    from evid.core.pdf_text import has_bad_chars
-
-    full_text, page_index = extract_document_text(doc_dir, refresh=refresh)
-
-    bib_path = doc_dir / MACHINE_FILE
-    bib_text = bib_path.read_text(encoding="utf-8") if bib_path.exists() else ""
-
+    full_text, pages = extract_document_text(doc_dir, refresh=refresh)
+    n = next_quote_number(doc_dir)
     results: list[QuoteResult] = []
-    appended = ""
     for cand in candidates:
         ratio = cand.min_ratio if cand.min_ratio is not None else min_ratio
         match = fuzzy_locate(cand.candidate, full_text, ratio)
-        if match.match_found and has_bad_chars(match.exact_quote):
-            # A glyph the PDF maps to no character (see evid.core.pdf_text): never
-            # write it, nor a U+FFFD in its place, into a citable title.
-            page = _page_for_offset(match.match_start, page_index)
-            logger.warning(
-                "Refusing quote on page %d: it contains characters that are not text "
-                "(an unmapped glyph; see the log of the text extraction): %.60s",
-                page,
-                cand.candidate,
-            )
-            results.append(
-                QuoteResult(candidate=cand.candidate, matched=False, score=match.score)
-            )
-            continue
-        if not match.match_found:
+        if not match.match_found or not match.exact_quote:
             logger.warning(
                 "Skipping low-confidence candidate (score %.2f < %.2f): %.60s",
                 match.score,
@@ -370,46 +339,29 @@ def extract_quotes(
                 QuoteResult(candidate=cand.candidate, matched=False, score=match.score)
             )
             continue
-
-        current = bib_text + appended
-        if not has_main(current, prefix):
-            appended += (
-                build_main_entry(prefix, source_type, url, author, date, title) + "\n"
+        span = make_span(full_text, match.match_start, match.match_end, pages)
+        if has_bad_chars(span["text"]):
+            # A glyph the PDF maps to no character (see evid.core.pdf_text): never cite it.
+            logger.warning(
+                "Refusing quote on page %d: it contains characters that are not text "
+                "(an unmapped glyph; see the log of the text extraction): %.60s",
+                span["page"],
+                cand.candidate,
             )
-            current = bib_text + appended
-
-        n = find_next_q(current, prefix)
-        key = f"{prefix}:q{n}"
-        page = _page_for_offset(match.match_start, page_index)
-        entry = build_quote_entry(
-            key=key,
-            quote=match.exact_quote,
-            char_start=match.match_start,
-            char_end=match.match_end,
-            page=page,
-            source_type=source_type,
-            url=url,
-            author=author,
-            date=date,
-        )
-        if appended and not appended.endswith("\n\n"):
-            appended += "\n"
-        appended += entry
+            results.append(
+                QuoteResult(candidate=cand.candidate, matched=False, score=match.score)
+            )
+            continue
+        key = f"q{n}"
+        n += 1
         results.append(
             QuoteResult(
                 candidate=cand.candidate,
                 matched=True,
                 score=match.score,
-                key=key,
-                page=page,
+                key=f"{prefix}:{key}",
+                page=span["page"],
+                span={**span, "key": key, "score": round(match.score, 4)},
             )
         )
-
-    if appended:
-        if bib_text and not bib_text.endswith("\n"):
-            bib_text += "\n"
-        if bib_text and not bib_text.endswith("\n\n"):
-            bib_text += "\n"
-        bib_path.write_text(bib_text + appended, encoding="utf-8")
-
     return results
