@@ -23,6 +23,7 @@ dependencies = [
     "GitPython",
     "rapidfuzz>=3.10.0,<4",
     "mcp>=1.2,<2",
+    "fonttools>=4.40",  # reading embedded fonts to expand unmapped ligature glyphs
 ]
 
 [project.optional-dependencies]
@@ -126,6 +127,8 @@ ignore = ["S101", "S104", "COM812", "ISC001", "E501"]
   "TC001", "TC003", "PLW0603", "SIM105", "S324", "S310", "RET503", "PERF401",
 ]
 "src/evid/open_external.py" = ["S603", "BLE001"]
+# fontTools pen API: _moveTo, _lineTo, _curveToOne, … are its method names
+"src/evid/core/pdf_text.py" = ["N802"]
 # Agent pane terminal, kept as in treedit: preexec_fn makes the pty the controlling
 # terminal (TIOCSCTTY), which subprocess offers no other way to do.
 "src/evid/web/term.py" = ["PTH119", "PLW1509", "S603", "SIM105", "FBT001", "FBT002", "E501", "PLR2004"]

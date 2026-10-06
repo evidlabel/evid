@@ -15,6 +15,7 @@ from rich.console import Console
 from rich.table import Table
 
 from evid.core.bibtex import generate_bib_from_typ
+from evid.core.hayagriva_fields import hayagriva_author, hayagriva_date
 from evid.models import InfoModel
 
 logger = logging.getLogger(__name__)
@@ -700,10 +701,10 @@ def _bib_to_hayagriva(bib_text: str) -> str:
         title = _flat(entry.get("title", ""))
         if title:
             item["title"] = title
-        author = _flat(entry.get("author", ""))
+        author = hayagriva_author(_flat(entry.get("author", "")))
         if author:
             item["author"] = author
-        date = entry.get("date", "")
+        date = hayagriva_date(entry.get("date", "")) if entry.get("date") else None
         if date:
             item["date"] = date
         url = entry.get("url", "")

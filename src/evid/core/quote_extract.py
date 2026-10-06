@@ -36,6 +36,7 @@ from evid.core.bibtex_utils import (
     load_url,
     load_uuid_prefix,
 )
+from evid.core.hayagriva_fields import hayagriva_author, hayagriva_date
 from evid.core.quote_match import fuzzy_locate
 from evid.core.text_cleaning import _dehyphenate
 
@@ -130,20 +131,28 @@ def _read_source(doc_dir: Path) -> tuple[str, list[tuple[int, int]]]:
     Unlike :func:`evid.core.typst_generation.textpdf_to_typst`, no Typst escaping
     is applied — the matcher needs the raw text.
     """
-    pdfs = sorted(doc_dir.glob("*.pdf"))
-    if pdfs:
+    from evid.services.doc_tags import resolve_doc_pdf
+
+    # The document's own PDF (original.pdf, else info.yml's original_name) — not
+    # the first *.pdf: a rendered rebuttal or memo can sit in the same folder.
+    pdf_path = resolve_doc_pdf(doc_dir)
+    if pdf_path is not None:
         import pymupdf
+
+        from evid.core.pdf_text import LigatureResolver, page_text
 
         parts: list[str] = []
         page_index: list[tuple[int, int]] = []
         offset = 0
-        with pymupdf.open(pdfs[0]) as pdf:
+        with pymupdf.open(pdf_path) as pdf:
+            resolver = LigatureResolver(pdf)
             for i, page in enumerate(pdf):
                 page_index.append((offset, i + 1))
-                # De-hyphenate per page so verbatim spans don't carry the PDF's
+                # Ligatures expanded (also glyphs the PDF maps to nothing), then
+                # de-hyphenated per page so verbatim spans don't carry the PDF's
                 # end-of-line soft hyphens (e.g. "mar-\nkant" → "markant"). Page
                 # offsets stay consistent with the cached text.txt.
-                text = _dehyphenate(page.get_text())
+                text = _dehyphenate(page_text(page, resolver))
                 parts.append(text)
                 offset += len(text)
         return "".join(parts), page_index
@@ -166,10 +175,27 @@ def extract_document_text(
     character offsets (keeping ``serial-number`` spans stable across runs). The
     page index is always derived from the live source.
     """
+    from evid.core.pdf_text import has_bad_chars
+
     computed_text, page_index = _read_source(doc_dir)
     cache = doc_dir / TEXT_CACHE
-    if cache.exists() and not refresh:
-        full_text = cache.read_text(encoding="utf-8")
+    cached = (
+        cache.read_text(encoding="utf-8") if cache.exists() and not refresh else None
+    )
+    if (
+        cached is not None
+        and has_bad_chars(cached)
+        and not has_bad_chars(computed_text)
+    ):
+        # Written by an extractor that left unexpanded ligatures (U+0001 / U+FFFD):
+        # keeping it would bring them back. Offsets of quotes taken from it change.
+        logger.warning(
+            "%s holds characters that are not text (unexpanded ligatures); extracting it again",
+            cache,
+        )
+        cached = None
+    if cached is not None:
+        full_text = cached
     else:
         full_text = computed_text
         cache.write_text(full_text, encoding="utf-8")
@@ -237,6 +263,7 @@ def build_main_entry(
 ) -> str:
     """The ``<prefix>:main`` document entry that quotes group under."""
     lines = [f"{prefix}:main:", f"  type: {source_type}"]
+    author, date = hayagriva_author(author), hayagriva_date(date)
     if doc_title:
         lines.append(f"  title: {_yaml_quoted_inline(_truncate(doc_title))}")
     if author:
@@ -260,6 +287,7 @@ def build_quote_entry(
     date: str | None,
 ) -> str:
     """A verbatim quote entry — labquote reads the quote body from ``title:``."""
+    author, date = hayagriva_author(author), hayagriva_date(date)
     lines = [
         "# verbatim, rapidfuzz-verified",
         f"{key}:",
@@ -305,6 +333,8 @@ def extract_quotes(
     url = load_url(info_path) or None
     date = load_dates(info_path) or None
 
+    from evid.core.pdf_text import has_bad_chars
+
     full_text, page_index = extract_document_text(doc_dir, refresh=refresh)
 
     bib_path = doc_dir / MACHINE_FILE
@@ -315,6 +345,20 @@ def extract_quotes(
     for cand in candidates:
         ratio = cand.min_ratio if cand.min_ratio is not None else min_ratio
         match = fuzzy_locate(cand.candidate, full_text, ratio)
+        if match.match_found and has_bad_chars(match.exact_quote):
+            # A glyph the PDF maps to no character (see evid.core.pdf_text): never
+            # write it, nor a U+FFFD in its place, into a citable title.
+            page = _page_for_offset(match.match_start, page_index)
+            logger.warning(
+                "Refusing quote on page %d: it contains characters that are not text "
+                "(an unmapped glyph; see the log of the text extraction): %.60s",
+                page,
+                cand.candidate,
+            )
+            results.append(
+                QuoteResult(candidate=cand.candidate, matched=False, score=match.score)
+            )
+            continue
         if not match.match_found:
             logger.warning(
                 "Skipping low-confidence candidate (score %.2f < %.2f): %.60s",

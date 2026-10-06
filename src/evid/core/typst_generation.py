@@ -180,13 +180,18 @@ def textpdf_to_typst(
     else:
         date, name = "DATE", "NAME"
 
+    from evid.core.pdf_text import LigatureResolver, page_text
+
     pdf = pymupdf.open(pdfname)
+    resolver = LigatureResolver(pdf)
+    # Clear TEXT_PRESERVE_LIGATURES so MuPDF dissolves the ligatures it can; the
+    # ones the PDF maps to no character are expanded by page_text (same as the
+    # quote path), since clearing the flag alone only yields U+FFFD for them.
+    flags = pymupdf.TEXTFLAGS_TEXT & ~pymupdf.TEXT_PRESERVE_LIGATURES
     body = ""
     para_num = 1
     for i, page in enumerate(pdf):
-        # Disable TEXT_PRESERVE_LIGATURES to dissolve ligatures
-        flags = pymupdf.TEXT_PRESERVE_LIGATURES
-        text = clean_text_for_typst(page.get_text(flags=flags))
+        text = clean_text_for_typst(page_text(page, resolver, flags=flags))
         page_body = f"#mset(values: (opage: {i + 1}))\n== Page {i + 1}\n"
         if autolabel:
             paragraphs = [p for p in text.split("\n\n") if p.strip()]
