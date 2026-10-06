@@ -34,6 +34,7 @@ FUNCS = [
     "merge3",
     "mergeFields",
     "freshness",
+    "historyChips",
 ]
 
 
@@ -300,3 +301,31 @@ def test_freshness(js):
     assert js(
         "return [freshness(100, 100, 900), freshness(100, 550, 900), freshness(100, 2000, 900)];"
     ) == [1, 0.5, 0]
+
+
+def test_history_chips(js):
+    items = json.dumps(
+        [
+            {"kind": "details", "fields": ["title", "tags"]},
+            {"kind": "labels", "file": "label.typ", "added": ["k1"], "removed": ["k0"]},
+            {
+                "kind": "pass",
+                "id": "p1",
+                "job": "dates",
+                "model": "m",
+                "matched": 2,
+                "tried": 3,
+            },
+            {"kind": "notes", "paths": ["original.pdf"]},
+            {"kind": "files", "what": "added", "files": ["scan.pdf"]},
+        ]
+    )
+    chips = js(f"return historyChips({items}).map(c => c[1]);")
+    assert chips == [
+        "✎ title, tags",
+        "+ k1",
+        "− k0",  # noqa: RUF001 — the chip uses a real minus
+        "pass: dates (2/3)",
+        "🗨 note on original.pdf",
+        "added scan.pdf",
+    ]

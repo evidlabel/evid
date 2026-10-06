@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from pathlib import Path
@@ -732,3 +733,13 @@ def test_terminal_env_points_evid_at_the_data_dir_and_set(tmp_path, monkeypatch)
     assert env["EVID_DB"] == str(tmp_path) and env["EVID_SET"] == "case"
     assert "EVID_IN_APP" not in env and env["TERM"] == "xterm-256color"
     assert "EVID_SET" not in web.terminal_env(tmp_path, "http://127.0.0.1:1/")
+
+
+def test_opening_a_doc_extracts_stale_labels(server, doc, app):
+    d = app.data_dir / "sets" / "case" / "docs" / doc
+    typ = d / "label.typ"
+    typ.write_text(typ.read_text() + '\n#lab("late-key", "Hello evidence world", "")\n')
+    t = time.time() + 5
+    os.utime(typ, (t, t))  # edited after label.json, while no GUI was watching
+    det = call(server, "GET", f"/api/sets/case/docs/{doc}")[1]
+    assert "late-key" in [x["key"] for x in det["labels"]]

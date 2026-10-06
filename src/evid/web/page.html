@@ -146,6 +146,23 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 .ftree .fe .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .ftree .fe .sz { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
 .ftree .empty { color: var(--muted); padding: 4px 8px; }
+.hist { display: flex; flex-direction: column; gap: 0; border-left: 2px solid var(--line); margin-left: 6px; font-size: 12px; }
+.hist .he { position: relative; padding: 2px 0 8px 12px; }
+.hist .he::before { content: ''; position: absolute; left: -6px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--panel); border: 2px solid var(--muted); }
+.hist .he.wip::before { border-color: var(--hl-lab); background: var(--hl-lab); }
+.hist .hh { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.hist .hd { color: var(--muted); font-variant-numeric: tabular-nums; }
+.hist .ha { color: var(--muted); }
+.hist .hs { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 100%; }
+.hist .hc { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.hist .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.hist .chip { border-radius: 4px; padding: 0 6px; background: var(--pill); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.hist .chip.lab { background: var(--hl-quote-bg); color: var(--hl-quote); }
+.hist .chip.lab.rm { background: color-mix(in srgb, var(--err) 14%, transparent); color: var(--err); }
+.hist .chip.det { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.hist .chip.pass { background: color-mix(in srgb, var(--hl-lab) 16%, transparent); }
+.hist .chip.note { font-style: italic; }
+.hist .empty { color: var(--muted); padding: 2px 0 2px 12px; }
 .ftree .fnote { color: var(--muted); font-style: italic; white-space: pre-wrap; word-break: break-word; padding: 0 8px 3px; font-size: 11.5px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .ftree .fnote:hover { color: var(--fg); background: var(--hover); }
 .ftree .fe.missing .nm { text-decoration: line-through; color: var(--muted); }
@@ -299,6 +316,8 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
         <h4 class="row">Files<span style="flex:1"></span><button class="mini" id="d-files-reload" title="Refresh" disabled>↻</button><button class="mini" id="d-files-open" title="Open the folder" disabled>Open folder</button></h4>
         <div class="ftree" id="d-files" tabindex="0"></div>
         <div class="legend">Click a file to open it (text files in your editor) · right-click → Annotate… to leave a note for people and agents</div>
+        <h4 class="row">History <span class="muted" id="d-hist-n"></span><span style="flex:1"></span><button class="mini" id="d-hist-reload" title="Refresh" disabled>↻</button></h4>
+        <div class="hist" id="d-hist"></div>
       </div>
       <div id="label" class="pview">
         <div id="edempty" hidden></div>
@@ -550,6 +569,22 @@ function mergeFields(base, mine, disk, fields) {
 
 // How fresh an outside change still looks (1 → 0 over `fade` seconds).
 function freshness(at, now, fade) { return Math.max(0, 1 - (now - at) / fade); }
+
+// The chips of one history entry: [cls, text, title].
+function historyChips(items) {
+  const out = [];
+  for (const it of items) {
+    if (it.kind === 'added') out.push(['det', 'document added', '']);
+    else if (it.kind === 'details') out.push(['det', `✎ ${it.fields.join(', ')}`, 'info.yml fields changed']);
+    else if (it.kind === 'notes') out.push(['note', `🗨 note on ${it.paths.join(', ')}`, 'annotations.yml']);
+    else if (it.kind === 'labels') {
+      for (const k of it.added) out.push(['lab', `+ ${k}`, `label added in ${it.file}`]);
+      for (const k of it.removed) out.push(['lab rm', `− ${k}`, `label removed from ${it.file}`]);
+    } else if (it.kind === 'pass') out.push(['pass', `pass${it.job ? ': ' + it.job : ''} (${it.matched}/${it.tried})`, `machine-quote pass ${it.id}${it.model ? ' · ' + it.model : ''}`]);
+    else if (it.kind === 'files') out.push(['', `${it.what} ${it.files.join(', ')}`, '']);
+  }
+  return out;
+}
 
 function shortUuid(u) { return u.length > 16 ? u.slice(0, 8) + '…' + u.slice(-8) : u; }
 
@@ -1218,6 +1253,30 @@ $('#d-files').addEventListener('contextmenu', e => {
 $('#d-files-open').onclick = () => S.detail && openDoc(S.slug, S.detail.uuid, 'dir');
 $('#d-files-reload').onclick = renderFiles;
 
+let histSeq = 0;
+async function renderHistory() {
+  const box = $('#d-hist'), d = S.detail, seq = ++histSeq;
+  $('#d-hist-reload').disabled = !d; $('#d-hist-n').textContent = '';
+  if (!d) { box.replaceChildren(); return; }
+  let r;
+  try { r = await api('GET', docUrl(S.slug, d.uuid, '/history')); } catch (e) { if (seq === histSeq) box.replaceChildren(el('div', { class: 'empty', text: e.message })); return; }
+  if (seq !== histSeq) return;
+  if (!r.tracked) { box.replaceChildren(el('div', { class: 'empty', text: 'Not in git — `evid set track` (or a repo around the data dir) keeps a history.' })); return; }
+  const commits = r.entries.filter(e => e.commit).length;
+  $('#d-hist-n').textContent = commits ? `(${commits}${commits >= 50 ? '+' : ''})` : '';
+  if (!r.entries.length) { box.replaceChildren(el('div', { class: 'empty', text: 'No commits touch this document yet.' })); return; }
+  box.replaceChildren(...r.entries.map(e => {
+    const chips = historyChips(e.items);
+    const head = e.commit
+      ? el('div', { class: 'hh' }, el('span', { class: 'hd', text: e.date.slice(0, 10), title: e.date }), el('span', { class: 'ha', text: e.author }),
+          el('span', { class: 'hc', text: e.short, title: `Copy ${e.commit}`, onclick: () => copyText(e.commit, 'commit hash') }), el('span', { class: 'hs', text: e.subject, title: e.subject }))
+      : el('div', { class: 'hh' }, el('span', { class: 'hd', text: 'not committed' }), el('span', { class: 'ha', text: 'changes in the folder since the last commit' }));
+    return el('div', { class: 'he' + (e.commit ? '' : ' wip') }, head,
+      chips.length ? el('div', { class: 'chips' }, ...chips.map(([c, t, title]) => el('span', { class: 'chip ' + c, text: t, title: title || t }))) : null);
+  }));
+}
+$('#d-hist-reload').onclick = renderHistory;
+
 function fillDetail(r) {
   S.detailBase = r ? Object.fromEntries(FIELDS.map(f => [f, r[f] ?? ''])) : null;
   S.detailConflict = null; $('#d-merge').classList.remove('on');
@@ -1229,6 +1288,7 @@ function fillDetail(r) {
   renderLabels(r ? r.labels : []);
   renderPills();
   renderFiles();
+  renderHistory();
 }
 for (const f of FIELDS) $('#d-' + f).addEventListener('input', () => { S.detailDirty = true; $('#d-dirty').textContent = 'unsaved'; if (f === 'tags') renderPills(); });
 async function saveDetail() {
@@ -1838,7 +1898,7 @@ function onDisk(e) {
   if (cur) detailFromDisk();  // only the fields that changed light up; your unsaved edits stay
   scheduleReload(true);  // the list; rows stay in place
   if (S.ed && S.ed.slug === e.slug && e.changed.some(c => c.uuid === S.ed.uuid && c.files.includes('label.typ'))) edDiskChanged();
-  if (S.cur && e.changed.some(c => c.uuid === S.cur)) renderFiles();
+  if (S.cur && e.changed.some(c => c.uuid === S.cur)) { renderFiles(); renderHistory(); }
   if (e.removed.some(c => c.uuid === S.cur)) status('The selected document was removed outside the app', 6000, true);
   if (outside.length) status(`${outside.length} document(s) changed outside the app`, 4000);
   refreshSetCounts();
