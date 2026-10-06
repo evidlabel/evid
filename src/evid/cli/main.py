@@ -10,7 +10,6 @@ from treeparse import argument, cli, command, group, option
 from evid import __version__
 from evid.cli.callbacks import (
     add_callback,
-    bibtex_callback,
     create_callback,
     fb_add_callback,
     fb_done_callback,
@@ -39,6 +38,15 @@ from evid.cli.callbacks import (
     tag_show_callback,
     track_callback,
     update_callback,
+)
+from evid.cli.label_cmd import (
+    label_add_callback,
+    label_annotate_callback,
+    label_ls_callback,
+    label_note_callback,
+    label_rename_callback,
+    label_rm_callback,
+    label_text_callback,
 )
 from evid.config import EvidConfig
 
@@ -247,12 +255,14 @@ doc_group.commands.append(
         options=[
             _DATASET_OPTION,
             option(
-                flags=["-l", "--label"], flag=True, help="Open labeler after adding"
+                flags=["-l", "--label"],
+                flag=True,
+                help="Label each paragraph as a span in label/",
             ),
             option(
                 flags=["-a", "--autolabel"],
                 flag=True,
-                help="Auto-label paragraphs when opening labeler",
+                help="Label each paragraph as a span in label/ (same as --label)",
             ),
             option(
                 flags=["--no-index"],
@@ -309,26 +319,8 @@ doc_group.commands.append(
 doc_group.commands.append(
     command(
         name="label",
-        help="Open a document in the labeler",
+        help="Open this document in the GUI label pane (no display: print the evid label commands)",
         callback=label_callback,
-        options=[
-            _DATASET_OPTION,
-            option(flags=["-u", "--uuid"], arg_type=str, help="Document UUID"),
-            option(
-                flags=["-f", "--filename"],
-                arg_type=str,
-                default="label.typ",
-                help="Typst file to label",
-            ),
-        ],
-    )
-)
-
-doc_group.commands.append(
-    command(
-        name="bibtex",
-        help="Generate BibTeX from a document's label.typ",
-        callback=bibtex_callback,
         options=[
             _DATASET_OPTION,
             option(flags=["-u", "--uuid"], arg_type=str, help="Document UUID"),
@@ -339,7 +331,7 @@ doc_group.commands.append(
 doc_group.commands.append(
     command(
         name="quote",
-        help="Machine-extract verbatim quotes from a doc (fuzzy) into machine.hayagriva",
+        help="Machine-extract verbatim quotes into pass/ (spans over label/text.txt)",
         callback=quote_callback,
         options=[
             _DATASET_OPTION,
@@ -371,7 +363,7 @@ doc_group.commands.append(
             option(
                 flags=["--refresh"],
                 flag=True,
-                help="Re-extract the cached text.txt before matching",
+                help="Re-extract label/text.txt and re-anchor spans before matching",
             ),
             option(
                 flags=["--model"],
@@ -396,6 +388,115 @@ doc_group.commands.append(
             _DATASET_OPTION,
             option(flags=["-u", "--uuid"], arg_type=str, help="Document UUID"),
             _FORMAT_OPTION,
+        ],
+    )
+)
+
+# ── label ──────────────────────────────────────────────────────────────────────
+
+_UUID_OPTION = option(flags=["-u", "--uuid"], arg_type=str, help="Document UUID")
+
+label_group = group(
+    name="label",
+    help="Human labels: spans over a document's plain text (label/)",
+)
+app.subgroups.append(label_group)
+
+label_group.commands.append(
+    command(
+        name="ls",
+        help="List labels (the whole set, or one document with -u)",
+        callback=label_ls_callback,
+        options=[_DATASET_OPTION, _UUID_OPTION, _FORMAT_OPTION],
+    )
+)
+
+label_group.commands.append(
+    command(
+        name="add",
+        help="Label a verbatim passage (exact match, else fuzzy with the ratio shown)",
+        callback=label_add_callback,
+        options=[
+            _DATASET_OPTION,
+            _UUID_OPTION,
+            option(
+                flags=["--text"],
+                arg_type=str,
+                help="The passage, as it occurs in the document",
+            ),
+            option(
+                flags=["--key"],
+                arg_type=str,
+                help="Label key (default: the first words of the passage)",
+            ),
+            option(flags=["--note"], arg_type=str, help="A note on the label"),
+        ],
+    )
+)
+
+label_group.commands.append(
+    command(
+        name="note",
+        help="Append a dated note to a label",
+        callback=label_note_callback,
+        arguments=[
+            argument(name="key", arg_type=str),
+            argument(name="text", arg_type=str),
+        ],
+        options=[_DATASET_OPTION, _UUID_OPTION],
+    )
+)
+
+label_group.commands.append(
+    command(
+        name="rm",
+        help="Remove a label",
+        callback=label_rm_callback,
+        arguments=[argument(name="key", arg_type=str)],
+        options=[_DATASET_OPTION, _UUID_OPTION],
+    )
+)
+
+label_group.commands.append(
+    command(
+        name="rename",
+        help="Rename a label",
+        callback=label_rename_callback,
+        arguments=[
+            argument(name="key", arg_type=str),
+            argument(name="new", arg_type=str),
+        ],
+        options=[_DATASET_OPTION, _UUID_OPTION],
+    )
+)
+
+label_group.commands.append(
+    command(
+        name="annotate",
+        help="Comment on a passage without a citation key",
+        callback=label_annotate_callback,
+        arguments=[argument(name="comment", arg_type=str)],
+        options=[
+            _DATASET_OPTION,
+            _UUID_OPTION,
+            option(
+                flags=["--text"],
+                arg_type=str,
+                help="The passage to annotate",
+            ),
+        ],
+    )
+)
+
+label_group.commands.append(
+    command(
+        name="text",
+        help="Print the canonical text with page markers",
+        callback=label_text_callback,
+        options=[
+            _DATASET_OPTION,
+            _UUID_OPTION,
+            option(flags=["--page"], arg_type=int, help="Only this page"),
         ],
     )
 )

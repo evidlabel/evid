@@ -484,6 +484,16 @@ function highlight(text, query, rx) {
 }
 
 // A label key from the quote's first words: lowercase ascii, unique among `taken`.
+// Where `evid doc label` asked the page to open: ?set=&doc=&pane= (pane defaults to label).
+function openTarget(search) {
+  const q = new URLSearchParams(String(search || '').replace(/^\?/, ''));
+  const slug = q.get('set') || q.get('slug') || '';
+  const uuid = q.get('doc') || q.get('uuid') || '';
+  const pane = q.get('pane') || '';
+  if (!slug && !uuid) return null;
+  return { slug, uuid, pane: pane || (uuid ? 'label' : '') };
+}
+
 function labKey(text, taken) {
   const words = String(text || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/æ/g, 'ae').replace(/ø/g, 'oe').replace(/å/g, 'aa').match(/[a-z0-9]+/g) || [];
@@ -878,6 +888,12 @@ function onEvent(e) {
       status('Labels updated', 3000); break;
     case 'label_error': status(`Labels: ${e.error}`, 8000, true);
       if (S.ed && S.ed.uuid === e.uuid) { S.ed.stale = true; edMsg(e.error, true); edMark(); } break;
+    case 'open':
+      (async () => {
+        if (e.slug && e.slug !== S.slug) await selectSet(e.slug);
+        if (e.uuid) { selectRow(e.uuid); if ((e.pane || 'label') === 'label') await openEditor(e.slug || S.slug, e.uuid); }
+      })();
+      break;
   }
 }
 
@@ -2240,7 +2256,9 @@ if (CFG.term) {
   } catch (e) { status(e.message, 0, true); }
   poll();
   try { S.registry = await api('GET', '/api/tags'); } catch (e) { status(e.message, 6000, true); }
-  await loadSets();
+  const open = openTarget(location.search);
+  await loadSets(open && open.slug || undefined);
+  if (open && open.uuid) { selectRow(open.uuid); if (open.pane === 'label') openEditor(S.slug, open.uuid); }
   $('#dtbl').focus({ preventScroll: true });
 })();
 </script>

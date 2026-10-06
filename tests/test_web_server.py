@@ -411,6 +411,24 @@ def test_index_queue_survives_a_failure(tmp_path, monkeypatch):
 # ── single instance ──────────────────────────────────────────────────────────
 
 
+def test_raise_opens_the_named_document(server, app, monkeypatch):
+    def _no_window(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(web, "raise_window", _no_window)
+    status, body = call(
+        server,
+        "POST",
+        "/api/raise",
+        {"set": "case", "doc": "u1", "pane": "label"},
+    )
+    assert status == 200 and body == {"ok": True}
+    opened = [e for e in app.events.since(0)[1] if e["kind"] == "open"]
+    assert opened[-1]["slug"] == "case"
+    assert opened[-1]["uuid"] == "u1"
+    assert opened[-1]["pane"] == "label"
+
+
 def test_second_launch_raises_running_instance(server, app, monkeypatch, capsys):
     import json as _json
 

@@ -21,7 +21,9 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import re
 import secrets
+import unicodedata
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -294,6 +296,72 @@ def remove_annotation(doc_dir: Path, ann_id: str) -> None:
 def notes_text(rec: dict) -> str:
     """A record's notes as one string, oldest first."""
     return "\n".join(n.get("text", "") for n in rec.get("notes") or [] if n.get("text"))
+
+
+_KEY_WORDS = 3  # first words of a passage, same as the GUI's labKey
+_KEY_SUFFIX_FROM = 2
+
+
+def suggest_key(text: str, taken: set[str] | None = None) -> str:
+    """A label key from the passage's first words, unique among *taken*."""
+    norm = unicodedata.normalize("NFKD", text or "")
+    norm = "".join(c for c in norm if not unicodedata.combining(c)).lower()
+    norm = norm.replace("æ", "ae").replace("ø", "oe").replace("å", "aa")
+    words = re.findall(r"[a-z0-9]+", norm)
+    base = "-".join(words[:_KEY_WORDS]) or "label"
+    have = set(taken or ())
+    if base not in have:
+        return base
+    n = _KEY_SUFFIX_FROM
+    while f"{base}-{n}" in have:
+        n += 1
+    return f"{base}-{n}"
+
+
+def paragraph_spans(text: str, pages) -> list[dict]:
+    """One span per blank-line paragraph (the same split the old autolabel used)."""
+    spans = []
+    offset = 0
+    parts = text.split("\n\n")
+    last = len(parts) - 1
+    for i, part in enumerate(parts):
+        stripped = part.strip()
+        if stripped:
+            rel = part.find(stripped)
+            start = offset + rel
+            spans.append(make_span(text, start, start + len(stripped), pages))
+        offset += len(part)
+        if i != last:
+            offset += len("\n\n")
+    return spans
+
+
+def autolabel(doc_dir: Path, by: str = "you") -> list[dict]:
+    """One label per paragraph of the canonical text. Keys are ``lab1``, ``lab2``, ….
+
+    A paragraph that is not citable text (an unmapped glyph) is skipped.
+    """
+    import logging
+
+    text, pages = ensure_text(doc_dir)
+    taken = {r["key"] for r in read(doc_dir)["labels"]}
+    made: list[dict] = []
+    seq = 0
+    for span in paragraph_spans(text, pages):
+        try:
+            _check_text(span)
+        except ValueError:
+            logging.getLogger(__name__).warning(
+                "skipped a paragraph that is not citable text"
+            )
+            continue
+        seq += 1
+        while f"lab{seq}" in taken:
+            seq += 1
+        key = f"lab{seq}"
+        made.append(add_label(doc_dir, span, key, by=by))
+        taken.add(key)
+    return made
 
 
 def label_entries(doc_dir: Path) -> list[tuple[str, dict]]:

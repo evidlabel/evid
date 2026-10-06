@@ -1,8 +1,8 @@
 """Handle evidence addition and management.
 
-Deep ingest (hash → copy → metadata → typst → bibtex → index) lives in
+Deep ingest (hash → copy → metadata → canonical text → index) lives in
 :class:`evid.services.doc_ingester.DocIngester`. This module is a thin CLI
-adapter: load/create the set, call the ingester, print results, optional labeler.
+adapter: load/create the set, call the ingester, print results, optional labels.
 """
 
 import logging
@@ -13,10 +13,7 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
-from evid.cli.dataset import docs_dir
-from evid.core.label import create_label
 from evid.models import InfoModel
-from evid.services.doc_tags import resolve_doc_pdf
 
 # Logging is configured centrally in evid.logging_config (called from main()).
 logger = logging.getLogger(__name__)
@@ -131,12 +128,10 @@ def add_evidence(
 
             _print_info(doc)
 
-            if label:
-                pdf = resolve_doc_pdf(doc.path)
-                if pdf is None:
-                    sys.exit(f"No PDF found for document {doc.uuid}")
-                logger.debug("Opening label file for %s...", pdf.name)
-                create_label(pdf, dataset, doc.uuid, autolabel=autolabel)
+            if label or autolabel:
+                from evid.cli.label_cmd import write_paragraph_labels
+
+                write_paragraph_labels(doc.path)
     finally:
         if pool is not None:
             pool.close()
@@ -220,31 +215,3 @@ def select_evidence(
         sys.exit("Invalid number.")
     except ValueError:
         sys.exit("Invalid selection.")
-
-
-def label_evidence(
-    directory: Path, dataset: str = None, uuid: str = None, filename: str = "label.typ"
-) -> None:
-    """Label a document in the specified dataset."""
-    from evid.cli.dataset import select_dataset
-
-    if not dataset:
-        dataset = select_dataset(
-            directory, "Select dataset to label", allow_create=False
-        )
-
-    if not uuid:
-        uuid = select_evidence(directory, dataset)
-
-    evidence_path = docs_dir(directory, dataset) / uuid
-    if not evidence_path.exists():
-        sys.exit(f"Document {uuid} in {dataset} does not exist.")
-
-    files = list(evidence_path.glob("*.pdf")) + list(evidence_path.glob("*.txt"))
-    if not files:
-        sys.exit("No PDF or TXT found in document directory.")
-    if len(files) > 1:
-        logger.warning("Multiple files found, using the first one.")
-    file_path = files[0]
-
-    create_label(file_path, dataset, uuid, filename=filename)

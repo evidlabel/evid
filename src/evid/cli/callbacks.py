@@ -23,12 +23,10 @@ from evid.cli.dataset import (
 from evid.cli.evidence import (
     add_evidence,
     get_evidence_list,
-    label_evidence,
     select_evidence,
 )
 from evid.cli.tags import assign_tag, list_tags, remove_tag, show_tag
 from evid.config import ConfigModel
-from evid.core.bibtex import generate_bibtex
 from evid.core.gather import gather_dataset
 from evid.core.quote_extract import (
     candidates_from_search,
@@ -269,17 +267,8 @@ def add_callback(
     add_evidence(DIRECTORY, dataset, source, label, autolabel, no_index=no_index)
 
 
-def bibtex_callback(db: str = None, dataset: str = None, uuid: str = None):
-    """Generate BibTeX for a document."""
-    dataset = _resolve_dataset(
-        dataset, "Select dataset for BibTeX generation", allow_create=False
-    )
-    if not uuid:
-        uuid = select_evidence(DIRECTORY, dataset)
-    typ_file = docs_dir(DIRECTORY, dataset) / uuid / "label.typ"
-    if not typ_file.exists():
-        sys.exit(f"label.typ not found in {dataset}/{uuid}")
-    generate_bibtex([typ_file])
+def _have_display() -> bool:
+    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
 
 def _search_candidates(dataset: str, uuid: str, query: str, n: int):
@@ -456,11 +445,30 @@ def label_callback(
     db: str = None,
     dataset: str = None,
     uuid: str = None,
-    filename: str = "label.typ",
 ):
-    """Open a document in the labeler."""
+    """Open a document in the GUI label pane.
+
+    With no display, print how to label it from ``evid label`` instead.
+    """
     dataset = _resolve_dataset(dataset, "Select dataset to label", allow_create=False)
-    label_evidence(DIRECTORY, dataset, uuid, filename)
+    if not uuid:
+        uuid = select_evidence(DIRECTORY, dataset, "Select document to label")
+    doc_dir = docs_dir(DIRECTORY, dataset) / uuid
+    if not doc_dir.is_dir():
+        sys.exit(f"No document {uuid!r} in '{dataset}'.")
+    if not _have_display():
+        print(f"No display, so the label pane stays closed. Label {dataset}/{uuid}:")
+        print(f'  evid label add -s {dataset} -u {uuid} --text "verbatim passage"')
+        print(f"  evid label ls -s {dataset} -u {uuid}")
+        print(f"  evid label text -s {dataset} -u {uuid}")
+        return
+    from evid.config import EvidConfig
+    from evid.web.server import serve_gui
+
+    print(f"Opening {dataset}/{uuid} in the label pane.")
+    config = EvidConfig.load()
+    config.data_dir = Path(DIRECTORY)
+    serve_gui(config, open_at={"set": dataset, "doc": uuid, "pane": "label"})
 
 
 def list_docs_callback(

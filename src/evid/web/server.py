@@ -1042,7 +1042,17 @@ class Handler(BaseHTTPRequestHandler):
 
     @route("POST", "/api/raise")
     def raise_window(self):
-        """A second `evid gui`: bring this one forward (or reopen it)."""
+        """A second `evid gui`: bring this one forward (or reopen it).
+
+        A body of ``{"set", "doc", "pane"}`` also asks the page to open that
+        document (``evid doc label``).
+        """
+        body = self.body() or {}
+        slug = str(body.get("slug") or body.get("set") or "")
+        uuid = str(body.get("uuid") or body.get("doc") or "")
+        pane = str(body.get("pane") or "")
+        if slug or uuid:
+            self.app.events.emit("open", slug=slug, uuid=uuid, pane=pane or "label")
         raise_window()
         self.send_json(200, {"ok": True})
 
@@ -1308,12 +1318,12 @@ def running_instance(data_dir: Path) -> str | None:
     return None
 
 
-def ask_raise(url: str) -> bool:
+def ask_raise(url: str, open_at: dict | None = None) -> bool:
     try:
         with urlopen(
             Request(
                 url + "api/raise",
-                data=b"{}",
+                data=json.dumps(open_at or {}).encode(),
                 method="POST",
                 headers={"X-Evid": "1", "Content-Type": "application/json"},
             ),
@@ -1324,6 +1334,22 @@ def ask_raise(url: str) -> bool:
         return False
 
 
+def _open_query(open_at: dict | None) -> str:
+    """Query string that opens one document in the GUI (``set``, ``doc``, ``pane``)."""
+    if not open_at:
+        return ""
+    from urllib.parse import urlencode
+
+    fields = {}
+    if open_at.get("set") or open_at.get("slug"):
+        fields["set"] = open_at.get("set") or open_at.get("slug")
+    if open_at.get("doc") or open_at.get("uuid"):
+        fields["doc"] = open_at.get("doc") or open_at.get("uuid")
+    if open_at.get("pane"):
+        fields["pane"] = open_at["pane"]
+    return urlencode(fields)
+
+
 def serve_gui(
     config: EvidConfig,
     *,
@@ -1331,6 +1357,7 @@ def serve_gui(
     browser: bool = False,
     headless: bool = False,
     agent: str = "",
+    open_at: dict | None = None,
 ) -> None:
     """Serve the GUI on 127.0.0.1 and show it in evid-app (else the browser).
 
@@ -1342,7 +1369,7 @@ def serve_gui(
     """
     config.data_dir = Path(config.data_dir).expanduser().resolve()
     url = running_instance(config.data_dir)
-    if url and ask_raise(url):
+    if url and ask_raise(url, open_at):
         print(f"Raised the running evid GUI ({url}).")
         return
 
@@ -1359,6 +1386,8 @@ def serve_gui(
         sys.exit(f"evid: no free port in {port}-{port + 19}")
     url = f"http://127.0.0.1:{srv.server_port}/"
     Handler.url = url
+    query = _open_query(open_at)
+    open_url = f"{url}?{query}" if query else url
     lp = lock_path(config.data_dir)
     lp.write_text(json.dumps({"url": url, "pid": os.getpid()}))
     # evid-app started us (EVID_IN_APP) and watches its own raise file; else we pass ours
@@ -1379,14 +1408,14 @@ def serve_gui(
     )
 
     print(
-        f"evid  {config.data_dir}\n  open {url}\n  agent {Handler.agent or 'shell'} (Agent pane)"
+        f"evid  {config.data_dir}\n  open {open_url}\n  agent {Handler.agent or 'shell'} (Agent pane)"
     )
     exe = None if headless or browser else find_app()
     Handler.in_app = bool(exe) or os.environ.get("EVID_IN_APP") == "1"
     try:
         if exe:
             threading.Thread(target=srv.serve_forever, daemon=True).start()
-            Handler.window = subprocess.Popen([exe, "--url", url, *_raise_args()])
+            Handler.window = subprocess.Popen([exe, "--url", open_url, *_raise_args()])
             try:
                 while (
                     True
@@ -1406,7 +1435,7 @@ def serve_gui(
             )
         print("  (Ctrl+C to stop)")
         if not headless:
-            threading.Timer(0.4, webbrowser.open, [url]).start()
+            threading.Timer(0.4, webbrowser.open, [open_url]).start()
         with contextlib.suppress(KeyboardInterrupt):
             srv.serve_forever()
     finally:

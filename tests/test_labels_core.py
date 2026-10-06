@@ -9,6 +9,7 @@ import pytest
 
 from evid.core import labels
 from evid.core.gitops import commit_labels
+from evid.core.labels import autolabel, paragraph_spans, suggest_key
 from evid.core.spans import locate, make_span, page_for_offset, reanchor
 
 TEXT = "Page one says hello.\nThe board finds that the municipality did not\ninvestigate the case.\nPage two: the end.\n"
@@ -35,6 +36,27 @@ def test_make_span_trims_and_pages():
     assert page_for_offset(0, PAGES) == 1
     with pytest.raises(ValueError, match="outside"):
         make_span(TEXT, 5, 999, PAGES)
+
+
+def test_suggest_key_matches_the_gui_rule():
+    assert suggest_key("Hello, world.") == "hello-world"
+    assert suggest_key("København år") == "koebenhavn-ar"
+    assert suggest_key("Hello, world.", {"hello-world"}) == "hello-world-2"
+    assert suggest_key("@@@") == "label"
+
+
+def test_autolabel_one_key_per_paragraph(doc):
+    labels._write_text(
+        doc, "First paragraph here.\n\nSecond one.\n\n\n\nThird.", [[0, 1]]
+    )
+    recs = autolabel(doc)
+    assert [r["key"] for r in recs] == ["lab1", "lab2", "lab3"]
+    assert [r["text"] for r in recs] == [
+        "First paragraph here.",
+        "Second one.",
+        "Third.",
+    ]
+    assert paragraph_spans("Only one.", [[0, 1]])[0]["text"] == "Only one."
 
 
 def test_locate_exact_spaces_fuzzy():

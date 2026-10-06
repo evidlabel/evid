@@ -22,6 +22,7 @@ FUNCS = [
     "searchDone",
     "shortUuid",
     "highlight",
+    "openTarget",
     "labKey",
     "labCall",
     "escHtml",
@@ -74,6 +75,25 @@ DOCS = json.dumps(
         {"uuid": "ccc333", "label": "Notes", "tags": []},
     ]
 )
+
+
+def test_open_target(js):
+    assert js("return openTarget('');") is None
+    assert js("return openTarget('?set=case&doc=u1');") == {
+        "slug": "case",
+        "uuid": "u1",
+        "pane": "label",
+    }
+    assert js("return openTarget('?set=case&doc=u1&pane=detail');") == {
+        "slug": "case",
+        "uuid": "u1",
+        "pane": "detail",
+    }
+    assert js("return openTarget('?set=case');") == {
+        "slug": "case",
+        "uuid": "",
+        "pane": "",
+    }
 
 
 def test_split_tags(js):
