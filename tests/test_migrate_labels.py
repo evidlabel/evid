@@ -224,13 +224,21 @@ def test_rerun_backfills_text_of_an_archived_doc(tmp_path):
     assert again.docs[0].skipped == "no old labels" and not again.docs[0].text
 
 
+def _git_identity(repo):
+    """A local author. GitHub's runner has no global user.name."""
+    subprocess.run(
+        ["git", "config", "user.email", "evid-test@example.com"], cwd=repo, check=True
+    )
+    subprocess.run(["git", "config", "user.name", "evid test"], cwd=repo, check=True)
+
+
 def test_commit_does_not_take_other_dirty_files(tmp_path):
     root, doc = _set(tmp_path)
-    subprocess.run(["git", "init", "-q"], cwd=root / "sets" / "demo", check=True)
-    subprocess.run(["git", "add", "-A"], cwd=root / "sets" / "demo", check=True)
-    subprocess.run(
-        ["git", "commit", "-q", "-m", "base"], cwd=root / "sets" / "demo", check=True
-    )
+    repo = root / "sets" / "demo"
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    _git_identity(repo)
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True)
     info = doc / "info.yml"
     info.write_text(info.read_text(encoding="utf-8") + "\n# dirty\n", encoding="utf-8")
     report = migrate_set(root, "demo")
@@ -291,6 +299,7 @@ def test_commit_on_an_allowlist_gitignore(tmp_path):
     repo = root / "sets" / "demo"
     (repo / ".gitignore").write_text(_ALLOWLIST, encoding="utf-8")
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    _git_identity(repo)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True)
     info = doc / "info.yml"
@@ -358,6 +367,7 @@ def _git(repo, *args):
 
 def _init(repo):
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    _git_identity(repo)
     subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True)
 
