@@ -18,6 +18,7 @@ The verbatim quote body is not stored here. Aggregators join on ``key``.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
 import os
@@ -185,12 +186,97 @@ def next_quote_number(doc_dir: Path) -> int:
     return n + 1
 
 
+def note_quote(
+    doc_dir: Path,
+    key: str,
+    text: str,
+    by: str = "you",
+    pass_id: str | None = None,
+) -> dict:
+    """Append a dated note to the machine quote ``key``.
+
+    ``pass_id`` limits the search to that pass. KeyError when the quote is
+    missing, ValueError when the note is empty. The note stays on the quote
+    across a re-anchor.
+    """
+    text = (text or "").strip()
+    if not text:
+        msg = "the note is empty"
+        raise ValueError(msg)
+    doc_dir = Path(doc_dir)
+    folder = doc_dir / MACHINE_DIR
+    if not folder.is_dir():
+        msg = f"no machine quote {key!r}"
+        raise KeyError(msg)
+    note = {
+        "at": datetime.now(tz=UTC).isoformat(timespec="seconds"),
+        "by": by,
+        "text": text,
+    }
+    lock = doc_dir / ".labels.lock"
+    with lock.open("a") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            return _append_quote_note(folder, key, note, pass_id)
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
+
+
+def _append_quote_note(folder: Path, key: str, note: dict, pass_id: str | None) -> dict:
+    for path in sorted(folder.glob("*.json")):
+        qp = load_pass(path)
+        if pass_id and qp.id != pass_id:
+            continue
+        rec = next(
+            (q for q in qp.found if q.get("key") == key and not q.get("lost")),
+            None,
+        )
+        if rec is None:
+            continue
+        rec.setdefault("notes", []).append(note)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(
+            qp.model_dump_json(indent=2, by_alias=True) + "\n",
+            encoding="utf-8",
+        )
+        tmp.replace(path)
+        return dict(rec)
+    msg = f"no machine quote {key!r}"
+    raise KeyError(msg)
+
+
+def found_with_notes(qp: QuotePass) -> list[dict]:
+    """Found spans, each carrying its candidate note when the pass recorded one.
+
+    The note stays on that quote. A pass does not write a separate annotation
+    for the pass as a whole.
+    """
+    by_key: dict[str, str] = {}
+    for cand, res in zip(qp.quotes, qp.results, strict=False):
+        text = (cand.note or "").strip()
+        if not text or not res.key:
+            continue
+        by_key[res.key] = text
+        by_key[res.key.rsplit(":", 1)[-1]] = text
+    out: list[dict] = []
+    for raw in qp.found:
+        span = dict(raw)
+        note = by_key.get(str(span.get("key") or ""), "")
+        notes = [dict(n) for n in span.get("notes") or []]
+        if note and note not in {n.get("text") for n in notes}:
+            notes.insert(0, {"at": qp.timestamp, "by": "pass", "text": note})
+            span["notes"] = notes
+        out.append(span)
+    return out
+
+
 def found_quotes(doc_dir: Path) -> list[dict]:
     """Every quote of every pass, oldest pass first, each with its pass id and job."""
     out = []
     for qp in list_passes(doc_dir):
         out.extend(
-            {**q, "pass": qp.id, "job": qp.job, "model": qp.model} for q in qp.found
+            {**q, "pass": qp.id, "job": qp.job, "model": qp.model}
+            for q in found_with_notes(qp)
         )
     return out
 

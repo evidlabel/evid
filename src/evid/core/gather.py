@@ -146,7 +146,13 @@ def collect(
         ]
         passages += [
             Passage(
-                q["key"], q["text"], q.get("page"), q["start"], q["end"], "", "machine"
+                q["key"],
+                q["text"],
+                q.get("page"),
+                q["start"],
+                q["end"],
+                labels.notes_text(q),
+                "machine",
             )
             for q in found_quotes(uuid_dir)
             if not q.get("lost")

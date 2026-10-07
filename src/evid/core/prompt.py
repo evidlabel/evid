@@ -129,7 +129,7 @@ def label_entries(workdir: Path) -> list[tuple[str, dict]]:
             {
                 "key": q["key"],
                 "text": q["text"],
-                "note": "",
+                "note": labels.notes_text(q),
                 "opage": q.get("page"),
                 "machine": True,
             },

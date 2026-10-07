@@ -60,6 +60,23 @@ def test_literal_is_case_insensitive(tmp_path):
     assert hits[0].uuid == "u1"
 
 
+def test_literal_span_points_at_the_match_after_non_ascii(tmp_path):
+    # casefold() turns ß into ss, so offsets into a casefolded copy drift.
+    sp = tmp_path / "set"
+    _doc(sp, "u1", ["Straße und Weg: the Needle sits here."])
+    h = search_fulltext(sp, "needle", n=5)[0]
+    text = (sp / "docs" / "u1" / "label" / "text.txt").read_text(encoding="utf-8")
+    assert text[h.char_start : h.char_end] == "Needle"
+
+
+def test_regex_span(tmp_path):
+    sp = tmp_path / "set"
+    _doc(sp, "u1", ["case no. 123 and case no. 4567"])
+    hits = search_fulltext(sp, r"no\. \d+", regex=True, n=5)
+    text = (sp / "docs" / "u1" / "label" / "text.txt").read_text(encoding="utf-8")
+    assert [text[h.char_start : h.char_end] for h in hits] == ["no. 123", "no. 4567"]
+
+
 def test_literal_no_match_returns_empty(tmp_path):
     sp = tmp_path / "set"
     _doc(sp, "u1", ["A short note about gardening tools and soil."])

@@ -26,7 +26,7 @@ Rediscover after install or upgrade, and invoke from that output.
 - `set gather` output is interchange, not the authored document.
 - Tagging writes both `info.yml` and `tags.yml`.
 - Read the annotations before using a document: `evid --db evid doc notes --dataset <slug>` (MCP: `doc_notes`). They are notes from the people handling the set, on a document (path `.`) or a file in its folder (`original.pdf`, …): what it is, what to watch out for, what is missing.
-- Leave a note when you learn something the next reader needs: `evid --db evid doc note --dataset <slug> -u <uuid> [-p original.pdf] -t "…"`. State facts about the file, not what you did.
+- A note on a document or a file (`evid --db evid doc note --dataset <slug> -u <uuid> [-p original.pdf] -t "…"`) says what that file is, what to watch out for, or what is missing.
 - Work the requests people leave for you (the GUI's *To the agent*): `evid --db evid fb ls --dataset <slug>` (MCP: `feedback`), do each, then answer it with `evid --db evid fb reply <id> "what changed, or why not" --done`. Inside the GUI's Agent pane `--db` and `--dataset` are already set.
 
 ## Analysis passes
@@ -35,7 +35,7 @@ A **pass** is a named job on one doc. Passes accumulate under `machine/` beside 
 
 `doc quote --from` takes candidates from **that** uuid's own text. Write the candidate JSON in that doc's `machine/` as a **new file each pass**: `machine/from-<YYYY-MM-DDTHH-MM-SSZ>-<slug>.json`. Never `/tmp`. Never reuse `quotes.json`. evid records the pass as `machine/<YYYY-MM-DDTHH-MM-SSZ>_<hex>.json`. Replay with `--from machine/<pass>.json`. `--from-search` seeds from the set. `matched: false` → new candidate from that doc, quote again. Hayagriva is tool output.
 
-A candidate is one span on one page of that uuid's text. A folio (standalone page number) in the matched `title:` means the span crossed a page break: `matched` is not enough. Pass again with a page-local span.
+A candidate is one span on one page of that uuid's text, and a `note` saying what that quote is (`{"candidate": "…", "note": "…"}`). That note is the annotation, on the quote. A folio (standalone page number) in the matched `title:` means the span crossed a page break: `matched` is not enough. Pass again with a page-local span.
 
 ## Install
 

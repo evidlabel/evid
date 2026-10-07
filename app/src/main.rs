@@ -78,7 +78,7 @@ fn main() {
         .manage(Server(Mutex::new(child)))
         .setup(move |app| {
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
-                .title("Evidence Manager")
+                .title("evid gui")
                 .inner_size(1400.0, 900.0)
                 .build()?;
             let handle = app.handle().clone();

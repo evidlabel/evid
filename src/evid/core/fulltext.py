@@ -42,6 +42,7 @@ class TextHit:
     page: int
     snippet: str
     char_start: int
+    char_end: int
     score: float | None  # always None now (kept for table/preview compatibility)
 
 
@@ -100,8 +101,10 @@ def _iter_typ_files(set_path: Path):
         else:
             skipped += 1
     if skipped:
-        logger.info(
-            "Full-text search skipped %d document(s) with no label/text.txt", skipped
+        logger.warning(
+            "Full-text search skipped %d document(s) with no label/text.txt"
+            " (evid set migrate-labels writes it)",
+            skipped,
         )
 
 
@@ -146,7 +149,7 @@ def _candidate_dirs(set_path: Path, query: str) -> list[Path] | None:
 def _literal_search(
     set_path: Path, query: str, *, n: int, context: int
 ) -> list[TextHit]:
-    needle = query.casefold()
+    rx = re.compile(re.escape(query), re.IGNORECASE)
     candidates = _candidate_dirs(set_path, query)
     if candidates is None:
         # No grepper: scan every text in Python.
@@ -160,16 +163,18 @@ def _literal_search(
         except OSError:
             logger.debug("Could not read %s", typ, exc_info=True)
             continue
-        idx = text.casefold().find(needle)
-        if idx < 0:
+        # re.IGNORECASE keeps offsets in *text*; casefold() can change lengths (ß → ss).
+        m = rx.search(text)
+        if m is None:
             continue
         hits.append(
             TextHit(
                 uuid=doc_dir.name,
                 label=_doc_label(doc_dir),
-                page=_page(doc_dir, idx),
-                snippet=_context(text, idx, idx + len(query), context),
-                char_start=idx,
+                page=_page(doc_dir, m.start()),
+                snippet=_context(text, m.start(), m.end(), context),
+                char_start=m.start(),
+                char_end=m.end(),
                 score=None,
             )
         )
@@ -205,6 +210,7 @@ def _regex_search(
                     page=_page(doc_dir, m.start()),
                     snippet=_context(text, m.start(), m.end(), context),
                     char_start=m.start(),
+                    char_end=m.end(),
                     score=None,
                 )
             )

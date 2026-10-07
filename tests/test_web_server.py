@@ -265,6 +265,32 @@ def test_label_reader(server, doc, app):
         out["passes"][0]["job"] == "find dates"
         and out["passes"][0]["quotes"][0]["key"] == "q1"
     )
+    status, out = call(
+        server,
+        "POST",
+        f"/api/sets/case/docs/{doc}/quotes/q1/notes",
+        {"text": "check this", "pass": "p1"},
+    )
+    assert status == 200
+    assert out["passes"][0]["quotes"][0]["notes"][0]["text"] == "check this"
+    assert (
+        call(
+            server,
+            "POST",
+            f"/api/sets/case/docs/{doc}/quotes/missing/notes",
+            {"text": "x"},
+        )[0]
+        == 404
+    )
+    assert (
+        call(
+            server,
+            "POST",
+            f"/api/sets/case/docs/{doc}/quotes/q1/notes",
+            {"text": "  "},
+        )[0]
+        == 400
+    )
     assert (d / "label" / "labels.json").exists()
     assert call(server, "GET", "/api/sets/case/docs")[1][0]["has_json"] is True
     status, out = call(
@@ -360,9 +386,12 @@ def test_search_meta_and_text(server, doc, app):
         app.data_dir / "sets" / "case" / "docs" / doc, "the needle is here\n", [[0, 1]]
     )
     hits = call(
-        server, "POST", "/api/search/text", {"slug": "case", "query": "needle"}
+        server, "POST", "/api/search/text", {"slug": "case", "query": "NEEDLE"}
     )[1]
     assert hits and hits[0]["uuid"] == doc and hits[0]["page"] == 1
+    assert (
+        "the needle is here\n"[hits[0]["char_start"] : hits[0]["char_end"]] == "needle"
+    )
     status, r = call(server, "POST", "/api/search/vec", {"slug": "case", "query": "x"})
     assert status == 400 and "vec" in r["error"]
 
@@ -597,6 +626,28 @@ def test_doc_files_list_and_open(server, doc, app, monkeypatch):
         )[0]
         == 400
     )
+
+
+def test_doc_rows_count_manual_and_machine_labels(server, doc, app):
+    row = call(server, "GET", "/api/sets/case/docs")[1][0]
+    assert row["nlabels"] == 0 and row["nmachine"] == 0
+    doc_dir = app.data_dir / "sets" / "case" / "docs" / doc
+    label_doc(
+        doc_dir,
+        labels=[{"key": "found", "text": "The committee found for the appellant."}],
+        quotes=[
+            {"text": "The committee found for the appellant."},
+            {"text": "Costs follow the event."},
+        ],
+    )
+    row = call(server, "GET", "/api/sets/case/docs")[1][0]
+    assert row["nlabels"] == 1 and row["nmachine"] == 2
+    # a quote the text no longer holds is not a label you can open
+    path = next((doc_dir / "pass").glob("*.json"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["found"][0]["lost"] = True
+    path.write_text(json.dumps(data), encoding="utf-8")
+    assert call(server, "GET", "/api/sets/case/docs")[1][0]["nmachine"] == 1
 
 
 def test_doc_rows_carry_author_and_date(server, doc):

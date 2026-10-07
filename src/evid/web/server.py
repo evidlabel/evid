@@ -174,7 +174,45 @@ def doc_row(doc) -> dict:
         "dates": str(doc.dates or ""),
         "has_pdf": resolve_doc_pdf(doc.path) is not None,
         "has_json": (doc.path / "label" / "labels.json").exists(),
+        "nlabels": count_labels(doc.path),
+        "nmachine": count_machine(doc.path),
     }
+
+
+def count_labels(doc_dir: Path) -> int:
+    """How many manual labels the doc has (``label/labels.json``)."""
+    p = doc_dir / "label" / "labels.json"
+    if not p.exists():
+        return 0
+    try:
+        return len(
+            (json.loads(p.read_text(encoding="utf-8")) or {}).get("labels") or []
+        )
+    except (OSError, ValueError, AttributeError) as exc:
+        logger.warning("Could not count the labels of %s: %s", doc_dir.name, exc)
+        return 0
+
+
+def count_machine(doc_dir: Path) -> int:
+    """How many machine quotes the doc shows (``pass/*.json`` ``found``, not lost)."""
+    from evid.core.quote_pass import MACHINE_DIR
+
+    folder = doc_dir / MACHINE_DIR
+    if not folder.is_dir():
+        return 0
+    n = 0
+    for path in folder.glob("*.json"):
+        try:
+            found = (json.loads(path.read_text(encoding="utf-8")) or {}).get(
+                "found"
+            ) or []
+        except (OSError, ValueError, AttributeError) as exc:
+            logger.warning(
+                "Could not count the machine quotes of %s: %s", path.name, exc
+            )
+            continue
+        n += sum(1 for q in found if isinstance(q, dict) and not q.get("lost"))
+    return n
 
 
 def vec_preview(typ_path: Path, char_start: int, chunk: str) -> dict | None:
@@ -214,7 +252,7 @@ def label_rows(doc_dir: Path) -> list[dict]:
 def text_view(doc_dir: Path) -> dict:
     """Canonical text, page bands, and the human and machine records on it."""
     from evid.core.labels import ensure_text, read
-    from evid.core.quote_pass import list_passes
+    from evid.core.quote_pass import found_with_notes, list_passes
 
     text, pages = ensure_text(doc_dir)
     data = read(doc_dir)
@@ -238,8 +276,9 @@ def text_view(doc_dir: Path) -> dict:
                 "end": q.get("end"),
                 "page": q.get("page"),
                 "text": q.get("text") or "",
+                "notes": list(q.get("notes") or []),
             }
-            for q in qp.found
+            for q in found_with_notes(qp)
             if not q.get("lost") and "start" in q
         ]
         passes.append(
@@ -253,12 +292,29 @@ def text_view(doc_dir: Path) -> dict:
                 "quotes": quotes,
             }
         )
+    mig = doc_dir / "label" / "migration.json"
+    unplaced = []
+    if mig.is_file():
+        try:
+            raw = json.loads(mig.read_text(encoding="utf-8")) or {}
+        except (OSError, json.JSONDecodeError):
+            raw = {}
+        unplaced = [
+            {
+                "key": r.get("key") or "",
+                "text": r.get("text") or "",
+                "score": r.get("score"),
+            }
+            for r in raw.get("unplaced") or []
+            if isinstance(r, dict)
+        ]
     return {
         "text": text,
         "pages": pages,
         "labels": [one(r, "key") for r in data["labels"] if not r.get("lost")],
         "annotations": [one(r, "id") for r in data["annotations"] if not r.get("lost")],
         "passes": passes,
+        "unplaced": unplaced,
     }
 
 
@@ -899,6 +955,25 @@ class Handler(BaseHTTPRequestHandler):
         logger.info("Removed annotation %s of %s", ann_id, doc_name(d))
         self.send_json(200, _commit_view(d, f"-annotation {ann_id}"))
 
+    @route("POST", "/api/sets/{slug}/docs/{uuid}/quotes/{key}/notes")
+    def post_quote_note(self, slug: str, uuid: str, key: str):
+        from evid.core.quote_pass import note_quote
+
+        _, d = self.app.doc_dir(slug, uuid)
+        b = self.body()
+        self.app.disk.touch(slug, uuid)
+        try:
+            note_quote(
+                d,
+                key,
+                str(b.get("text") or ""),
+                pass_id=str(b.get("pass") or "") or None,
+            )
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Noted machine quote %s of %s", key, doc_name(d))
+        self.send_json(200, _commit_view(d, f"{key} note"))
+
     # tags -----------------------------------------------------------------
 
     @route("GET", "/api/tags")
@@ -1087,6 +1162,8 @@ class Handler(BaseHTTPRequestHandler):
                     "score": r.score,
                     "chunk_idx": r.chunk_idx,
                     "chunk": r.chunk_text,
+                    "char_start": r.char_start,
+                    "char_end": r.char_start + len(r.chunk_text),
                     "preview": vec_preview(
                         es.path / "docs" / r.doc.uuid / "label" / "text.txt",
                         r.char_start,
@@ -1120,6 +1197,8 @@ class Handler(BaseHTTPRequestHandler):
                     "label": h.label,
                     "page": h.page,
                     "snippet": h.snippet,
+                    "char_start": h.char_start,
+                    "char_end": h.char_end,
                     "score": h.score,
                 }
                 for h in hits

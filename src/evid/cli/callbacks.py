@@ -222,6 +222,91 @@ def track_callback(db: str = None, dataset: str = None):
     track_dataset(DIRECTORY, dataset)
 
 
+def _migrate_progress(result) -> None:
+    """One line per document so a long set is not silent until the final table."""
+    if result.skipped and not result.error:
+        return
+    name = result.title or result.uuid[:8]
+    if result.error:
+        print(f"  {name}: {result.error}", flush=True)
+        return
+    print(
+        f"  {name}: {result.placed} placed, {result.fuzzy} fuzzy, {result.unplaced} unplaced"
+        + (", text written" if result.text else ""),
+        flush=True,
+    )
+
+
+def migrate_labels_callback(db: str = None, dataset: str = None, dry_run: bool = False):
+    """Move a set's label.typ labels and machine quotes onto label/ spans."""
+    from rich.console import Console
+    from rich.table import Table
+
+    from evid.services.migrate_labels import migrate_set
+
+    dataset = _resolve_dataset(dataset, "Select dataset to migrate", allow_create=False)
+    print(f"migrate-labels: {dataset}", flush=True)
+    report = migrate_set(DIRECTORY, dataset, dry_run=dry_run, on_doc=_migrate_progress)
+    table = Table(
+        title=f"migrate-labels: {dataset}" + (" (dry run)" if dry_run else "")
+    )
+    table.add_column("document")
+    table.add_column("placed", justify="right")
+    table.add_column("fuzzy", justify="right")
+    table.add_column("unplaced", justify="right")
+    table.add_column("quotes", justify="right")
+    table.add_column("note")
+    shown = [d for d in report.docs if d.skipped != "no old labels"]
+    for d in shown:
+        name = d.title or d.uuid[:8]
+        note = d.error or d.skipped
+        if d.already:
+            note = (note + "; " if note else "") + f"{d.already} already there"
+        if d.quotes_moved:
+            note = (note + "; " if note else "") + f"{d.quotes_moved} re-anchored"
+        table.add_row(
+            name,
+            str(d.placed),
+            str(d.fuzzy),
+            str(d.unplaced),
+            str(d.quotes + d.quotes_moved),
+            note,
+        )
+    console = Console()
+    if shown:
+        console.print(table)
+    else:
+        print(f"No old labels in {dataset}.")
+    for d in shown:
+        if not d.details:
+            continue
+        who = d.title or d.uuid[:8]
+        print(f"Unplaced in {who}:")
+        for line in d.details:
+            print(f"  {line}")
+    labels = sum(d.placed + d.fuzzy for d in report.touched)
+    unplaced = sum(d.unplaced for d in report.touched)
+    if dry_run:
+        print(
+            f"Dry run: {labels} labels would be placed, {unplaced} left unplaced. Nothing written."
+        )
+    elif report.commit and report.touched:
+        print(
+            f"Committed {report.commit}: {labels} labels placed, {unplaced} unplaced."
+        )
+    elif report.commit:
+        print(f"Committed {report.commit}: recorded the archived label files.")
+    elif report.commit_error:
+        print(
+            f"Migrated {len(report.touched)} documents ({labels} labels, {unplaced} unplaced). "
+            f"Git did not commit: {report.commit_error}"
+        )
+    elif report.touched:
+        print(
+            f"Migrated {len(report.touched)} documents ({labels} labels, {unplaced} unplaced)."
+        )
+
+
 def list_datasets_callback(db: str = None):
     """List all available datasets."""
     list_datasets(DIRECTORY)

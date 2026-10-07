@@ -23,6 +23,7 @@ from evid.cli.callbacks import (
     list_datasets_callback,
     list_docs_callback,
     mcp_callback,
+    migrate_labels_callback,
     note_callback,
     notes_callback,
     passes_callback,
@@ -202,6 +203,22 @@ set_group.commands.append(
         help="Rebuild the vector index for every document in a set. Requires extra evid[vec].",
         callback=reindex_callback,
         options=[_DATASET_OPTION],
+    )
+)
+
+set_group.commands.append(
+    command(
+        name="migrate-labels",
+        help="Move label.typ labels and machine.hayagriva quotes onto label/ spans",
+        callback=migrate_labels_callback,
+        options=[
+            _DATASET_OPTION,
+            option(
+                flags=["--dry-run"],
+                flag=True,
+                help="Print what would be placed and write nothing",
+            ),
+        ],
     )
 )
 

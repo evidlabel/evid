@@ -28,6 +28,11 @@ FUNCS = [
     "escHtml",
     "escAttr",
     "labelHtml",
+    "edWordStep",
+    "edLineStep",
+    "edMove",
+    "edListStep",
+    "edListMove",
     "pageAt",
     "keepOrder",
     "isSaveKey",
@@ -40,6 +45,8 @@ FUNCS = [
     "historyChips",
     "agentBadge",
     "noteLine",
+    "hitSpan",
+    "findAll",
 ]
 
 
@@ -172,6 +179,32 @@ def test_search_queue_runs_only_the_latest(js):
     assert out == ["a", None, None, "c", None, False]
 
 
+def test_hit_span(js):
+    assert js("return hitSpan({char_start: 4, char_end: 10}, 100);") == {
+        "start": 4,
+        "end": 10,
+    }
+    # clamped to the text; a meta hit (no offsets) or an empty span has none
+    assert js("return hitSpan({char_start: 95, char_end: 140}, 100);") == {
+        "start": 95,
+        "end": 100,
+    }
+    assert js("return hitSpan({uuid: 'u'}, 100);") is None
+    assert js("return hitSpan({char_start: 100, char_end: 120}, 100);") is None
+
+
+def test_find_all(js):
+    assert js("return findAll('A cat. a CAT (cat)', 'cat');") == [
+        {"start": 2, "end": 5},
+        {"start": 9, "end": 12},
+        {"start": 14, "end": 17},
+    ]
+    # literal, not a regex; empty finds nothing; capped
+    assert js("return findAll('a.b axb', 'a.b');") == [{"start": 0, "end": 3}]
+    assert js("return findAll('abc', '');") == []
+    assert js("return findAll('aaaa', 'a', 2).length;") == 2
+
+
 def test_short_uuid(js):
     assert js("return shortUuid('0123456789abcdef0123');") == "01234567…cdef0123"
     assert js("return shortUuid('short');") == "short"
@@ -232,6 +265,116 @@ def test_label_html_layers_pages_and_escapes(js):
     )
     assert js("return pageAt([[0, 1], [15, 2]], 15);") == 2
     assert js("return pageAt([[0, 1], [15, 2]], 3);") == 1
+
+
+def test_label_cursor_moves_and_shift_extends(js):
+    text = "Hello evidence.\nThe municipality did not reply."
+    cur = {"at": 0, "anchor": 0}
+    cur = js(f"return edMove({text!r}, {cur}, 'ArrowRight', false);")
+    assert cur == {"at": 1, "anchor": 1}
+    cur = js(f"return edMove({text!r}, {json.dumps(cur)}, 'ArrowRight', true);")
+    assert cur == {"at": 2, "anchor": 1}
+    cur = js(f"return edMove({text!r}, {json.dumps(cur)}, 'ArrowRight', true);")
+    assert cur == {"at": 3, "anchor": 1}
+    cur = js(f"return edMove({text!r}, {json.dumps(cur)}, 'ArrowLeft', true);")
+    assert cur == {"at": 2, "anchor": 1}
+    # a plain arrow drops the selection and moves from the caret
+    cur = js(f"return edMove({text!r}, {json.dumps(cur)}, 'ArrowRight', false);")
+    assert cur == {"at": 3, "anchor": 3}
+    # up from the second line keeps the column; down from the end stays put
+    assert js(f"return edLineStep({text!r}, 22, -1);") == 6
+    assert js("return edLineStep('ab\\nc', 0, -1);") == 0
+    assert js("return edLineStep('ab\\nc', 4, 1);") == 4
+    # an empty line still has a place for the caret
+    assert js("return edLineStep('\\nab', 1, -1);") == 0
+    # end of "Hello" lands at the end of "world"; one column left lands before "d"
+    assert js("return edLineStep('Hello\\nworld', 5, 1);") == 11
+    assert js("return edLineStep('Hello\\nworld', 4, 1);") == 10
+    jumped = js(
+        f"return edMove({text!r}, {{at: 0, anchor: 0}}, 'ArrowDown', true, () => 16);"
+    )
+    assert jumped == {"at": 16, "anchor": 0}
+
+
+def test_label_cursor_skips_words(js):
+    # "Hello, " then "afgørelse" (letters, including ø), then ".\nThe …"
+    text = "Hello, afgørelse.\nThe municipality did not reply."
+    assert js(f"return edWordStep({text!r}, 0, 1);") == 5
+    assert js(f"return edWordStep({text!r}, 5, 1);") == 16
+    assert js(f"return edWordStep({text!r}, 16, 1);") == 21
+    assert js(f"return edWordStep({text!r}, 2, 1);") == 5
+    assert js(f"return edWordStep({text!r}, 6, 1);") == 16
+    assert js(f"return edWordStep({text!r}, 21, -1);") == 18
+    assert js(f"return edWordStep({text!r}, 18, -1);") == 7
+    assert js(f"return edWordStep({text!r}, 7, -1);") == 0
+    assert js(f"return edWordStep({text!r}, 16, -1);") == 7
+    assert js(f"return edWordStep({text!r}, 0, -1);") == 0
+    assert js(f"return edWordStep({text!r}, {len(text)}, 1);") == len(text)
+    # digits are a word; the section sign is not
+    assert js("return edWordStep('§ 12 a', 0, 1);") == 4
+    assert js("return edWordStep('§ 12 a', 4, 1);") == 6
+    assert js("return edWordStep('§ 12 a', 6, -1);") == 5
+    assert js("return edWordStep('§ 12 a', 5, -1);") == 2
+    # a run of spaces is one gap, not a stop
+    assert js("return edWordStep('aa   bb', 2, 1);") == 7
+    assert js("return edWordStep('aa   bb', 4, -1);") == 0
+    assert js("return edWordStep('...', 0, 1);") == 3
+    assert js("return edWordStep('', 0, 1);") == 0
+    # Shift keeps the anchor; a plain word move drops the selection
+    cur = js(
+        f"return edMove({text!r}, {{at: 0, anchor: 0}}, 'ArrowRight', true, null, true);"
+    )
+    assert cur == {"at": 5, "anchor": 0}
+    cur = js(
+        f"return edMove({text!r}, {json.dumps(cur)}, 'ArrowRight', true, null, true);"
+    )
+    assert cur == {"at": 16, "anchor": 0}
+    cur = js(
+        f"return edMove({text!r}, {json.dumps(cur)}, 'ArrowLeft', true, null, true);"
+    )
+    assert cur == {"at": 7, "anchor": 0}
+    cur = js(
+        f"return edMove({text!r}, {json.dumps(cur)}, 'ArrowLeft', false, null, true);"
+    )
+    assert cur == {"at": 0, "anchor": 0}
+    # Ctrl does not change a line move
+    assert js(
+        "return edMove('ab\\ncd', {at: 0, anchor: 0}, 'ArrowDown', false, null, true);"
+    ) == {
+        "at": 3,
+        "anchor": 3,
+    }
+
+
+def test_label_list_arrows(js):
+    rows = [
+        {"kind": "h", "id": "a"},
+        {"kind": "a", "id": "n1"},
+        {"kind": "h", "id": "b"},
+    ]
+    assert js(f"return edListMove({json.dumps(rows)}, null, 1);") == rows[0]
+    assert js(f"return edListMove({json.dumps(rows)}, null, -1);") == rows[2]
+    cur = rows[0]
+    cur = js(f"return edListMove({json.dumps(rows)}, {json.dumps(cur)}, 1);")
+    assert cur == rows[1]
+    cur = js(f"return edListMove({json.dumps(rows)}, {json.dumps(cur)}, 1);")
+    assert cur == rows[2]
+    assert (
+        js(f"return edListMove({json.dumps(rows)}, {json.dumps(cur)}, 1);") == rows[2]
+    )
+    assert (
+        js(f"return edListMove({json.dumps(rows)}, {json.dumps(rows[0])}, -1);")
+        == rows[0]
+    )
+    other = {"kind": "m", "id": "q1"}
+    assert (
+        js(f"return edListMove({json.dumps(rows)}, {json.dumps(other)}, 1);") == rows[0]
+    )
+    assert (
+        js(f"return edListMove({json.dumps(rows)}, {json.dumps(other)}, -1);")
+        == rows[2]
+    )
+    assert js("return edListMove([], null, 1);") is None
 
 
 def test_keep_order_on_reload(js):

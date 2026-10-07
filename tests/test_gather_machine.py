@@ -72,6 +72,17 @@ def test_gather_yaml_labels_and_machine_quotes(tmp_path):
     )
 
 
+def test_gather_machine_quote_note(tmp_path):
+    root, doc = _make_dataset(tmp_path, labels=False)
+    from evid.core.quote_pass import note_quote
+
+    note_quote(doc, "q1", "Check the date.")
+    out = tmp_path / "refs.yml"
+    gather_dataset(root, "demo", out)
+    data = yaml.safe_load(out.read_text(encoding="utf-8"))
+    assert data["1a2b:q1"]["note"] == "Check the date."
+
+
 def test_gather_machine_only_and_labels_only(tmp_path):
     root, _ = _make_dataset(tmp_path, labels=False)
     out = tmp_path / "m.yml"

@@ -16,14 +16,16 @@ License: [MIT](LICENSE). CLI: `evid -h`. Agents: [`SKILL.md`](SKILL.md).
 
 <table>
 <tr>
-<td align="center" width="50%"><img src="assets/gui-docs.png" alt="Docs tab"/></td>
-<td align="center" width="50%"><img src="assets/gui-search.png" alt="Search tab"/></td>
+<td align="center" width="50%"><img src="assets/gui-docs.png" alt="Docs: a fictional case. The green count is manual labels, the purple count is machine labels."></td>
+<td align="center" width="50%"><img src="assets/gui-search.png" alt="Search in Docs: hits open in the Label pane"/></td>
 </tr>
 <tr>
 <td align="center">Docs</td>
-<td align="center">Search</td>
+<td align="center">Search → label</td>
 </tr>
 </table>
+
+The screenshots are a fictional case.
 
 ## Install
 

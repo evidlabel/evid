@@ -175,12 +175,18 @@ def track_dataset(directory: Path, dataset: str = None) -> None:
 vecdb/
 # Scratch reasoning.
 reasoning/
-# Cached PDF text extraction — re-extracted from the PDF on demand.
+# Cached PDF text at the document root. label/text.txt is the canonical text.
 text.txt
+!**/label/text.txt
 # typst query outputs — regenerated from label.typ by `evid set gather`.
 label.json
 label.bib
 label_table.bib
+# Archive byproducts from `evid set migrate-labels` (legacy/label.typ stays tracked).
+**/legacy/label.json
+**/legacy/label.bib
+**/legacy/label_table.bib
+**/legacy/text.txt
 # Rendered label preview.
 label.pdf
 # LaTeX / typst compile byproducts.

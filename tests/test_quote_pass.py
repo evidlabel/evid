@@ -11,6 +11,7 @@ from evid.core.quote_extract import (
     load_quotes_json,
 )
 from evid.core.quote_pass import (
+    found_quotes,
     list_passes,
     load_pass,
     pass_summaries,
@@ -98,6 +99,27 @@ def test_record_pass_includes_skipped_results_without_haya(tmp_path):
     # Verbatim quote body is not stored on the pass.
     assert "title" not in data["results"][0]
     assert "exact_quote" not in data["results"][0]
+
+
+def test_candidate_note_stays_on_the_quote(tmp_path):
+    doc = _make_doc(tmp_path)
+    cands = [
+        QuoteCandidate(
+            candidate="the appeal was dismissed in its entirety",
+            note="The holding.",
+        )
+    ]
+    results = extract_quotes(doc, cands, min_ratio=0.6)
+    path = record_pass(
+        doc, job="appeal outcome", model=None, quotes=cands, results=results
+    )
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    assert "notes" not in stored["found"][0]
+    (q,) = found_quotes(doc)
+    assert q["key"] == "q1"
+    assert q["notes"] == [
+        {"at": stored["timestamp"], "by": "pass", "text": "The holding."}
+    ]
 
 
 def test_extract_then_record_keeps_haya_citation_only(tmp_path):
@@ -254,6 +276,34 @@ def test_list_passes_empty_without_directory(tmp_path):
     empty = tmp_path / "doc"
     empty.mkdir()
     assert list_passes(empty) == []
+
+
+def test_note_quote_appends_and_survives_reanchor(tmp_path):
+    import pytest
+
+    from evid.core.quote_pass import load_pass, note_quote, reanchor_passes
+    from tests.labelkit import label_doc
+
+    doc = tmp_path / "doc"
+    doc.mkdir()
+    label_doc(doc, quotes=[{"text": "The appeal was therefore dismissed.", "page": 1}])
+    rec = note_quote(doc, "q1", "The date is wrong.")
+    assert rec["notes"][0]["text"] == "The date is wrong."
+    assert rec["notes"][0]["by"] == "you"
+    rec = note_quote(doc, "q1", "See page 2.")
+    assert [n["text"] for n in rec["notes"]] == ["The date is wrong.", "See page 2."]
+    reanchor_passes(doc)
+    qp = load_pass(next((doc / "pass").glob("*.json")))
+    assert [n["text"] for n in qp.found[0]["notes"]] == [
+        "The date is wrong.",
+        "See page 2.",
+    ]
+    with pytest.raises(KeyError):
+        note_quote(doc, "q9", "nope")
+    with pytest.raises(ValueError):
+        note_quote(doc, "q1", "  ")
+    with pytest.raises(KeyError):
+        note_quote(doc, "q1", "elsewhere", pass_id="no-such-pass")
 
 
 def test_extract_alone_does_not_write_a_pass(tmp_path):
