@@ -4,11 +4,13 @@
 
 **Aim.** Human and agent collaboration on document sets for legal work: find, quote, and cite from the same store, without either side inventing wording.
 
-**Use.** Ingest PDFs and URLs into an evidence set. Search (semantic, metadata, full text). Make spans citable — by hand in Typst (`#lab`) or by machine (`evid doc quote`). Gather BibTeX / Hayagriva / Markdown / JSON. Author the brief elsewhere (Typst / labquote), keys only.
+**Use.** Ingest PDFs and URLs into an evidence set. Search (semantic, metadata, full text). Make spans citable — by hand (`evid label`, or in the GUI) or by a machine pass (`evid doc quote`). Gather BibTeX / Hayagriva / Markdown / JSON. Author the brief elsewhere (Typst / labquote), keys only.
 
 **Features.**
 - CLI + GUI over one on-disk layout (`sets/<slug>/docs/<uuid>/`)
-- Manual labelling in `label.typ`; machine quoting into `machine.hayagriva` (verbatim match, never paraphrase)
+- Precise quoting. `evid label add` and `evid doc quote` locate a passage in the document and store that span of `label/text.txt`. The cited words are the document's own.
+- Passes. Each `evid doc quote` run is one job, recorded under `pass/` with its description, model, and match outcomes. Later runs add passes; `evid doc passes` lists the ledger.
+- Human labels in `label/labels.json` are the same kind of span, with notes
 - Vector, metadata, and body search; tags; gather for interchange
 - MCP server (`evid mcp <set>`) for a warm agent query session
 
@@ -66,7 +68,7 @@ An editable checkout also finds `app/target/{release,debug}/evid-app` without in
 
 **Agent pane.** The *Agent* button (top right) opens terminals next to the documents, as in [treedit](https://github.com/wr1/treedit): a shell, or an agent with `evid gui --agent claude` (or `$EVID_AGENT`). An agent belongs to one evidence set: it starts in that set's folder, and `evid` there uses the GUI's data dir and that set by default (`$EVID_DB`, `$EVID_SET`), so `evid doc notes` just works. The pane shows the selected set's terminals; other sets' keep running, and the set tree marks sets with an agent attached. *Selection* types a reference to the selected documents, labels or label.typ text into the terminal. The terminal is served on loopback only and needs the page's token.
 
-**Live.** While an agent (or the CLI, or an editor) changes a set — cleaning up titles, adding notes, labelling — the GUI follows along: changed rows get a fading ◆ marker, the open document's details take in the outside change without losing your unsaved edits (a field you both changed shows a banner: use the disk version or keep yours), the label editor merges outside edits into yours line by line, and a `label.typ` edited outside has its labels extracted again.
+**Live.** While an agent (or the CLI, or an editor) changes a set — cleaning up titles, adding notes, labelling — the GUI follows along: changed rows get a fading ◆ marker, the open document's details take in the outside change without losing your unsaved edits (a field you both changed shows a banner: use the disk version or keep yours), the label editor merges outside edits into yours line by line, and reloads when `label/labels.json` or a pass changes outside.
 
 ## Development
 
