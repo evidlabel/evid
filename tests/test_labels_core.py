@@ -119,6 +119,39 @@ def test_labels_notes_annotations(doc):
         labels.add_note(doc, "nope", "x")
 
 
+def test_edit_and_remove_a_label_note(doc):
+    span, _score, _how = labels.span_of(doc, "the municipality did not investigate")
+    labels.add_label(doc, span, "deadline", note="Key finding.")
+    labels.add_note(doc, "deadline", "Checked against the letter.", by="agent")
+    rec = labels.edit_note(doc, "deadline", 0, "Key finding, revised.")
+    assert [n["text"] for n in rec["notes"]] == [
+        "Key finding, revised.",
+        "Checked against the letter.",
+    ]
+    assert rec["notes"][0]["by"] == "you"
+    assert rec["notes"][1]["by"] == "agent"
+    rec = labels.remove_note(doc, "deadline", 1)
+    assert [n["text"] for n in rec["notes"]] == ["Key finding, revised."]
+    assert labels.read(doc)["labels"][0]["key"] == "deadline"
+    with pytest.raises(KeyError):
+        labels.remove_note(doc, "deadline", 3)
+    with pytest.raises(ValueError, match="empty"):
+        labels.edit_note(doc, "deadline", 0, "  ")
+    ann = labels.add_annotation(doc, labels.span_at(doc, 0, 10), "Odd header")
+    labels.annotate(doc, ann["id"], "letterhead")
+    labels.edit_annotation_note(doc, ann["id"], 1, "it is the letterhead")
+    assert [n["text"] for n in labels.read(doc)["annotations"][0]["notes"]] == [
+        "Odd header",
+        "it is the letterhead",
+    ]
+    labels.remove_annotation_note(doc, ann["id"], 0)
+    assert [n["text"] for n in labels.read(doc)["annotations"][0]["notes"]] == [
+        "it is the letterhead"
+    ]
+    labels.remove_annotation_note(doc, ann["id"], 0)
+    assert labels.read(doc)["annotations"] == []
+
+
 def test_unmapped_glyph_cannot_be_labelled(tmp_path):
     d = tmp_path / "d"
     d.mkdir()

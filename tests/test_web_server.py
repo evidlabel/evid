@@ -273,6 +273,18 @@ def test_label_reader(server, doc, app):
     )
     assert status == 200
     assert out["passes"][0]["quotes"][0]["notes"][0]["text"] == "check this"
+    status, out = call(
+        server,
+        "PUT",
+        f"/api/sets/case/docs/{doc}/quotes/q1/notes/0",
+        {"text": "check the date", "pass": "p1"},
+    )
+    assert status == 200
+    assert out["passes"][0]["quotes"][0]["notes"][0]["text"] == "check the date"
+    status, out = call(
+        server, "DELETE", f"/api/sets/case/docs/{doc}/quotes/q1/notes/0?pass=p1"
+    )
+    assert status == 200 and out["passes"][0]["quotes"][0]["notes"] == []
     assert (
         call(
             server,
@@ -301,6 +313,32 @@ def test_label_reader(server, doc, app):
     )
     assert status == 200 and len(out["labels"][0]["notes"]) == 2
     status, out = call(
+        server,
+        "PUT",
+        f"/api/sets/case/docs/{doc}/labels/hello/notes/0",
+        {"text": "why, revised"},
+    )
+    assert status == 200 and out["labels"][0]["notes"][0]["text"] == "why, revised"
+    status, out = call(
+        server, "DELETE", f"/api/sets/case/docs/{doc}/labels/hello/notes/1"
+    )
+    assert status == 200 and [n["text"] for n in out["labels"][0]["notes"]] == [
+        "why, revised"
+    ]
+    assert (
+        call(server, "DELETE", f"/api/sets/case/docs/{doc}/labels/hello/notes/5")[0]
+        == 404
+    )
+    assert (
+        call(
+            server,
+            "PUT",
+            f"/api/sets/case/docs/{doc}/labels/hello/notes/0",
+            {"text": "  "},
+        )[0]
+        == 400
+    )
+    status, out = call(
         server, "PUT", f"/api/sets/case/docs/{doc}/labels/hello", {"key": "greeting"}
     )
     assert status == 200 and out["labels"][0]["key"] == "greeting"
@@ -319,6 +357,19 @@ def test_label_reader(server, doc, app):
         {"text": "more"},
     )
     assert status == 200 and len(out["annotations"][0]["notes"]) == 2
+    status, out = call(
+        server,
+        "PUT",
+        f"/api/sets/case/docs/{doc}/annotations-on-text/{aid}/notes/0",
+        {"text": "check this"},
+    )
+    assert status == 200 and out["annotations"][0]["notes"][0]["text"] == "check this"
+    status, out = call(
+        server,
+        "DELETE",
+        f"/api/sets/case/docs/{doc}/annotations-on-text/{aid}/notes/1",
+    )
+    assert status == 200 and len(out["annotations"][0]["notes"]) == 1
     assert (
         call(server, "DELETE", f"/api/sets/case/docs/{doc}/annotations-on-text/{aid}")[
             1

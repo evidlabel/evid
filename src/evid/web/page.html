@@ -258,11 +258,18 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 #edside h4 { margin: 2px 0 0; }
 #edside .list { flex: 1; max-height: none; min-height: 48px; }
 #edside .list:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
-#edside .item { display: flex; gap: 4px; align-items: center; }
-#edside .item b { overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
-#edside .item .meta { color: var(--muted); flex: none; font-size: 11px; }
+#edside .item { display: flex; gap: 4px; align-items: baseline; flex-wrap: wrap; white-space: normal; overflow: visible; }
+#edside .item b { overflow: hidden; text-overflow: ellipsis; font-weight: 600; flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+#edside .item .meta { color: var(--muted); flex: none; font-size: 11px; white-space: nowrap; }
 #edside .item .mini { flex: none; margin-left: auto; }
+#edside .nlines { flex: 1 0 100%; display: flex; flex-direction: column; gap: 1px; padding: 1px 0 3px; white-space: normal; overflow: visible; }
+#edside .nline { white-space: pre-wrap; overflow: visible; text-overflow: unset; word-break: break-word; color: var(--hl-note); font-style: italic; font-size: 11.5px; line-height: 1.35; padding: 1px 0; cursor: pointer; }
+#edside .nline:hover { color: var(--fg); }
 #edside .pass { color: var(--muted); font-size: 11px; background: var(--panel2); }
+.notedlg { display: flex; flex-direction: column; gap: 8px; }
+.notedlg .nrow { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.notedlg textarea { width: 100%; resize: vertical; min-height: 52px; }
+.notedlg .nmeta { font-size: 11px; }
 #logwrap { border-top: 1px solid var(--line); background: var(--panel2); }
 #loghead { display: flex; align-items: center; gap: 6px; padding: 2px 8px; color: var(--muted); font-size: 12px; user-select: none; }
 #log { height: 110px; overflow: auto; margin: 0; padding: 4px 8px; font: 11px/1.4 var(--mono); white-space: pre-wrap; background: var(--panel); border-top: 1px solid var(--line); }
@@ -320,7 +327,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
           <button id="b-ingest" title="Add PDFs from disk">Ingest PDF</button>
           <button id="b-url" title="Download a web page or PDF">Add from URL</button>
           <button id="b-index" title="Vector-index every unindexed document">Index docs</button>
-          <button id="b-label" title="Label the selected document (the Label pane; Enter or double-click a row)">Label</button>
           <button id="b-opendir" title="Open the document folder">Open dir</button>
         </div>
         <div id="qbar">
@@ -405,7 +411,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
   <aside id="termpane" hidden>
     <div class="tbar"><b id="t-title" title="Terminals belong to one evidence set; switching sets switches them">Agents</b>
       <button id="t-sel" title="Type a reference to what you selected (documents, labels, text in the label editor) into the terminal">Selection</button>
-      <button id="t-ext" title="Open the agent in a separate Ptyxis window">Ptyxis</button>
       <button id="t-add" title="Add a terminal below: a shell, or an agent such as claude">+</button>
       <button id="t-close" title="Hide the pane (the sessions keep running)">›</button></div>
     <div id="tempty" hidden><span id="tempty-msg"></span><span class="row"><button class="primary" id="t-start"></button><button id="t-agent">Add an agent</button></span></div>
@@ -759,6 +764,17 @@ function agentBadge(names) {
 function noteLine(note) {
   const lines = String(note || '').trim().split('\n');
   return lines[0] + (lines.length > 1 ? ` (+${lines.length - 1})` : '');
+}
+
+// Index among notes that are stored on the record. A pass-supplied note
+// (from_pass) is shown but has no slot to edit.
+function storedNoteIndex(notes, i) {
+  notes = notes || [];
+  i = i | 0;
+  if (i < 0 || i >= notes.length || (notes[i] && notes[i].from_pass)) return null;
+  let n = 0;
+  for (let k = 0; k < i; k++) if (!notes[k].from_pass) n++;
+  return n;
 }
 
 function shortUuid(u) { return u.length > 16 ? u.slice(0, 8) + '…' + u.slice(-8) : u; }
@@ -1180,7 +1196,7 @@ const curDoc = () => S.cur ? S.byUuid.get(S.cur) : null;
 
 function updateActions() {
   const one = !!curDoc();
-  for (const id of ['#b-label', '#b-opendir', '#d-save', '#d-view', '#d-copy']) $(id).disabled = !one;
+  for (const id of ['#b-opendir', '#d-save', '#d-view', '#d-copy']) $(id).disabled = !one;
   $('#b-index').disabled = !S.slug;
   $('#b-index').title = CFG.has_vec ? 'Vector-index every unindexed document' : CFG.vec_install;
   for (const id of ['#b-ingest', '#b-url']) $(id).disabled = !S.slug;
@@ -1963,11 +1979,15 @@ function switchPane(p, focus = true) {
 }
 $$('.ptabs button').forEach(b => b.onclick = () => switchPane(b.dataset.p));
 
-function findRec(kind, id) {
+function findRec(kind, id, passId) {
   if (!S.ed) return null;
   if (kind === 'h') return (S.ed.labels || []).find(l => l.key === id) || null;
   if (kind === 'a') return (S.ed.annotations || []).find(a => a.id === id) || null;
-  for (const p of S.ed.passes || []) {
+  const passes = S.ed.passes || [];
+  const ordered = passId
+    ? passes.filter(p => p.id === passId).concat(passes.filter(p => p.id !== passId))
+    : passes;
+  for (const p of ordered) {
     const q = (p.quotes || []).find(x => x.key === id);
     if (q) return q;
   }
@@ -1994,15 +2014,21 @@ function edSide() {
   $('#ed-nlabels').textContent = (labels.length + anns.length) ? `(${labels.length + anns.length})` : '';
   $('#ed-nmachine').textContent = nq ? `(${nq})` : '';
   const human = [];
-  for (const l of labels) human.push(sideRow('h', l.key, l.key, `p${l.page ?? '?'} · ${(l.notes || []).length}`, l.text, () => addNote(l.key)));
+  for (const l of labels) {
+    const notes = l.notes || [];
+    const tip = [l.text, ...notes.map(n => n.text)].filter(Boolean).join('\n');
+    human.push(sideRow('h', l.key, l.key, `p${l.page ?? '?'} · ${notes.length}`, tip, notes));
+  }
   for (const u of S.ed.unplaced || []) {
     const pct = u.score == null ? '' : ` · ${Math.round(u.score * 100)}%`;
     human.push(el('div', { class: 'item', title: u.text || '' }, el('b', { text: u.key || '(no key)' }), el('span', { class: 'meta', text: `unplaced${pct}` })));
   }
   for (const a of anns) {
-    const preview = ((a.notes || [])[0] || {}).text || a.text || a.id;
+    const notes = a.notes || [];
+    const preview = (notes[0] || {}).text || a.text || a.id;
     const short = preview.length > 32 ? preview.slice(0, 31) + '…' : preview;
-    human.push(sideRow('a', a.id, short, `p${a.page ?? '?'} · ${(a.notes || []).length}`, (a.notes || []).map(n => n.text).filter(Boolean).join('\n') || a.text, () => addAnnNote(a.id)));
+    const tip = notes.map(n => n.text).filter(Boolean).join('\n') || a.text;
+    human.push(sideRow('a', a.id, short, `p${a.page ?? '?'} · ${notes.length}`, tip, notes));
   }
   $('#ed-labels').replaceChildren(...(human.length ? human : [el('div', { class: 'empty', text: '(none yet)' })]));
   const machine = [];
@@ -2012,16 +2038,21 @@ function edSide() {
     for (const q of p.quotes || []) if (!q.lost) {
       const notes = q.notes || [];
       const tip = [q.text, ...notes.map(n => n.text)].filter(Boolean).join('\n');
-      machine.push(sideRow('m', q.key, q.key, `p${q.page ?? '?'} · ${notes.length}`, tip, () => addQuoteNote(p.id, q.key), p.id));
+      machine.push(sideRow('m', q.key, q.key, `p${q.page ?? '?'} · ${notes.length}`, tip, notes, p.id));
     }
   }
   $('#ed-machine').replaceChildren(...(machine.length ? machine : [el('div', { class: 'empty', text: '(none yet)' })]));
 }
-function sideRow(kind, id, title, meta, tip, noteFn, passId) {
+function sideRow(kind, id, title, meta, tip, notes, passId) {
+  notes = notes || [];
   const row = el('div', { class: 'item', 'data-kind': kind, 'data-id': id, title: tip || '', onclick: () => edGo(kind, id, passId),
     oncontextmenu: e => edMenu(e, kind, id), ...(passId ? { 'data-pass': passId } : {}) },
-    el('b', { text: title }), el('span', { class: 'meta', text: meta }));
-  if (noteFn) row.append(el('button', { class: 'mini', text: '+ note', title: 'Add a note', onclick: ev => { ev.stopPropagation(); noteFn(); } }));
+    el('b', { text: title }), el('span', { class: 'meta', text: meta }),
+    el('button', { class: 'mini', type: 'button', text: notes.length ? 'notes' : '+ note', title: 'Read, edit, or add notes',
+      onclick: ev => { ev.stopPropagation(); openNotes(kind, id, passId); } }));
+  if (notes.length) row.append(el('div', { class: 'nlines' }, ...notes.map((n, i) =>
+    el('div', { class: 'nline', title: noteStamp(n), text: n.text || '',
+      onclick: ev => { ev.stopPropagation(); openNotes(kind, id, passId, i); } }))));
   return row;
 }
 function edMenu(e, kind, id) {
@@ -2030,18 +2061,21 @@ function edMenu(e, kind, id) {
   edGo(kind, id, passId);
   const items = [];
   if (kind === 'h') items.push(
+    { label: 'Notes…', fn: () => openNotes('h', id) },
     { label: 'Rename', fn: () => renameLabel(id) },
     { label: 'Delete', fn: () => deleteLabel(id) },
     { label: 'Copy as YAML', fn: () => copyLabelYaml([id]) });
-  else if (kind === 'a') items.push({ label: 'Delete', fn: () => deleteAnn(id) });
+  else if (kind === 'a') items.push(
+    { label: 'Notes…', fn: () => openNotes('a', id) },
+    { label: 'Delete', fn: () => deleteAnn(id) });
   else items.push(
-    { label: 'Add note', fn: () => addQuoteNote(passId, id) },
+    { label: 'Notes…', fn: () => openNotes('m', id, passId) },
     { label: 'Copy as YAML', fn: () => copyLabelYaml([id]) });
   showMenu(e.clientX, e.clientY, items);
 }
 async function afterWrite(r, msg) {
   if (!S.ed) return;
-  showText(S.ed.slug, S.ed.uuid, r, true);
+  showText(S.ed.slug, S.ed.uuid, r, !dlg.open);
   if (msg) status(msg, 3000);
   const d = S.ed.slug === S.slug && S.byUuid.get(S.ed.uuid);
   if (d && r.labels && d.nlabels !== r.labels.length) { d.nlabels = r.labels.length; renderDocs(); }
@@ -2082,20 +2116,111 @@ function machineRec() {
   }
   return null;
 }
-async function addQuoteNote(passId, key) {
-  const text = await promptDlg('Note', `Note on ${key}:`, '');
-  if (!text || !S.ed) return;
-  try {
-    const r = await api('POST', docUrl(S.ed.slug, S.ed.uuid, `/quotes/${enc(key)}/notes`), { text, pass: passId || '' });
-    S.ed.rec = { kind: 'm', id: key, pass: passId || undefined };
-    await afterWrite(r, `Noted ${key}`);
-  } catch (e) { status(e.message, 6000, true); }
+function noteStamp(n) {
+  const at = n && n.at ? String(n.at).replace('T', ' ').replace(/(Z|\+\d\d:\d\d)$/, '') : '';
+  const who = n && n.from_pass ? 'from the pass' : (n && n.by) || '';
+  return [who, at].filter(Boolean).join(' · ') || 'note';
+}
+async function noteWrite(op, kind, id, passId, index, text) {
+  if (!S.ed) return;
+  const slug = S.ed.slug, uuid = S.ed.uuid;
+  let r;
+  if (kind === 'h') {
+    const path = `/labels/${enc(id)}/notes` + (op === 'add' ? '' : `/${index}`);
+    r = await api(op === 'add' ? 'POST' : op === 'edit' ? 'PUT' : 'DELETE', docUrl(slug, uuid, path), op === 'del' ? undefined : { text });
+  } else if (kind === 'a') {
+    if (op === 'add') r = await api('PUT', docUrl(slug, uuid, `/annotations-on-text/${enc(id)}`), { text });
+    else r = await api(op === 'edit' ? 'PUT' : 'DELETE', docUrl(slug, uuid, `/annotations-on-text/${enc(id)}/notes/${index}`), op === 'del' ? undefined : { text });
+  } else {
+    const q = passId ? `?pass=${enc(passId)}` : '';
+    if (op === 'add') r = await api('POST', docUrl(slug, uuid, `/quotes/${enc(id)}/notes`), { text, pass: passId || '' });
+    else r = await api(op === 'edit' ? 'PUT' : 'DELETE', docUrl(slug, uuid, `/quotes/${enc(id)}/notes/${index}${q}`), op === 'del' ? undefined : { text, pass: passId || '' });
+  }
+  const rec = { kind, id };
+  if (passId) rec.pass = passId;
+  S.ed.rec = rec;
+  const msg = op === 'del' ? `Removed a note on ${id}` : op === 'edit' ? `Updated the note on ${id}` : `Noted ${id}`;
+  await afterWrite(r, msg);
+  if (dlg.open && !findRec(kind, id, passId)) closeDialog(null);
+}
+function noteCard(kind, id, passId, notes, i, paint) {
+  const n = notes[i];
+  const ta = el('textarea', { rows: 3, ...(n.from_pass ? { readonly: true } : {}) });
+  ta.value = n.text || '';
+  const meta = el('div', { class: 'muted nmeta', text: noteStamp(n) });
+  if (n.from_pass) return el('div', { class: 'nrow' }, meta, ta);
+  const save = el('button', { type: 'button', text: 'Save', disabled: true });
+  const del = el('button', { type: 'button', text: 'Delete' });
+  ta.addEventListener('input', () => { save.disabled = !ta.value.trim() || ta.value.trim() === (n.text || '').trim(); });
+  save.onclick = async () => {
+    const stored = storedNoteIndex(notes, i);
+    if (stored == null) return;
+    save.disabled = true;
+    try {
+      await noteWrite('edit', kind, id, passId, stored, ta.value.trim());
+      if (!dlg.open) return;
+      paint();
+      const box = document.querySelectorAll('#dlg .notedlg textarea')[i];
+      if (box) box.focus();
+    } catch (e) { status(e.message, 6000, true); save.disabled = false; }
+  };
+  del.onclick = async () => {
+    const stored = storedNoteIndex(notes, i);
+    if (stored == null) return;
+    del.disabled = true;
+    try {
+      await noteWrite('del', kind, id, passId, stored);
+      if (!dlg.open || !findRec(kind, id, passId)) return;
+      paint();
+      const addBox = document.querySelector('#dlg-body textarea:last-of-type');
+      if (addBox) addBox.focus();
+    } catch (e) { status(e.message, 6000, true); del.disabled = false; }
+  };
+  return el('div', { class: 'nrow' }, meta, ta, el('div', { class: 'row' }, save, del));
+}
+function openNotes(kind, id, passId, focus) {
+  if (!S.ed) return;
+  const rec0 = findRec(kind, id, passId);
+  if (!rec0) return;
+  edGo(kind, id, passId);
+  const list = el('div', { class: 'notedlg' });
+  const add = el('textarea', { rows: 3, placeholder: 'Add a note' });
+  const addBtn = el('button', { type: 'button', text: 'Add' });
+  function paint() {
+    const rec = findRec(kind, id, passId);
+    if (!rec) { closeDialog(null); return; }
+    const notes = rec.notes || [];
+    list.replaceChildren(...(notes.length
+      ? notes.map((n, i) => noteCard(kind, id, passId, notes, i, paint))
+      : [el('div', { class: 'muted', text: 'No notes yet.' })]));
+  }
+  addBtn.onclick = async () => {
+    const text = add.value.trim();
+    if (!text) { add.focus(); return; }
+    addBtn.disabled = true;
+    try {
+      await noteWrite('add', kind, id, passId, null, text);
+      if (!dlg.open) return;
+      add.value = '';
+      paint();
+      add.focus();
+    } catch (e) { status(e.message, 6000, true); }
+    finally { addBtn.disabled = false; }
+  };
+  paint();
+  const title = kind === 'a' ? 'Notes on this annotation' : `Notes on ${id}`;
+  const body = [rec0.text ? el('pre', { class: 'box', text: rec0.text }) : null, list, el('label', { text: 'New note' }), add, el('div', { class: 'row' }, addBtn)];
+  const pending = dialog(title, body, [{ label: 'Close', value: () => null }]);
+  const boxes = [...list.querySelectorAll('textarea')];
+  const want = focus == null ? add : boxes[focus];
+  if (want) want.focus();
+  return pending;
 }
 async function addAnn() {
   if (!S.ed) return;
   const inMachine = document.activeElement && document.activeElement.closest && document.activeElement.closest('#ed-machine');
   const hit = machineRec();
-  if (hit && (inMachine || !textSel())) { await addQuoteNote(hit.pass, hit.key); return; }
+  if (hit && (inMachine || !textSel())) { openNotes('m', hit.key, hit.pass); return; }
   const sel = textSel();
   if (!sel) { status('Select a passage to annotate', 4000, true); return; }
   const note = await promptDlg('Annotate', 'Note on the selected passage:', '');
@@ -2103,22 +2228,6 @@ async function addAnn() {
   try {
     const r = await api('POST', docUrl(S.ed.slug, S.ed.uuid, '/annotations-on-text'), { start: sel.start, end: sel.end, text: note });
     await afterWrite(r, 'Annotated');
-  } catch (e) { status(e.message, 6000, true); }
-}
-async function addNote(key) {
-  const text = await promptDlg('Note', `Note on ${key}:`, '');
-  if (!text || !S.ed) return;
-  try {
-    const r = await api('POST', docUrl(S.ed.slug, S.ed.uuid, `/labels/${enc(key)}/notes`), { text });
-    await afterWrite(r, `Noted ${key}`);
-  } catch (e) { status(e.message, 6000, true); }
-}
-async function addAnnNote(id) {
-  const text = await promptDlg('Note', 'Note on this annotation:', '');
-  if (!text || !S.ed) return;
-  try {
-    const r = await api('PUT', docUrl(S.ed.slug, S.ed.uuid, `/annotations-on-text/${enc(id)}`), { text });
-    await afterWrite(r, 'Noted');
   } catch (e) { status(e.message, 6000, true); }
 }
 async function renameLabel(key) {
@@ -2450,7 +2559,8 @@ const HELP = `<p>Humans and agents share one legal document set. Cited wording i
 <tr><td><kbd>↑</kbd> <kbd>↓</kbd> (Human or Machine list)</td><td>move through that list</td></tr>
 <tr><td><kbd>Ctrl+F</kbd> (Label pane)</td><td>find words in the text: Enter / Shift+Enter (or F3) next / previous; the match is selected, so <kbd>Ctrl+L</kbd> labels it; Esc closes</td></tr>
 <tr><td><kbd>Ctrl+L</kbd> (Label pane)</td><td>label the selected passage (saved at once)</td></tr>
-<tr><td><kbd>Ctrl+M</kbd> (Label pane)</td><td>annotate the selected passage, or the selected machine quote</td></tr>
+<tr><td><kbd>Ctrl+M</kbd> (Label pane)</td><td>annotate the selected passage, or open the notes on the selected machine quote</td></tr>
+<tr><td>notes (Label pane)</td><td>each label, annotation, and machine quote lists its notes. Notes… reads them, edits or deletes one, and adds another</td></tr>
 <tr><td><kbd>Ctrl++</kbd> / <kbd>Ctrl+−</kbd> / <kbd>Ctrl+0</kbd>, Ctrl+wheel (Label pane)</td><td>text size</td></tr>
 <tr><td><kbd>Ctrl+S</kbd></td><td>Detail pane: save the detail. The Label pane saves as you label.</td></tr>
 ${CFG.app ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr>' : ''}
@@ -2459,7 +2569,7 @@ ${CFG.app ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr
 <tr><td>Agent (top right)</td><td>terminals running your agent or a shell for the selected set (marked <i>agent</i> in the set tree): they start in the set's folder, and <span class="mono">evid</span> there uses this data dir and set. Selection types what you selected into the terminal. Ctrl+Shift+C / V copy and paste.</td></tr>
 <tr><td>drag rows onto a set</td><td>copy the documents there</td></tr>
 <tr><td>drag a tag pill onto a row</td><td>tag that document</td></tr></table>
-<p><b>Docs</b> — Ingest PDF · Add from URL · Index · Label (select a passage in the Label pane) · Open dir</p>
+<p><b>Docs</b> — Ingest PDF · Add from URL · Index · Open dir</p>
 <p class="muted">Data: ${CFG.data_dir.replace(/&/g, '&amp;').replace(/</g, '&lt;')}<br>Editor: ${String(CFG.editor).replace(/</g, '&lt;')} (set <span class="mono">editor:</span> in evid.yml)</p>`;
 function help() { const d = el('div', { class: 'help' }); d.innerHTML = HELP; dialog('evid help', d, [{ label: 'Close', primary: true }]); }
 $('#b-help').onclick = help;
@@ -2523,7 +2633,6 @@ $('#b-import').onclick = importDir;
 $('#b-ingest').onclick = ingestPdf;
 $('#b-url').onclick = addFromUrl;
 $('#b-index').onclick = indexDocs;
-$('#b-label').onclick = () => curDoc() && openEditor(S.slug, S.cur);
 $('#b-opendir').onclick = () => curDoc() && openDoc(S.slug, S.cur, 'dir');
 $('#loghead').onclick = () => { const w = $('#logwrap'); w.classList.toggle('fold'); $('#logtw').textContent = w.classList.contains('fold') ? '▸' : '▾'; store('logopen', !w.classList.contains('fold')); };
 if (load('logopen', false)) $('#loghead').click();
@@ -2733,8 +2842,6 @@ if (CFG.term) {
   $('#t-agent').onclick = () => termAdd(true);
   $('#t-start').onclick = () => termNew(CFG.agent || '').catch(e => status(e.message, 6000, true));
   $('#t-sel').onclick = () => { const t = selectionText(currentSelection()); if (!t) return status('Select a document first', 3000, true); sendToAgent(t, false); };
-  $('#t-ext').hidden = !CFG.ptyxis;
-  $('#t-ext').onclick = async () => { try { await api('POST', '/api/term/external', { slug: S.slug }); status('Opened in a new terminal window', 3000); } catch (e) { status(e.message, 6000, true); } };
   (() => {  // resizable from its left edge
     const d = $('#divider2'), w = load('termw', null);
     if (w) document.documentElement.style.setProperty('--term-w', w + 'px');

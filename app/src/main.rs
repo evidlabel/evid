@@ -18,6 +18,71 @@ use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 
 struct Server(Mutex<Option<Child>>);
 
+/// Desktop-file id. GNOME's app switcher looks up `<id>.desktop` for the icon.
+const APP_ID: &str = "io.github.evidlabel.evid";
+const ICON_PNG: &[u8] = include_bytes!("../icons/icon.png");
+
+/// Write the icon and a desktop entry so the switcher can find them.
+/// GTK's own application id is left unset: registering one makes GTK refuse a
+/// second evid-app, and two data dirs are allowed to be open at once.
+#[cfg(target_os = "linux")]
+fn publish_desktop_entry() -> Option<PathBuf> {
+    let base = std::env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))?;
+    let icon = base.join(format!("icons/hicolor/512x512/apps/{APP_ID}.png"));
+    let desktop = base.join(format!("applications/{APP_ID}.desktop"));
+    std::fs::create_dir_all(icon.parent()?).ok()?;
+    std::fs::create_dir_all(desktop.parent()?).ok()?;
+    std::fs::write(&icon, ICON_PNG).ok()?;
+    let exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("evid-app"));
+    let exec = exe.display().to_string().replace('"', "\\\"");
+    let text = format!(
+        "[Desktop Entry]\n\
+         Type=Application\n\
+         Name=evid\n\
+         Comment=Evidence manager\n\
+         Exec=\"{exec}\"\n\
+         Icon={icon}\n\
+         StartupWMClass={APP_ID}\n\
+         Terminal=false\n\
+         Categories=Office;\n",
+        icon = icon.display(),
+    );
+    std::fs::write(&desktop, text).ok()?;
+    Some(icon)
+}
+
+#[cfg(target_os = "linux")]
+fn set_switcher_icon(window: &tauri::WebviewWindow, icon: Option<&std::path::Path>) {
+    use gtk::prelude::*;
+
+    let Ok(gtk_win) = window.gtk_window() else {
+        return;
+    };
+    if let Some(path) = icon {
+        let _ = gtk_win.set_icon_from_file(path);
+    }
+    // Wayland ignores the window icon. The shell matches this id to the desktop file.
+    if gtk_win.display().backend().is_wayland() {
+        gtk_win.realize();
+        if let Some(gdk_win) = gtk_win.window() {
+            let id = std::ffi::CString::new(APP_ID).unwrap();
+            unsafe {
+                gdk_wayland_window_set_application_id(gdk_win.as_ptr().cast(), id.as_ptr());
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+extern "C" {
+    fn gdk_wayland_window_set_application_id(
+        window: *mut std::ffi::c_void,
+        application_id: *const std::ffi::c_char,
+    );
+}
+
 fn free_port() -> u16 {
     TcpListener::bind("127.0.0.1:0")
         .and_then(|l| l.local_addr())
@@ -74,13 +139,27 @@ fn main() {
         exit(2)
     });
 
+    #[cfg(target_os = "linux")]
+    let icon = publish_desktop_entry();
+
     tauri::Builder::default()
         .manage(Server(Mutex::new(child)))
         .setup(move |app| {
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                 .title("evid gui")
                 .inner_size(1400.0, 900.0)
+                .decorations(true)
+                .maximized(true)
+                .visible(false)
                 .build()?;
+            #[cfg(target_os = "linux")]
+            set_switcher_icon(&window, icon.as_deref());
+            // Maximized fills the work area and leaves the title bar. Clear any
+            // remembered exclusive fullscreen so the close button stays.
+            let _ = window.set_fullscreen(false);
+            let _ = window.set_decorations(true);
+            let _ = window.maximize();
+            let _ = window.show();
             let handle = app.handle().clone();
             std::thread::spawn(move || {
                 let mut seen = raise.as_ref().and_then(mtime);

@@ -118,7 +118,12 @@ def test_candidate_note_stays_on_the_quote(tmp_path):
     (q,) = found_quotes(doc)
     assert q["key"] == "q1"
     assert q["notes"] == [
-        {"at": stored["timestamp"], "by": "pass", "text": "The holding."}
+        {
+            "at": stored["timestamp"],
+            "by": "pass",
+            "text": "The holding.",
+            "from_pass": True,
+        }
     ]
 
 
@@ -281,7 +286,13 @@ def test_list_passes_empty_without_directory(tmp_path):
 def test_note_quote_appends_and_survives_reanchor(tmp_path):
     import pytest
 
-    from evid.core.quote_pass import load_pass, note_quote, reanchor_passes
+    from evid.core.quote_pass import (
+        edit_quote_note,
+        load_pass,
+        note_quote,
+        reanchor_passes,
+        remove_quote_note,
+    )
     from tests.labelkit import label_doc
 
     doc = tmp_path / "doc"
@@ -304,6 +315,16 @@ def test_note_quote_appends_and_survives_reanchor(tmp_path):
         note_quote(doc, "q1", "  ")
     with pytest.raises(KeyError):
         note_quote(doc, "q1", "elsewhere", pass_id="no-such-pass")
+    edited = edit_quote_note(doc, "q1", 0, "The date is 2024.")
+    assert edited["notes"][0]["text"] == "The date is 2024."
+    assert edited["notes"][0]["by"] == "you"
+    assert edited["notes"][1]["text"] == "See page 2."
+    removed = remove_quote_note(doc, "q1", 1)
+    assert [n["text"] for n in removed["notes"]] == ["The date is 2024."]
+    with pytest.raises(KeyError):
+        remove_quote_note(doc, "q1", 4)
+    with pytest.raises(ValueError):
+        edit_quote_note(doc, "q1", 0, " ")
 
 
 def test_extract_alone_does_not_write_a_pass(tmp_path):

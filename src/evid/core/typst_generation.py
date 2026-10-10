@@ -85,7 +85,7 @@ def _label_typ_document(name: str, date: str, body: str) -> str:
 """
 
 
-def web_to_pdf(url: str, output_dir: Path, html: str = None) -> tuple:
+def web_to_pdf(url: str, output_dir: Path, html: str = None, stem: str = None) -> tuple:
     """Fetch a web page, render it as a timestamped Typst document, compile to PDF.
 
     If html is provided the network fetch is skipped.
@@ -138,7 +138,10 @@ def web_to_pdf(url: str, output_dir: Path, html: str = None) -> tuple:
 {text}
 """
 
-    stem = Path(url.rsplit("/", maxsplit=1)[-1] or "document").stem or "document"
+    stem = (
+        stem or Path(url.rsplit("/", maxsplit=1)[-1] or "document").stem or "document"
+    )
+    stem = Path(stem).name or "document"
     typ_path = output_dir / f"{stem}.typ"
     pdf_path = output_dir / f"{stem}.pdf"
     typ_path.write_text(typst_content, encoding="utf-8")

@@ -222,7 +222,18 @@ def note_quote(
             fcntl.flock(lf, fcntl.LOCK_UN)
 
 
-def _append_quote_note(folder: Path, key: str, note: dict, pass_id: str | None) -> dict:
+def _write_pass(path: Path, qp: QuotePass) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(
+        qp.model_dump_json(indent=2, by_alias=True) + "\n",
+        encoding="utf-8",
+    )
+    tmp.replace(path)
+
+
+def _locate_quote(
+    folder: Path, key: str, pass_id: str | None
+) -> tuple[Path, QuotePass, dict]:
     for path in sorted(folder.glob("*.json")):
         qp = load_pass(path)
         if pass_id and qp.id != pass_id:
@@ -231,18 +242,81 @@ def _append_quote_note(folder: Path, key: str, note: dict, pass_id: str | None) 
             (q for q in qp.found if q.get("key") == key and not q.get("lost")),
             None,
         )
-        if rec is None:
-            continue
-        rec.setdefault("notes", []).append(note)
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text(
-            qp.model_dump_json(indent=2, by_alias=True) + "\n",
-            encoding="utf-8",
-        )
-        tmp.replace(path)
-        return dict(rec)
+        if rec is not None:
+            return path, qp, rec
     msg = f"no machine quote {key!r}"
     raise KeyError(msg)
+
+
+def _update_quote_notes(doc_dir: Path, key: str, pass_id: str | None, change) -> dict:
+    doc_dir = Path(doc_dir)
+    folder = doc_dir / MACHINE_DIR
+    if not folder.is_dir():
+        msg = f"no machine quote {key!r}"
+        raise KeyError(msg)
+    lock = doc_dir / ".labels.lock"
+    with lock.open("a") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            path, qp, rec = _locate_quote(folder, key, pass_id)
+            change(rec.setdefault("notes", []))
+            _write_pass(path, qp)
+            return dict(rec)
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
+
+
+def _append_quote_note(folder: Path, key: str, note: dict, pass_id: str | None) -> dict:
+    path, qp, rec = _locate_quote(folder, key, pass_id)
+    rec.setdefault("notes", []).append(note)
+    _write_pass(path, qp)
+    return dict(rec)
+
+
+def _quote_note_at(notes: list, index: int, key: str) -> None:
+    if index < 0 or index >= len(notes):
+        msg = f"no note {index} on {key!r}"
+        raise KeyError(msg)
+
+
+def edit_quote_note(
+    doc_dir: Path,
+    key: str,
+    index: int,
+    text: str,
+    pass_id: str | None = None,
+) -> dict:
+    """Replace stored note *index* on machine quote *key*. The author stays.
+
+    A note the pass itself supplied (``from_pass``) is not stored, so it has
+    no index here.
+    """
+    text = (text or "").strip()
+    if not text:
+        msg = "the note is empty"
+        raise ValueError(msg)
+    when = datetime.now(tz=UTC).isoformat(timespec="seconds")
+
+    def change(notes: list) -> None:
+        _quote_note_at(notes, index, key)
+        if notes[index].get("text") == text:
+            return
+        notes[index]["text"] = text
+        notes[index]["at"] = when
+
+    return _update_quote_notes(doc_dir, key, pass_id, change)
+
+
+def remove_quote_note(
+    doc_dir: Path, key: str, index: int, pass_id: str | None = None
+) -> dict:
+    """Drop stored note *index* from machine quote *key*. The quote stays."""
+
+    def change(notes: list) -> None:
+        _quote_note_at(notes, index, key)
+        del notes[index]
+
+    return _update_quote_notes(doc_dir, key, pass_id, change)
 
 
 def found_with_notes(qp: QuotePass) -> list[dict]:
@@ -264,7 +338,15 @@ def found_with_notes(qp: QuotePass) -> list[dict]:
         note = by_key.get(str(span.get("key") or ""), "")
         notes = [dict(n) for n in span.get("notes") or []]
         if note and note not in {n.get("text") for n in notes}:
-            notes.insert(0, {"at": qp.timestamp, "by": "pass", "text": note})
+            notes.insert(
+                0,
+                {
+                    "at": qp.timestamp,
+                    "by": "pass",
+                    "text": note,
+                    "from_pass": True,
+                },
+            )
             span["notes"] = notes
         out.append(span)
     return out

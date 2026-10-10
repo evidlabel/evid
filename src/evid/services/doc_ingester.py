@@ -16,6 +16,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import unquote, urlparse
@@ -60,6 +61,8 @@ def resolve_source(source: str) -> ResolvedSource:
     """Resolve a local PDF path or HTTP(S) URL to a local PDF for ingest.
 
     For URLs: download a PDF response, or render an HTML page to PDF via Typst.
+    A YouTube video uses its caption track instead of the watch page. No captions
+    raises ValueError ("This video is not transcribed.") and does not save the page.
     Raises ``ValueError`` / ``FileNotFoundError`` / ``requests.RequestException``
     on failure (callers map these to UI / CLI exit codes).
     """
@@ -77,6 +80,12 @@ def resolve_source(source: str) -> ResolvedSource:
             pdf_path=file_path,
             original_name=file_path.name,
         )
+
+    from evid.services.youtube import youtube_video_id
+
+    video_id = youtube_video_id(source)
+    if video_id:
+        return _resolve_youtube(source, video_id)
 
     import requests
 
@@ -136,6 +145,33 @@ def resolve_source(source: str) -> ResolvedSource:
         authors=host,
         dates=web_page_date,
         original_name=rendered_pdf.name,
+        temp_dir=tmp,
+    )
+
+
+def _resolve_youtube(source: str, video_id: str) -> ResolvedSource:
+    """A PDF whose text is the video's caption track."""
+    from evid.core.typst_generation import web_to_pdf
+    from evid.services.youtube import fetch_transcript, youtube_oembed
+
+    text = fetch_transcript(video_id)
+    title, author = youtube_oembed(video_id)
+    shown = title or video_id
+    html = (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'><title>"
+        + escape(shown)
+        + "</title></head><body>"
+        + escape(text)
+        + "</body></html>"
+    )
+    tmp = tempfile.TemporaryDirectory()
+    pdf_path, page_title = web_to_pdf(source, Path(tmp.name), html=html, stem=video_id)
+    return ResolvedSource(
+        pdf_path=pdf_path,
+        source_url=source,
+        title=title or page_title,
+        authors=author,
+        original_name=f"{video_id}.pdf",
         temp_dir=tmp,
     )
 

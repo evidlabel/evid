@@ -15,6 +15,7 @@ dependencies = [
     "arrow",
     "rich",
     "requests",
+    "youtube-transcript-api>=1.2,<2",
     "beautifulsoup4",
     "PyMuPDF",
     "treeparse>=0.2.8",

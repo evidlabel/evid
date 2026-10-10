@@ -336,6 +336,12 @@ def _missing(exc: KeyError) -> HTTPError:
     return HTTPError(404, msg)
 
 
+def _note_index(raw: str) -> int:
+    if not str(raw).isdigit():
+        raise HTTPError(400, "bad note index")
+    return int(raw)
+
+
 def _commit_view(doc_dir: Path, verb: str) -> dict:
     """Commit ``label/`` and ``pass/``, then return the reader payload."""
     from evid.core.bibtex_utils import load_title
@@ -539,7 +545,6 @@ class Handler(BaseHTTPRequestHandler):
             "token": self.token,
             "term": self.agents is not None,
             "agent": self.agent,
-            "ptyxis": bool(shutil.which("ptyxis") or shutil.which("gnome-terminal")),
         }
 
     @route("GET", "/api/config")
@@ -881,6 +886,32 @@ class Handler(BaseHTTPRequestHandler):
         logger.info("Noted %s of %s", key, doc_name(d))
         self.send_json(200, _commit_view(d, f"{key} note"))
 
+    @route("PUT", "/api/sets/{slug}/docs/{uuid}/labels/{key}/notes/{index}")
+    def put_label_note(self, slug: str, uuid: str, key: str, index: str):
+        from evid.core.labels import edit_note
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.disk.touch(slug, uuid)
+        try:
+            edit_note(d, key, _note_index(index), str(self.body().get("text") or ""))
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Edited a note on %s of %s", key, doc_name(d))
+        self.send_json(200, _commit_view(d, f"{key} note"))
+
+    @route("DELETE", "/api/sets/{slug}/docs/{uuid}/labels/{key}/notes/{index}")
+    def delete_label_note(self, slug: str, uuid: str, key: str, index: str):
+        from evid.core.labels import remove_note
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.disk.touch(slug, uuid)
+        try:
+            remove_note(d, key, _note_index(index))
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Removed a note on %s of %s", key, doc_name(d))
+        self.send_json(200, _commit_view(d, f"{key} note"))
+
     @route("PUT", "/api/sets/{slug}/docs/{uuid}/labels/{key}")
     def put_label(self, slug: str, uuid: str, key: str):
         from evid.core.labels import rename_label
@@ -942,6 +973,39 @@ class Handler(BaseHTTPRequestHandler):
         logger.info("Noted annotation %s of %s", ann_id, doc_name(d))
         self.send_json(200, _commit_view(d, f"annotation {ann_id} note"))
 
+    @route(
+        "PUT", "/api/sets/{slug}/docs/{uuid}/annotations-on-text/{ann_id}/notes/{index}"
+    )
+    def put_annotation_note(self, slug: str, uuid: str, ann_id: str, index: str):
+        from evid.core.labels import edit_annotation_note
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.disk.touch(slug, uuid)
+        try:
+            edit_annotation_note(
+                d, ann_id, _note_index(index), str(self.body().get("text") or "")
+            )
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Edited a note on annotation %s of %s", ann_id, doc_name(d))
+        self.send_json(200, _commit_view(d, f"annotation {ann_id} note"))
+
+    @route(
+        "DELETE",
+        "/api/sets/{slug}/docs/{uuid}/annotations-on-text/{ann_id}/notes/{index}",
+    )
+    def delete_annotation_note(self, slug: str, uuid: str, ann_id: str, index: str):
+        from evid.core.labels import remove_annotation_note
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.disk.touch(slug, uuid)
+        try:
+            remove_annotation_note(d, ann_id, _note_index(index))
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Removed a note on annotation %s of %s", ann_id, doc_name(d))
+        self.send_json(200, _commit_view(d, f"annotation {ann_id} note"))
+
     @route("DELETE", "/api/sets/{slug}/docs/{uuid}/annotations-on-text/{ann_id}")
     def delete_annotation_on_text(self, slug: str, uuid: str, ann_id: str):
         from evid.core.labels import remove_annotation
@@ -972,6 +1036,44 @@ class Handler(BaseHTTPRequestHandler):
         except KeyError as exc:
             raise _missing(exc) from exc
         logger.info("Noted machine quote %s of %s", key, doc_name(d))
+        self.send_json(200, _commit_view(d, f"{key} note"))
+
+    @route("PUT", "/api/sets/{slug}/docs/{uuid}/quotes/{key}/notes/{index}")
+    def put_quote_note(self, slug: str, uuid: str, key: str, index: str):
+        from evid.core.quote_pass import edit_quote_note
+
+        _, d = self.app.doc_dir(slug, uuid)
+        b = self.body()
+        self.app.disk.touch(slug, uuid)
+        try:
+            edit_quote_note(
+                d,
+                key,
+                _note_index(index),
+                str(b.get("text") or ""),
+                pass_id=str(b.get("pass") or "") or None,
+            )
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Edited a note on machine quote %s of %s", key, doc_name(d))
+        self.send_json(200, _commit_view(d, f"{key} note"))
+
+    @route("DELETE", "/api/sets/{slug}/docs/{uuid}/quotes/{key}/notes/{index}")
+    def delete_quote_note(self, slug: str, uuid: str, key: str, index: str):
+        from evid.core.quote_pass import remove_quote_note
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.disk.touch(slug, uuid)
+        try:
+            remove_quote_note(
+                d,
+                key,
+                _note_index(index),
+                pass_id=self.q.get("pass") or None,
+            )
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Removed a note on machine quote %s of %s", key, doc_name(d))
         self.send_json(200, _commit_view(d, f"{key} note"))
 
     # tags -----------------------------------------------------------------
@@ -1269,12 +1371,6 @@ class Handler(BaseHTTPRequestHandler):
             raise HTTPError(404, "no such terminal")
         self.send_json(200, {"terms": terms.list()})
 
-    @route("POST", "/api/term/external")
-    def external_term(self):
-        terms = self.sessions(str(self.body().get("slug", "")))
-        cmd = external_terminal(Path(terms.cwd), terms.env, self.agent)
-        self.send_json(200, {"ok": True, "cmd": cmd})
-
     @route("GET", "/api/term")
     def terminal(self):
         """Upgrade to a WebSocket onto one of a set's terminals (?slug=&id=, default the first)."""
@@ -1313,34 +1409,6 @@ class Handler(BaseHTTPRequestHandler):
             Handler.window.terminate()  # serve_gui() then stops the server
         else:
             threading.Thread(target=self.server.shutdown, daemon=True).start()
-
-
-def external_terminal(cwd: Path, env: dict, agent: str) -> str:
-    """Open the agent (or a shell) in Ptyxis / GNOME Terminal. The env goes on the command line,
-    because these terminals hand new windows to an already running instance."""
-    shell = env.get("SHELL") or "/bin/sh"
-    keep = [
-        f"{k}={v}"
-        for k, v in env.items()
-        if k.startswith("EVID_") and k != "EVID_IN_APP"
-    ]
-    inner = [shell, "-ic", f"{agent}; exec {shell}"] if agent else [shell, "-i"]
-    run = ["env", *keep, *inner]
-    if shutil.which("ptyxis"):
-        cmd = ["ptyxis", "--new-window", "--working-directory", str(cwd), "--", *run]
-    elif shutil.which("gnome-terminal"):
-        cmd = ["gnome-terminal", f"--working-directory={cwd}", "--", *run]
-    else:
-        raise HTTPError(404, "neither ptyxis nor gnome-terminal is installed")
-    subprocess.Popen(
-        cmd,
-        cwd=str(cwd),
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-    return " ".join(cmd[:4])
 
 
 class SetAgents:

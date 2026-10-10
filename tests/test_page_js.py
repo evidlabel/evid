@@ -45,6 +45,7 @@ FUNCS = [
     "historyChips",
     "agentBadge",
     "noteLine",
+    "storedNoteIndex",
     "hitSpan",
     "findAll",
 ]
@@ -495,6 +496,21 @@ def test_agent_badge(js):
     assert js(
         "return [agentBadge(['claude']), agentBadge(['claude', 'fish', 'codex']), agentBadge([]), agentBadge(undefined)];"
     ) == ["claude", "claude +2", "agent", "agent"]
+
+
+def test_stored_note_index_skips_pass_notes(js):
+    notes = json.dumps(
+        [
+            {"text": "from the pass", "from_pass": True},
+            {"text": "one"},
+            {"text": "two"},
+        ]
+    )
+    assert js(f"return storedNoteIndex({notes}, 0);") is None
+    assert js(f"return storedNoteIndex({notes}, 1);") == 0
+    assert js(f"return storedNoteIndex({notes}, 2);") == 1
+    assert js(f"return storedNoteIndex({notes}, 3);") is None
+    assert js("return storedNoteIndex(null, 0);") is None
 
 
 def test_note_line_and_filter_by_note(js):

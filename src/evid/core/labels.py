@@ -241,6 +241,43 @@ def add_note(doc_dir: Path, key: str, text: str, by: str = "you") -> dict:
         return dict(rec)
 
 
+def _note_slot(notes: list, index: int, owner: str) -> dict:
+    if index < 0 or index >= len(notes):
+        msg = f"no note {index} on {owner}"
+        raise KeyError(msg)
+    return notes[index]
+
+
+def _rewrite_note(notes: list, index: int, text: str, owner: str) -> None:
+    text = text.strip()
+    if not text:
+        msg = "the note is empty"
+        raise ValueError(msg)
+    note = _note_slot(notes, index, owner)
+    if note.get("text") == text:
+        return
+    note["text"] = text
+    note["at"] = _now()
+
+
+def edit_note(doc_dir: Path, key: str, index: int, text: str) -> dict:
+    """Replace the text of note *index* on label *key*. The author stays."""
+    with _locked(doc_dir) as data:
+        rec = _find(data["labels"], "key", key)
+        _rewrite_note(rec.setdefault("notes", []), index, text, key)
+        return dict(rec)
+
+
+def remove_note(doc_dir: Path, key: str, index: int) -> dict:
+    """Drop note *index* from label *key*. The label stays."""
+    with _locked(doc_dir) as data:
+        rec = _find(data["labels"], "key", key)
+        notes = rec.setdefault("notes", [])
+        _note_slot(notes, index, key)
+        del notes[index]
+        return dict(rec)
+
+
 def remove_label(doc_dir: Path, key: str) -> None:
     with _locked(doc_dir) as data:
         _find(data["labels"], "key", key)
@@ -285,6 +322,27 @@ def annotate(doc_dir: Path, ann_id: str, text: str, by: str = "you") -> dict:
         rec = _find(data["annotations"], "id", ann_id)
         rec.setdefault("notes", []).append(_note(text, by))
         return dict(rec)
+
+
+def edit_annotation_note(doc_dir: Path, ann_id: str, index: int, text: str) -> dict:
+    """Replace note *index* on an annotation. The author stays."""
+    with _locked(doc_dir) as data:
+        rec = _find(data["annotations"], "id", ann_id)
+        _rewrite_note(rec.setdefault("notes", []), index, text, ann_id)
+        return dict(rec)
+
+
+def remove_annotation_note(doc_dir: Path, ann_id: str, index: int) -> dict | None:
+    """Drop note *index*. The annotation goes away with its last note."""
+    with _locked(doc_dir) as data:
+        rec = _find(data["annotations"], "id", ann_id)
+        notes = rec.setdefault("notes", [])
+        _note_slot(notes, index, ann_id)
+        del notes[index]
+        if notes:
+            return dict(rec)
+        data["annotations"] = [r for r in data["annotations"] if r["id"] != ann_id]
+        return None
 
 
 def remove_annotation(doc_dir: Path, ann_id: str) -> None:
