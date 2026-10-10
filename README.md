@@ -13,6 +13,8 @@
 - Human labels in `label/labels.json` are the same kind of span, with notes
 - Vector, metadata, and body search; tags; gather for interchange
 - MCP server (`evid mcp <set>`) for a warm agent query session
+- Anon sets (`evid set create -s <case>-anon --type anon`): a case's documents after [did](https://github.com/evidlabel/did) pseudonymised them, marked with a mask in the GUI
+- In-place replacement (`evid doc replace`): when did hands the documents over again, the uuid stays, labels and quotes follow (renumbered placeholders via `--map`), and what cannot be found again is marked stale. `evid label stale` lists them; `evid label repair` lets a model point at the new passage (`$EVID_REPAIR_CMD`, default `claude -p`), kept only when it matches the text verbatim
 
 License: [MIT](LICENSE). CLI: `evid -h`. Agents: [`SKILL.md`](SKILL.md).
 
@@ -67,6 +69,8 @@ install -m755 app/target/release/evid-app ~/.local/bin/   # or set EVID_APP=/pat
 An editable checkout also finds `app/target/{release,debug}/evid-app` without installing it.
 
 **Agent pane.** The *Agent* button (top right) opens terminals next to the documents, as in [treedit](https://github.com/wr1/treedit): a shell, or an agent with `evid gui --agent claude` (or `$EVID_AGENT`). An agent belongs to one evidence set: it starts in that set's folder, and `evid` there uses the GUI's data dir and that set by default (`$EVID_DB`, `$EVID_SET`), so `evid doc notes` just works. The pane shows the selected set's terminals; other sets' keep running, and the set tree marks sets with an agent attached. *Selection* types a reference to the selected documents, labels or label.typ text into the terminal. The terminal is served on loopback only and needs the page's token.
+
+**Workbench.** In the [jura workbench](../workbench) the GUI is the Datasets tab: `?set=<slug>` opens a set, `?theme=light|dark` (or the workbench's message) sets the theme.
 
 **Live.** While an agent (or the CLI, or an editor) changes a set — cleaning up titles, adding notes, labelling — the GUI follows along: changed rows get a fading ◆ marker, the open document's details take in the outside change without losing your unsaved edits (a field you both changed shows a banner: use the disk version or keep yours), the label editor merges outside edits into yours line by line, and reloads when `label/labels.json` or a pass changes outside.
 

@@ -24,6 +24,7 @@ Rediscover after install or upgrade, and invoke from that output.
 - Track the case in Git. Commit `evid/` with each milestone. Keep credentials and identity maps out; add them to `.gitignore` before the first commit.
 - Citable = verbatim `#lab` or `evid --db evid doc quote`. Never retype. Print keys only.
 - `set gather` output is interchange, not the authored document.
+- A set of type `anon` holds a case's documents as did handed them over: placeholders such as `[PERSON 1]` stand for identities. Keep them verbatim and never guess who they are. Its documents are replaced in place on a later handoff (`doc replace`); labels that lost their place are stale (`label stale`), and `label repair` re-anchors them (verbatim matches only).
 - Tagging writes both `info.yml` and `tags.yml`.
 - Read the annotations before using a document: `evid --db evid doc notes --dataset <slug>` (MCP: `doc_notes`). They are notes from the people handling the set, on a document (path `.`) or a file in its folder (`original.pdf`, …): what it is, what to watch out for, what is missing.
 - A note on a document or a file (`evid --db evid doc note --dataset <slug> -u <uuid> [-p original.pdf] -t "…"`) says what that file is, what to watch out for, or what is missing.
