@@ -564,6 +564,9 @@ def list_docs_callback(
     """List documents in a dataset."""
     dataset = _resolve_dataset(dataset, "Select dataset to list", allow_create=False)
     documents = get_evidence_list(DIRECTORY, dataset)
+    if not documents and format == "json":
+        print("[]")  # JSON stays JSON, so a script reading it sees an empty list
+        return
     if not documents:
         print("No documents found.")
         return

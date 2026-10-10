@@ -38,11 +38,7 @@ def setdir(tmp_path, monkeypatch):
         "investigate the case.\n\nPage two: the end.\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(cb, "DIRECTORY", tmp_path)
-    # label_cmd captured DIRECTORY at import, so point that binding too.
-    import evid.cli.label_cmd as lc
-
-    monkeypatch.setattr(lc, "DIRECTORY", tmp_path)
+    monkeypatch.setattr(cb, "DIRECTORY", tmp_path)  # label_cmd reads it at call time
     return d
 
 
@@ -160,3 +156,32 @@ def test_format_canonical_marks_pages():
     assert "— page 1 —" in out and "aaa" in out
     assert "— page 2 —" in out and "bbb" in out
     assert "aaa" not in format_canonical(text, [[0, 1], [4, 2]], page=2)
+
+
+def test_label_commands_honour_db(tmp_path):
+    """`evid --db DIR label ...` used to crash: label_cmd copied DIRECTORY before --db set it."""
+    import subprocess
+    import sys
+
+    from evid.services.set_manager import SetManager
+
+    SetManager(tmp_path).create_set("s")
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "evid.cli.main",
+            "--db",
+            str(tmp_path),
+            "label",
+            "ls",
+            "-s",
+            "s",
+            "-f",
+            "json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode == 0, r.stderr

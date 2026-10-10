@@ -12,7 +12,8 @@ import sys
 from rich.console import Console
 from rich.table import Table
 
-from evid.cli.callbacks import DIRECTORY, _resolve_dataset
+from evid.cli import callbacks
+from evid.cli.callbacks import _resolve_dataset
 from evid.cli.dataset import docs_dir
 from evid.cli.evidence import select_evidence
 from evid.core.bibtex_utils import load_title
@@ -47,8 +48,8 @@ def _title(doc_dir) -> str:
 def _doc(dataset: str | None, uuid: str | None, prompt: str):
     dataset = _resolve_dataset(dataset, prompt, allow_create=False)
     if not uuid:
-        uuid = select_evidence(DIRECTORY, dataset, prompt)
-    doc_dir = docs_dir(DIRECTORY, dataset) / uuid
+        uuid = select_evidence(callbacks.DIRECTORY, dataset, prompt)
+    doc_dir = docs_dir(callbacks.DIRECTORY, dataset) / uuid
     if not doc_dir.is_dir():
         sys.exit(f"No document {uuid!r} in '{dataset}'.")
     return dataset, uuid, doc_dir
@@ -89,7 +90,9 @@ def label_ls_callback(
     else:
         from evid.services.set_manager import SetManager
 
-        docs = [(d.name, d) for d in SetManager(DIRECTORY).list_documents(dataset)]
+        docs = [
+            (d.name, d) for d in SetManager(callbacks.DIRECTORY).list_documents(dataset)
+        ]
     listed = [
         {"uuid": doc_uuid, **row}
         for doc_uuid, doc_dir in docs
