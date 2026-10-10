@@ -97,3 +97,18 @@ def test_list_documents_requires_info_yml(sm, tmp_path):
     junk.mkdir()
     docs = sm.list_documents("case")
     assert [d.name for d in docs] == ["aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"]
+
+
+def test_anon_set_type(sm):
+    """A case's did-pseudonymised documents live in an anon set; GUIs mark it."""
+    s = sm.create_set("2026-014 anon", set_type="anon")
+    assert s.set_type == SetType.ANON
+    assert sm.load_set("2026-014-anon").set_type == SetType.ANON
+
+
+def test_cli_create_anon(tmp_path, capsys):
+    from evid.cli.dataset import create_dataset
+
+    assert create_dataset(tmp_path, "c anon", "anon") == "c-anon"
+    assert ", anon)" in capsys.readouterr().out
+    assert SetManager(tmp_path).load_set("c-anon").set_type == SetType.ANON

@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 class SetType(StrEnum):
     NORMAL = "normal"
+    # a case's documents after did pseudonymised them; GUIs mark these sets
+    ANON = "anon"
 
 
 @dataclass

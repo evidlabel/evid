@@ -207,13 +207,13 @@ def _print_text_results(
 # ── set callbacks ──────────────────────────────────────────────────────────────
 
 
-def create_callback(db: str = None, dataset: str = None):
+def create_callback(db: str = None, dataset: str = None, type: str = "normal"):
     """Create a new dataset."""
     if not dataset:
         dataset = input("Enter new dataset name: ").strip()
         if not dataset:
             sys.exit("No dataset name provided.")
-    create_dataset(DIRECTORY, dataset)
+    create_dataset(DIRECTORY, dataset, type)
 
 
 def track_callback(db: str = None, dataset: str = None):

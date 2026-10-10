@@ -987,3 +987,15 @@ def test_feedback_routes(server, doc, app):
         "ok": True
     }
     assert call(server, "GET", "/api/sets/case/feedback")[1] == []
+
+
+def test_sets_report_type(server, tmp_path):
+    from evid.services.set_manager import SetManager
+
+    call(server, "POST", "/api/sets", {"name": "Reference"})
+    sets = call(server, "GET", "/api/sets")[1]
+    assert {s["slug"]: s["type"] for s in sets}["reference"] == "normal"
+    data_dir = Path(call(server, "GET", "/api/config")[1]["data_dir"])
+    SetManager(data_dir).create_set("Case anon", set_type="anon")
+    sets = call(server, "GET", "/api/sets")[1]
+    assert {s["slug"]: s["type"] for s in sets}["case-anon"] == "anon"

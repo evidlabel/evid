@@ -130,11 +130,14 @@ def select_dataset(
         sys.exit("Invalid selection or no dataset name provided.")
 
 
-def create_dataset(directory: Path, name: str) -> str:
+def create_dataset(directory: Path, name: str, set_type: str = "normal") -> str:
     """Create a new evidmgr set; return its slug."""
     try:
-        ev_set = SetManager(directory).create_set(name)
-        print(f"Created dataset '{ev_set.name}' (slug: {ev_set.slug}) at {ev_set.path}")
+        ev_set = SetManager(directory).create_set(name, set_type)
+        kind = "" if ev_set.set_type == "normal" else f", {ev_set.set_type}"
+        print(
+            f"Created dataset '{ev_set.name}' (slug: {ev_set.slug}{kind}) at {ev_set.path}"
+        )
         return ev_set.slug
     except FileExistsError:
         sys.exit(f"Dataset '{name}' already exists.")

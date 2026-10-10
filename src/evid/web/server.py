@@ -575,6 +575,7 @@ class Handler(BaseHTTPRequestHandler):
                 {
                     "slug": s.slug,
                     "name": s.name,
+                    "type": s.set_type.value,
                     "description": s.description,
                     "docs": len(self.app.sets.list_documents(s.slug)),
                     "agents": agents.get(s.slug),

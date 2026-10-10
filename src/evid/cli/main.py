@@ -184,7 +184,16 @@ set_group.commands.append(
         name="create",
         help="Create a new evidence set",
         callback=create_callback,
-        options=[_DATASET_OPTION],
+        options=[
+            _DATASET_OPTION,
+            option(
+                flags=["--type", "-t"],
+                arg_type=str,
+                default="normal",
+                choices=["normal", "anon"],
+                help="anon: a case's documents pseudonymised by did (marked in GUIs)",
+            ),
+        ],
     )
 )
 
