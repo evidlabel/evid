@@ -149,6 +149,8 @@ def test_bibtex_command_is_gone_and_label_group_is_there():
         "rename",
         "annotate",
         "text",
+        "stale",
+        "repair",
     }
 
 

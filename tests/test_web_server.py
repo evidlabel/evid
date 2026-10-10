@@ -999,3 +999,31 @@ def test_sets_report_type(server, tmp_path):
     SetManager(data_dir).create_set("Case anon", set_type="anon")
     sets = call(server, "GET", "/api/sets")[1]
     assert {s["slug"]: s["type"] for s in sets}["case-anon"] == "anon"
+
+
+def test_stale_route_and_counts(server, doc, tmp_path):
+    """After a replace, lost labels show as stale: per set, per document, in the text view."""
+    from evid.core import labels
+    from evid.services.doc_replace import replace
+
+    data_dir = Path(call(server, "GET", "/api/config")[1]["data_dir"])
+    d = data_dir / "sets" / "case" / "docs" / doc
+    span, _, _ = labels.span_of(d, "Hello evidence world")
+    labels.add_label(d, span, "hello")
+    assert call(server, "GET", "/api/sets/case/stale")[1] == {"docs": [], "count": 0}
+    replace(d, _make_pdf(tmp_path / "v2.pdf", "Something else entirely"), {})
+    status, st = call(server, "GET", "/api/sets/case/stale")
+    assert (
+        status == 200
+        and st["count"] == 1
+        and st["docs"][0]["records"][0]["key"] == "hello"
+    )
+    rows = call(server, "GET", "/api/sets/case/docs")[1]
+    row = next(
+        r
+        for r in (rows["docs"] if isinstance(rows, dict) else rows)
+        if r["uuid"] == doc
+    )
+    assert row["nstale"] == 1 and row["nlabels"] == 0
+    view = call(server, "GET", f"/api/sets/case/docs/{doc}/text")[1]
+    assert view["labels"] == [] and view["stale"][0]["key"] == "hello"

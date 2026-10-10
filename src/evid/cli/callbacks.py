@@ -1133,3 +1133,74 @@ def show_callback(db: str = None):
         else:
             source = "default"
         print(f"  {key}: {value} ({source})")
+
+
+def replace_callback(
+    db: str = None,
+    dataset: str = None,
+    uuid: str = None,
+    source: str = None,
+    map: str = None,
+    format: str = "table",
+):
+    """Replace a document's PDF in place; its labels and quotes follow (did re-handoff)."""
+    from evid.services.doc_replace import replace
+
+    dataset = _resolve_dataset(dataset, "Select dataset")
+    doc_dir = _doc_dir_or_exit(dataset, uuid or "")
+    mapping = {}
+    if map:
+        try:
+            mapping = json.loads(Path(map).read_text(encoding="utf-8")) or {}
+        except (OSError, ValueError) as e:
+            sys.exit(f"--map {map}: {e}")
+    try:
+        result = replace(doc_dir, Path(source or ""), mapping)
+    except FileNotFoundError as e:
+        sys.exit(str(e))
+    if format == "json":
+        print(json.dumps(result, ensure_ascii=False))
+        return
+    counts = (
+        ", ".join(f"{n} {k}" for k, n in sorted(result["counts"].items()))
+        or "no labels"
+    )
+    print(f"Replaced {uuid[:8]}: {counts}; {result['stale']} stale")
+
+
+def stale_callback(
+    db: str = None, dataset: str = None, uuid: str = None, format: str = "table"
+):
+    """Labels and quotes that lost their place (after a replace), per document."""
+    from evid.cli.dataset import set_dir
+    from evid.services.doc_replace import stale
+
+    dataset = _resolve_dataset(dataset, "Select dataset")
+    rows = stale(set_dir(DIRECTORY, dataset), uuid)
+    if format == "json":
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+        return
+    if not rows:
+        print("Nothing stale.")
+    for d in rows:
+        print(f"{d['uuid'][:8]}  {d['title']}")
+        for r in d["records"]:
+            print(f"    {r['kind']:<10} {r['key'] or '':<20} {r['text'][:70]!r}")
+
+
+def repair_callback(db: str = None, dataset: str = None, uuid: str = None):
+    """Ask a model where each stale label now points; keep only verbatim matches."""
+    from evid.cli.dataset import set_dir
+    from evid.services.doc_replace import repair, stale
+
+    dataset = _resolve_dataset(dataset, "Select dataset")
+    rows = stale(set_dir(DIRECTORY, dataset), uuid)
+    if not rows:
+        print("Nothing stale.")
+        return
+    for d in rows:
+        try:
+            r = repair(docs_dir(DIRECTORY, dataset) / d["uuid"])
+        except RuntimeError as e:
+            sys.exit(str(e))
+        print(f"{d['uuid'][:8]}  {r['repaired']} re-anchored, {r['stale']} still stale")

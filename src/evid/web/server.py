@@ -176,7 +176,28 @@ def doc_row(doc) -> dict:
         "has_json": (doc.path / "label" / "labels.json").exists(),
         "nlabels": count_labels(doc.path),
         "nmachine": count_machine(doc.path),
+        "nstale": count_stale(doc.path),
     }
+
+
+def count_stale(doc_dir: Path) -> int:
+    """Labels, annotations and machine quotes that lost their place (after a replace)."""
+    from evid.core.quote_pass import MACHINE_DIR
+
+    n = 0
+    p = doc_dir / "label" / "labels.json"
+    try:
+        data = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+        for kind in ("labels", "annotations"):
+            n += sum(
+                1 for r in data.get(kind) or [] if isinstance(r, dict) and r.get("lost")
+            )
+        for f in (doc_dir / MACHINE_DIR).glob("*.json"):
+            found = (json.loads(f.read_text(encoding="utf-8")) or {}).get("found") or []
+            n += sum(1 for q in found if isinstance(q, dict) and q.get("lost"))
+    except (OSError, ValueError, AttributeError) as exc:
+        logger.warning("Could not count the stale labels of %s: %s", doc_dir.name, exc)
+    return n
 
 
 def count_labels(doc_dir: Path) -> int:
@@ -185,9 +206,8 @@ def count_labels(doc_dir: Path) -> int:
     if not p.exists():
         return 0
     try:
-        return len(
-            (json.loads(p.read_text(encoding="utf-8")) or {}).get("labels") or []
-        )
+        rows = (json.loads(p.read_text(encoding="utf-8")) or {}).get("labels") or []
+        return sum(1 for r in rows if not (isinstance(r, dict) and r.get("lost")))
     except (OSError, ValueError, AttributeError) as exc:
         logger.warning("Could not count the labels of %s: %s", doc_dir.name, exc)
         return 0
@@ -313,6 +333,16 @@ def text_view(doc_dir: Path) -> dict:
         "pages": pages,
         "labels": [one(r, "key") for r in data["labels"] if not r.get("lost")],
         "annotations": [one(r, "id") for r in data["annotations"] if not r.get("lost")],
+        "stale": [
+            {
+                "kind": kind[:-1],
+                "key": r.get("key") or r.get("id") or "",
+                "text": r.get("text") or "",
+            }
+            for kind in ("labels", "annotations")
+            for r in data[kind]
+            if r.get("lost")
+        ],
         "passes": passes,
         "unplaced": unplaced,
     }
@@ -690,6 +720,44 @@ class Handler(BaseHTTPRequestHandler):
             "Queued %d document(s) of '%s' for vector indexing", len(todo), slug
         )
         self.send_json(200, {"queued": len(todo)})
+
+    @route("GET", "/api/sets/{slug}/stale")
+    def set_stale(self, slug: str):
+        """Labels and quotes that lost their place after a document was replaced."""
+        from evid.services.doc_replace import stale
+
+        rows = stale(self.app.evidence_set(slug).path)
+        self.send_json(
+            200, {"docs": rows, "count": sum(len(d["records"]) for d in rows)}
+        )
+
+    @route("POST", "/api/sets/{slug}/repair")
+    def set_repair(self, slug: str):
+        """Ask a model where each stale label now points (verbatim matches only), as a job."""
+        from evid.services.doc_replace import repair, stale
+
+        es = self.app.evidence_set(slug)
+
+        def run(progress, job):
+            done = {"repaired": 0, "stale": 0}
+            for d in stale(es.path):
+                if job["cancelled"]:
+                    break
+                progress(f"Re-anchoring {d['title'] or d['uuid'][:8]}")
+                r = repair(es.path / "docs" / d["uuid"])
+                done["repaired"] += r["repaired"]
+                done["stale"] += r["stale"]
+            self.app.events.emit("docs_changed", slug=slug)
+            return done
+
+        self.send_json(
+            200,
+            {
+                "job": self.app.jobs.start(
+                    "repair", run, f"Re-anchoring stale labels in {slug}"
+                )
+            },
+        )
 
     @route("POST", "/api/sets/{slug}/delete")
     def delete_docs(self, slug: str):

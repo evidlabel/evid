@@ -82,6 +82,10 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 .set.anon.cur { background: color-mix(in srgb, var(--anon) 22%, var(--anon-bg)); }
 .set .mask { flex: none; color: var(--anon); display: inline-flex; }
 .set .anonb { flex: none; font-size: 10px; font-weight: 700; letter-spacing: .03em; padding: 0 6px; border-radius: 999px; color: var(--anon); border: 1px solid var(--anon); }
+.nstale { flex: none; font-size: 11px; font-weight: 700; color: var(--err); margin-right: 4px; }
+#ed-labels .item.stale b { text-decoration: line-through; color: var(--muted); }
+#ed-labels .item.stale .meta { color: var(--err); font-weight: 600; }
+.repairbtn { margin: 6px 4px; font-size: 12px; }
 .set .n { color: var(--muted); font-size: 11px; font-weight: normal; font-variant-numeric: tabular-nums; flex: none; }
 .subtags { margin: 0 0 4px 22px; }
 .subtag { padding: 2px 6px; border-radius: 4px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1203,6 +1207,7 @@ function renderDocs(msg) {
         el('td', { class: 'muted', text: d.authors }),
         el('td', {}, el('div', { class: 'lt' }, el('span', { class: 'nlab' + (d.nlabels ? '' : ' zero'), title: `${d.nlabels || 0} manual label(s)`, text: d.nlabels || 0 }),
             el('span', { class: 'nmac' + (d.nmachine ? '' : ' zero'), title: `${d.nmachine || 0} machine label(s)`, text: d.nmachine || 0 }),
+            d.nstale ? el('span', { class: 'nstale', title: `${d.nstale} label(s) lost their place when the document was replaced — open it, or re-anchor them with a model`, text: `⚠ ${d.nstale}` }) : null,
             f > 0 ? el('span', { class: 'chgmark', style: `opacity:${(0.35 + 0.65 * f).toFixed(2)}`, text: '◆' }) : null, d.label,
             d.note && !S.showNotes ? el('span', { class: 'ndot', title: d.note, text: ' ●' }) : null,
             d.fb_open ? el('span', { class: 'fbadge', title: `${d.fb_open} open request(s) to the agent`, text: `● ${d.fb_open}` }) : null),
@@ -1963,7 +1968,7 @@ function showText(slug, uuid, r, focus) {
   const rec = same ? S.ed.rec : null;
   const keepCur = same ? edCur : null;
   clearHit();  // its range dies with the old text
-  S.ed = { slug, uuid, text: r.text, pages: r.pages || [], labels: r.labels || [], annotations: r.annotations || [], passes: r.passes || [], unplaced: r.unplaced || [], rec };
+  S.ed = { slug, uuid, text: r.text, pages: r.pages || [], labels: r.labels || [], annotations: r.annotations || [], passes: r.passes || [], unplaced: r.unplaced || [], stale: r.stale || [], rec };
   edShow(true);
   const doc = S.byUuid.get(uuid) || { label: uuid };
   $('#edtitle').textContent = doc.label; $('#edtitle').title = doc.label;
@@ -2053,6 +2058,18 @@ function edSide() {
     const short = preview.length > 32 ? preview.slice(0, 31) + '…' : preview;
     const tip = notes.map(n => n.text).filter(Boolean).join('\n') || a.text;
     human.push(sideRow('a', a.id, short, `p${a.page ?? '?'} · ${notes.length}`, tip, notes));
+  }
+  for (const s of S.ed.stale || []) {  // lost their place when the document was replaced (did re-handoff)
+    human.push(el('div', { class: 'item stale', title: `Stale: no longer found in the new text\n${s.text}` },
+      el('b', { text: s.key || s.kind }), el('span', { class: 'meta', text: 'stale' })));
+  }
+  if ((S.ed.stale || []).length) {
+    human.push(el('button', { class: 'repairbtn', text: 'Re-anchor stale labels…',
+      title: 'A model picks where each stale label now points; only passages found verbatim in the text are kept',
+      onclick: async () => {
+        try { await api('POST', `/api/sets/${encodeURIComponent(S.ed.slug)}/repair`, {}); status('Re-anchoring in the background…', 4000); }
+        catch (e) { status(e.message, 6000); }
+      } }));
   }
   $('#ed-labels').replaceChildren(...(human.length ? human : [el('div', { class: 'empty', text: '(none yet)' })]));
   const machine = [];

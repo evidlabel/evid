@@ -29,10 +29,13 @@ from evid.cli.callbacks import (
     passes_callback,
     quote_callback,
     reindex_callback,
+    repair_callback,
+    replace_callback,
     search_meta_callback,
     search_text_callback,
     search_vec_callback,
     show_callback,
+    stale_callback,
     tag_assign_callback,
     tag_list_callback,
     tag_remove_callback,
@@ -418,15 +421,50 @@ doc_group.commands.append(
     )
 )
 
+doc_group.commands.append(
+    command(
+        name="replace",
+        help="Replace a document's PDF in place; labels and quotes follow, the lost ones are marked stale",
+        callback=replace_callback,
+        options=[
+            _DATASET_OPTION,
+            option(flags=["-u", "--uuid"], arg_type=str, help="Document UUID"),
+            option(flags=["--source"], arg_type=str, required=True, help="The new PDF"),
+            option(
+                flags=["--map"],
+                arg_type=str,
+                help='JSON {old placeholder: new} — renumbered identities, e.g. {"[PERSON 1]": "[PERSON 4]"}',
+            ),
+            _FORMAT_OPTION,
+        ],
+    )
+)
+
 # ── label ──────────────────────────────────────────────────────────────────────
 
 _UUID_OPTION = option(flags=["-u", "--uuid"], arg_type=str, help="Document UUID")
+
+label_stale_commands = [
+    command(
+        name="stale",
+        help="Labels and quotes that lost their place (after a replace)",
+        callback=stale_callback,
+        options=[_DATASET_OPTION, _UUID_OPTION, _FORMAT_OPTION],
+    ),
+    command(
+        name="repair",
+        help="Ask a model ($EVID_REPAIR_CMD, default `claude -p`) where stale labels now point; verbatim only",
+        callback=repair_callback,
+        options=[_DATASET_OPTION, _UUID_OPTION],
+    ),
+]
 
 label_group = group(
     name="label",
     help="Human labels: spans over a document's plain text (label/)",
 )
 app.subgroups.append(label_group)
+label_group.commands.extend(label_stale_commands)
 
 label_group.commands.append(
     command(
