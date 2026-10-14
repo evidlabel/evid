@@ -1516,3 +1516,14 @@ def test_saved_roots_reload_and_a_bad_file_is_skipped(tmp_path, monkeypatch):
     assert [t.id for t in skipped.trunks()] == ["main"]
     assert yaml.safe_load((data / "roots.yml").read_text()) == []
     skipped.shutdown()
+
+
+def test_config_shows_the_source_version_and_a_short_data_dir(server, monkeypatch):
+    from evid import __version__
+    from evid.web import server as web
+
+    cfg = call(server, "GET", "/api/config")[1]
+    assert cfg["version"] == __version__  # not an editable install's stale metadata
+    monkeypatch.setenv("HOME", "/home/someone")
+    assert web._short_path(Path("/home/someone/demo/evid")) == "~/demo/evid"
+    assert web._short_path(Path("/srv/evid")) == "/srv/evid"

@@ -854,6 +854,7 @@ class Handler(BaseHTTPRequestHandler):
         return {
             "app": self.in_app,
             "data_dir": str(a.data_dir),
+            "data_dir_short": _short_path(a.data_dir),
             "cwd": str(Path.cwd()),
             "editor": a.config.editor,
             "has_vec": a.has_vec,
@@ -2083,13 +2084,22 @@ def _raise_args() -> list[str]:
     return ["--raise-file", str(Handler.raise_file)] if Handler.raise_file else []
 
 
-def _version() -> str:
-    from importlib.metadata import PackageNotFoundError, version
+def _short_path(path: Path) -> str:
+    """PATH with the home directory as ~, for display."""
+    p, home = Path(path), Path.home()
+    return (
+        "~/" + p.relative_to(home).as_posix()
+        if p.is_relative_to(home) and p != home
+        else str(p)
+    )
 
-    try:
-        return version("evid")
-    except PackageNotFoundError:
-        return ""
+
+def _version() -> str:
+    # The source's version, as `evid --version` prints it: an editable install's
+    # metadata keeps the version it was installed at.
+    from evid import __version__
+
+    return __version__
 
 
 class Server(ThreadingHTTPServer):

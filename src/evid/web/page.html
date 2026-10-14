@@ -3280,7 +3280,7 @@ if (CFG.term && !EMBED) {  // the agent pane is hidden when embedded in the work
 // ── start ────────────────────────────────────────────────────────────────────
 
 (async function start() {
-  $('#datadir').textContent = CFG.data_dir; $('#datadir').title = CFG.data_dir;
+  $('#datadir').textContent = CFG.data_dir_short || CFG.data_dir; $('#datadir').title = CFG.data_dir;
   $('#ver').textContent = CFG.version ? 'v' + CFG.version : '';
   setSkind(load('skind', 'text'));
   updateActions(); switchPane(S.pane); setFold(load('folded', false));
