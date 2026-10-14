@@ -25,6 +25,7 @@ const ICON_PNG: &[u8] = include_bytes!("../icons/icon.png");
 /// Write the icon and a desktop entry so the switcher can find them.
 /// GTK's own application id is left unset: registering one makes GTK refuse a
 /// second evid-app, and two data dirs are allowed to be open at once.
+/// The program name carries the id instead (see main).
 #[cfg(target_os = "linux")]
 fn publish_desktop_entry() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_DATA_HOME")
@@ -54,33 +55,12 @@ fn publish_desktop_entry() -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "linux")]
-fn set_switcher_icon(window: &tauri::WebviewWindow, icon: Option<&std::path::Path>) {
+fn set_window_icon(window: &tauri::WebviewWindow, icon: Option<&std::path::Path>) {
     use gtk::prelude::*;
 
-    let Ok(gtk_win) = window.gtk_window() else {
-        return;
-    };
-    if let Some(path) = icon {
+    if let (Ok(gtk_win), Some(path)) = (window.gtk_window(), icon) {
         let _ = gtk_win.set_icon_from_file(path);
     }
-    // Wayland ignores the window icon. The shell matches this id to the desktop file.
-    if gtk_win.display().backend().is_wayland() {
-        gtk_win.realize();
-        if let Some(gdk_win) = gtk_win.window() {
-            let id = std::ffi::CString::new(APP_ID).unwrap();
-            unsafe {
-                gdk_wayland_window_set_application_id(gdk_win.as_ptr().cast(), id.as_ptr());
-            }
-        }
-    }
-}
-
-#[cfg(target_os = "linux")]
-extern "C" {
-    fn gdk_wayland_window_set_application_id(
-        window: *mut std::ffi::c_void,
-        application_id: *const std::ffi::c_char,
-    );
 }
 
 fn free_port() -> u16 {
@@ -141,6 +121,11 @@ fn main() {
 
     #[cfg(target_os = "linux")]
     let icon = publish_desktop_entry();
+    // On Wayland the window's app id is the program name, set when the window
+    // maps; the shell matches it to the desktop file for the switcher icon.
+    // gtk::init only fills it from argv[0] when it is still unset.
+    #[cfg(target_os = "linux")]
+    gtk::glib::set_prgname(Some(APP_ID));
 
     tauri::Builder::default()
         .manage(Server(Mutex::new(child)))
@@ -153,7 +138,7 @@ fn main() {
                 .visible(false)
                 .build()?;
             #[cfg(target_os = "linux")]
-            set_switcher_icon(&window, icon.as_deref());
+            set_window_icon(&window, icon.as_deref());
             // Maximized fills the work area and leaves the title bar. Clear any
             // remembered exclusive fullscreen so the close button stays.
             let _ = window.set_fullscreen(false);
