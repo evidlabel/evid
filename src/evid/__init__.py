@@ -11,7 +11,7 @@ from evid.models import (
     VecResult,
 )
 
-__version__ = "0.7.1"
+__version__ = "0.8.0"
 
 __all__ = [
     "ConfigModel",

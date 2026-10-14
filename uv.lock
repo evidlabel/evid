@@ -716,7 +716,7 @@ wheels = [
 
 [[package]]
 name = "evid"
-version = "0.7.0"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "arrow" },
@@ -783,7 +783,7 @@ requires-dist = [
     { name = "ruamel-yaml", specifier = ">=0.17" },
     { name = "sentence-transformers", marker = "extra == 'all'" },
     { name = "sentence-transformers", marker = "extra == 'vec'" },
-    { name = "treeparse", specifier = ">=0.2.8" },
+    { name = "treeparse", specifier = ">=0.4.0" },
     { name = "youtube-transcript-api", specifier = ">=1.2,<2" },
 ]
 provides-extras = ["gui", "vec", "all"]
@@ -3282,16 +3282,16 @@ wheels = [
 
 [[package]]
 name = "treeparse"
-version = "0.2.8"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "rich" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6d/57/420f859d353a3c333dd1042381c20c35d2ef4fc9787f2b717a61e915689e/treeparse-0.2.8.tar.gz", hash = "sha256:8a7aa3533fe08879fcc6df31a57041cb582959469d02bb79e15665cf4378b241", size = 18653, upload-time = "2026-06-02T14:26:12.743Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/65/05/aa5e2b35f5989bd8e5bc5885d9f08ac0aa892eb90e7eaf48d5fd2cb5709d/treeparse-0.4.0.tar.gz", hash = "sha256:a57e9c33f313c6071645941d49bd1aa24d6a5e3f96d3848ac8be331b348c8a82", size = 24390, upload-time = "2026-10-09T07:50:18.288Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8a/f8/ac1ccc4ece29bbad46e3df2eef4a741af26d0e0f841949d48e7bc4ebd4d9/treeparse-0.2.8-py3-none-any.whl", hash = "sha256:d6ac690a297306bfe0f311600f35f005cc5b33e6b0d5091259aea05e7f2684e5", size = 23540, upload-time = "2026-06-02T14:26:11.743Z" },
+    { url = "https://files.pythonhosted.org/packages/56/bf/df74a2bc849ed5cd29308222ad1d4401c369ba4b3e4da35ee3337a92e2e9/treeparse-0.4.0-py3-none-any.whl", hash = "sha256:fa6879c8932d4dfa84fa3077d2e52581b6b927e7543869c34175f86a14001ac0", size = 28465, upload-time = "2026-10-09T07:50:16.892Z" },
 ]
 
 [[package]]
