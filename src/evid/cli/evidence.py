@@ -140,6 +140,75 @@ def add_evidence(
         sys.exit(f"{failures} of {len(sources)} document(s) failed to add.")
 
 
+def add_screenshots(
+    directory: Path,
+    dataset: str,
+    sources: list[str],
+    *,
+    title: str = "",
+    authors: str = "",
+    dates: str = "",
+    url: str = "",
+    lang: str = "dan+eng",
+    no_index: bool = False,
+) -> None:
+    """Add page images as one document. The text is OCR.
+
+    One invocation is one document: a directory is its images in natural
+    order, and several files are pages in the order given. ``--no-index``
+    matches :func:`add_evidence`.
+    """
+    from evid import extras
+    from evid.services.doc_ingester import DocIngester
+    from evid.services.screenshots import annotate_screenshot, resolve_screenshots
+    from evid.services.set_manager import SetManager
+    from evid.services.vec_service import VecService
+
+    if not sources:
+        sys.exit("No screenshots to add.")
+
+    sm = SetManager(directory)
+    try:
+        evidence_set = sm.load_set(dataset)
+    except FileNotFoundError:
+        evidence_set = sm.create_set(dataset)
+
+    do_index = not no_index and extras.has_vec()
+    if not no_index and not extras.has_vec():
+        print(extras.VEC_SKIP_INDEX)
+    vec_service = VecService() if do_index else None
+    ingester = DocIngester(vec_service=vec_service)
+
+    def _page(i: int, n: int, _name: str) -> None:
+        if i == 1:
+            print(f"Reading {n} screenshot(s)…", file=sys.stderr)
+
+    try:
+        resolved = resolve_screenshots(sources, lang=lang or "dan+eng", progress=_page)
+        doc = ingester.ingest(
+            pdf_path=resolved.pdf_path,
+            evidence_set=evidence_set,
+            title=title or resolved.title,
+            authors=authors,
+            dates=dates,
+            source_url=url,
+            temp_dir=resolved.temp_dir,
+            do_index=do_index,
+            source_name=resolved.original_name,
+        )
+    except (FileNotFoundError, ValueError) as e:
+        sys.exit(str(e))
+    except Exception as e:
+        sys.exit(f"Failed to add screenshots: {e}")
+
+    if ingester.last_was_existing:
+        print(f"This document is already added in {dataset} at {doc.uuid}")
+        return
+
+    annotate_screenshot(doc.path)
+    _print_info(doc)
+
+
 def _print_info(doc) -> None:
     """Print the document's info.yml to stdout, as `doc add` always has."""
     info_path = doc.path / "info.yml"

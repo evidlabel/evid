@@ -18,6 +18,7 @@
   --hl-head: #2f6fb3; --hl-hash: #a0306e; --hl-str: #7a5c00; --hl-com: #8c8c86;
   --mk-h: #2e7d32; --mk-a: #c9a227; --mk-m: #7a3ff2;
   --mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif; --sans-weight: 400;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -42,7 +43,7 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--fg); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+body { background: var(--bg); color: var(--fg); font: 13px/1.4 var(--sans); font-weight: var(--sans-weight); overflow: hidden; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 3px 10px; cursor: default; }
 button:hover:not(:disabled) { background: var(--hover); }
@@ -87,7 +88,14 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 #ed-labels .item.stale .meta { color: var(--err); font-weight: 600; }
 .repairbtn { margin: 6px 4px; font-size: 12px; }
 .set .n { color: var(--muted); font-size: 11px; font-weight: normal; font-variant-numeric: tabular-nums; flex: none; }
+.trunk { display: flex; align-items: center; gap: 4px; padding: 6px 6px 2px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; user-select: none; }
+.trunk .tw { width: 14px; text-align: center; flex: none; cursor: pointer; }
+.trunk .nm { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.trunk .x { flex: none; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 4px; font-size: 14px; line-height: 1; }
+.trunk .x:hover { color: var(--fg); }
+.set.under { margin-left: 12px; }
 .subtags { margin: 0 0 4px 22px; }
+.subtags.under { margin-left: 34px; }
 .subtag { padding: 2px 6px; border-radius: 4px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .subtag:hover { background: var(--hover); color: var(--fg); }
 .subtag.on { color: var(--accent); font-weight: 600; }
@@ -97,6 +105,8 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 #divider2 { width: 5px; cursor: col-resize; flex: none; background: var(--line); opacity: .6; }
 #divider2:hover { opacity: 1; }
 #termpane { width: var(--term-w, 520px); min-width: 280px; max-width: 72vw; flex: none; display: flex; flex-direction: column; background: var(--bg); border-left: 1px solid var(--line); }
+/* embedded in the workbench: the Write tab owns the agent terminals, so hide this pane there */
+body.embed #b-term, body.embed #termpane, body.embed #divider2 { display: none !important; }
 .tbar { display: flex; gap: 6px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel2); font-size: 12.5px; flex-wrap: wrap; }
 .tbar b { margin-right: auto; }
 .tbar button { padding: 2px 8px; font-size: 12px; }
@@ -253,6 +263,7 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 .foot { color: var(--muted); font-size: 12px; }
 #label { flex-direction: column; padding: 8px; gap: 6px; min-width: 0; }
 #edhead { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.edgrp { display: inline-flex; gap: 4px; align-items: center; padding-left: 8px; border-left: 1px solid var(--line); }
 #edempty { color: var(--muted); padding: 20px 4px; }
 #edtitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 140px; }
 #edpath { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 100%; order: 9; }
@@ -266,7 +277,7 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 @keyframes edblink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { #edcaret { animation: none; } }
 #ed-wrap.on { background: var(--sel); }
-.pageband { user-select: none; display: block; text-align: center; color: var(--hl-head); font: 600 11px/1.6 system-ui, sans-serif; letter-spacing: .04em; margin: 10px 0 6px; }
+.pageband { user-select: none; display: block; text-align: center; color: var(--hl-head); font: 600 11px/1.6 var(--sans); letter-spacing: .04em; margin: 10px 0 6px; }
 .mk-h { background: color-mix(in srgb, var(--mk-h) 34%, transparent); }
 .mk-a { background: color-mix(in srgb, var(--mk-a) 45%, transparent); }
 .mk-m { background: color-mix(in srgb, var(--mk-m) 28%, transparent); }
@@ -276,6 +287,7 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 #edside { width: 260px; flex: none; display: flex; flex-direction: column; gap: 4px; min-height: 0; }
 #edside h4 { margin: 2px 0 0; }
 #edside .list { flex: 1; max-height: none; min-height: 48px; }
+#edside #ed-document { flex: 0 1 auto; max-height: 34%; }
 #edside .list:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 #edside .item { display: flex; gap: 4px; align-items: baseline; flex-wrap: wrap; white-space: normal; overflow: visible; }
 #edside .item b { overflow: hidden; text-overflow: ellipsis; font-weight: 600; flex: 1 1 auto; min-width: 0; white-space: nowrap; }
@@ -330,6 +342,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
     <div id="sidebtns">
       <button id="b-newset">+ New set</button>
       <button id="b-import">Import evid dir…</button>
+      <button id="b-connect" title="Show another data directory in this tree">Connect directory…</button>
     </div>
   </aside>
   <div id="main">
@@ -345,6 +358,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
         <div class="toolbar">
           <button id="b-ingest" title="Add PDFs from disk">Ingest PDF</button>
           <button id="b-url" title="Download a web page or PDF">Add from URL</button>
+          <button id="b-shots" title="Add page screenshots as one document">Add screenshots</button>
           <button id="b-index" title="Vector-index every unindexed document">Index docs</button>
           <button id="b-opendir" title="Open the document folder">Open dir</button>
         </div>
@@ -362,7 +376,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
           <colgroup><col style="width:28%"><col><col style="width:88px"></colgroup>
           <thead><tr><th>Author</th><th>Label</th><th title="The document's date (else the date it was added, in italics)">Date</th></tr></thead>
           <tbody></tbody></table></div>
-        <div class="legend row"><span id="count"></span> · drag the divider to widen the list<span style="flex:1"></span><label title="Show each document's annotation under its title"><input type="checkbox" id="shownotes"> annotations</label></div>
+        <div class="legend row"><span id="count"></span> · drag the divider to widen the list<span style="flex:1"></span><label title="Show each document's whole-document notes under its title"><input type="checkbox" id="shownotes"> annotations</label></div>
       </div>
       <div class="split-v" id="split"></div>
       <div id="rpane">
@@ -380,7 +394,6 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
           <label for="d-tags">Tags</label><input id="d-tags" data-tags="1" placeholder="comma, separated">
           <label for="d-label">Label</label><input id="d-label">
           <label for="d-url">URL</label><input id="d-url">
-          <label for="d-notes" title="Saved in annotations.yml; agents read it with evid doc notes / MCP doc_notes">Note</label><textarea id="d-notes" rows="3" placeholder="About this document, for the people and agents using the set"></textarea>
         </div>
         <div class="row"><span class="muted" id="d-dirty"></span><span style="flex:1"></span><button class="primary" id="d-save" title="Ctrl+S">Save changes</button></div>
         <h4 class="row">To the agent <span class="muted" id="d-fb-n"></span><span style="flex:1"></span><button class="mini" id="d-fb-add" title="Ask the agent working on this set to do something with this document" disabled>+ Request</button></h4>
@@ -401,8 +414,9 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
       <div id="label" class="pview">
         <div id="edempty">Select a document to label it.</div>
         <div id="edhead" hidden><span id="edtitle"></span>
-          <button id="ed-lab" title="Label the selected passage (Ctrl+L)">+ Label</button>
-          <button id="ed-ann" title="Annotate the selected passage, or the selected machine quote (Ctrl+M)">+ Note</button>
+          <span class="edgrp">
+            <button id="ed-doc-ann" title="Note on the whole document. No passage. (Ctrl+M)">Note</button>
+            <button id="ed-lab" title="Label the selected passage (Ctrl+L)">Label</button></span>
           <button id="ed-zout" title="Smaller text (Ctrl+−)">A−</button><button id="ed-zin" title="Larger text (Ctrl++, Ctrl+0 resets, Ctrl+wheel)">A+</button>
           <button id="ed-wrap" title="Wrap long lines">Wrap</button>
           <button id="ed-reload" title="Reload from disk">↻</button>
@@ -411,7 +425,9 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
         <div id="edmain" hidden>
           <div id="edbox" tabindex="0"><div id="edtext"></div></div>
           <div id="edside">
-            <h4>Human <span class="muted" id="ed-nlabels"></span></h4>
+            <h4>All doc <span class="muted" id="ed-ndoc"></span></h4>
+            <div class="list" id="ed-document" tabindex="0"></div>
+            <h4>Snippets <span class="muted" id="ed-nlabels"></span></h4>
             <div class="list" id="ed-labels" tabindex="0"></div>
             <h4>Machine <span class="muted" id="ed-nmachine"></span></h4>
             <div class="list" id="ed-machine" tabindex="0"></div>
@@ -766,6 +782,7 @@ function historyChips(items) {
       for (const k of it.added || []) out.push(['lab', `+ ${k}`, `label added in ${it.file}`]);
       for (const k of it.removed || []) out.push(['lab rm', `− ${k}`, `label removed from ${it.file}`]);
       for (const k of it.notes || []) out.push(['note', `note on ${k}`, `note added to ${k}`]);
+      for (const k of it.documents || []) out.push(['note', k, 'whole-document annotation in label/labels.json']);
     } else if (it.kind === 'pass') out.push(['pass', `pass${it.job ? ': ' + it.job : ''} (${it.matched}/${it.tried})`, `machine-quote pass ${it.id}${it.model ? ' · ' + it.model : ''}`]);
     else if (it.kind === 'files') out.push(['', `${it.what} ${it.files.join(', ')}`, '']);
   }
@@ -826,7 +843,6 @@ async function api(method, url, body) {
   return data;
 }
 const enc = encodeURIComponent;
-const setUrl = (slug, rest) => `/api/sets/${enc(slug)}${rest || ''}`;
 const docUrl = (slug, uuid, rest) => setUrl(slug, `/docs/${enc(uuid)}${rest || ''}`);
 
 let statusT;
@@ -850,12 +866,44 @@ const load = (k, d) => { try { const v = JSON.parse(localStorage.getItem('evid:'
 // ── state ────────────────────────────────────────────────────────────────────
 
 const S = {
-  sets: [], slug: null, docs: [], byUuid: new Map(), sel: new Set(), cur: null, anchor: null,
+  sets: [], roots: [], root: load('root', 'main') || 'main', trunkClosed: new Set(load('trunkClosed', [])),
+  slug: null, docs: [], byUuid: new Map(), sel: new Set(), cur: null, anchor: null,
   tagFilter: new Set(), registry: [], detail: null, detailDirty: false, loadSeq: 0,
   expanded: new Set(load('expanded', [])), setTags: new Map(),
   hits: false, skind: 'text', sq: { busy: false, queued: null, last: null }, sres: [], ssel: new Set(), scur: -1, sanchor: null,
   ed: null, fbShowDone: false, pane: load('pane', 'detail'), showNotes: load('shownotes', true), changes: new Map(), detailBase: null, detailConflict: null, evSince: 0, waiters: new Map(), finished: new Map(),
 };
+
+// A request aimed at a trunk other than the primary data directory names that trunk.
+function withRoot(url, root) {
+  if (root == null) root = S.root || 'main';
+  if (!root || root === 'main') return url;
+  return url + (url.includes('?') ? '&' : '?') + 'root=' + enc(root);
+}
+function placeKey(root, slug) { return (root || 'main') + '/' + slug; }
+function rootOf(slug) {
+  const here = S.root || 'main';
+  const match = S.sets.find(s => s.slug === slug && (s.root || 'main') === here);
+  if (match) return match.root || 'main';
+  const any = S.sets.find(s => s.slug === slug);
+  return (any && any.root) || here;
+}
+function setUrl(slug, rest, root) {
+  return withRoot(`/api/sets/${enc(slug)}${rest || ''}`, root == null ? rootOf(slug) : root);
+}
+function currentSet() {
+  const root = S.root || 'main';
+  return S.sets.find(s => s.slug === S.slug && (s.root || 'main') === root) || null;
+}
+function samePlace(e) {
+  if (e.slug && e.slug !== S.slug) return false;
+  const here = S.root || 'main';
+  if (!e.root) return here === 'main';
+  return e.root === here;
+}
+function isOpen(s) {
+  return S.expanded.has(placeKey(s.root, s.slug)) || S.expanded.has(s.slug);
+}
 
 // ── dialogs ──────────────────────────────────────────────────────────────────
 
@@ -904,15 +952,17 @@ function tagDlg(title, label) {
 
 // file / folder picker served by /api/files (works in the window and a browser)
 async function pickPaths(opts) {
-  const { pdf, multi, dir: wantDir, title } = opts;
-  let cur = load(pdf ? 'pdfdir' : 'importdir', CFG.cwd);
+  const { pdf, images, multi, dir: wantDir, title } = opts;
+  const storeKey = pdf ? 'pdfdir' : images ? 'shotdir' : 'importdir';
+  const filter = pdf ? '&pdf=1' : images ? '&images=1' : '';
+  let cur = load(storeKey, CFG.cwd);
   const chosen = new Set();
   const pathIn = el('input', { style: 'flex:1' });
   const list = el('div', { class: 'files', tabindex: '0' });
   const info = el('span', { class: 'muted' });
   async function go(d) {
     let r;
-    try { r = await api('GET', `/api/files?dir=${enc(d)}${pdf ? '&pdf=1' : ''}`); } catch (e) { info.textContent = e.message; return; }
+    try { r = await api('GET', `/api/files?dir=${enc(d)}${filter}`); } catch (e) { info.textContent = e.message; return; }
     cur = r.dir; pathIn.value = r.dir; chosen.clear(); upd();
     list.replaceChildren(...(r.parent ? [el('div', { ondblclick: () => go(r.parent), onclick: () => go(r.parent) }, el('span', { class: 'ic', text: '↰' }), '..')] : []),
       ...r.entries.map(en => {
@@ -927,16 +977,16 @@ async function pickPaths(opts) {
         if (!en.dir) row.ondblclick = () => { chosen.clear(); chosen.add(full); $('#dlg-foot [data-primary]').click(); };
         return row;
       }));
-    if (!r.entries.length) list.append(el('div', { class: 'muted', text: pdf ? '(no PDFs or folders here)' : '(empty)' }));
+    if (!r.entries.length) list.append(el('div', { class: 'muted', text: pdf ? '(no PDFs or folders here)' : images ? '(no images or folders here)' : '(empty)' }));
   }
   function upd() { info.textContent = wantDir ? cur : chosen.size ? `${chosen.size} selected` : (multi ? 'Ctrl/Shift+click to pick several' : ''); }
   pathIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); go(pathIn.value); } });
-  const all = multi ? el('button', { text: 'Select all PDFs', onclick: () => { $$('.files div[data-full]', $('#dlg-body')).forEach(r => { chosen.add(r.dataset.full); r.classList.add('sel'); }); upd(); } }) : null;
+  const all = multi ? el('button', { text: images ? 'Select all images' : 'Select all PDFs', onclick: () => { $$('.files div[data-full]', $('#dlg-body')).forEach(r => { chosen.add(r.dataset.full); r.classList.add('sel'); }); upd(); } }) : null;
   go(cur);
   const res = await dialog(title, [el('div', { class: 'row' }, pathIn, el('button', { text: 'Go', onclick: () => go(pathIn.value) })), list],
     [{ label: 'Cancel', value: () => null }, { label: wantDir ? 'Choose this folder' : 'Open', primary: true, value: () => wantDir ? cur : (chosen.size ? [...chosen] : undefined) }],
     { left: el('span', {}, all, ' ', info) });
-  if (res) store(pdf ? 'pdfdir' : 'importdir', cur);
+  if (res) store(storeKey, cur);
   return res;
 }
 
@@ -1025,22 +1075,28 @@ function onEvent(e) {
       if (e.state === 'error') status('', 0);
       break;
     case 'index_queue': if (e.pending > 0) status(`Indexing in background (${e.pending} queued)…`); break;
-    case 'indexed': if (e.slug === S.slug) scheduleReload(); if (e.pending > 0) status(`Indexing in background (${e.pending} queued)…`); break;
+    case 'indexed': if (samePlace(e)) scheduleReload(); if (e.pending > 0) status(`Indexing in background (${e.pending} queued)…`); break;
     case 'index_idle': status('Indexing complete', 4000); break;
     case 'agents': refreshSetCounts(); break;
-    case 'feedback': if (e.slug === S.slug) { renderFeedback(); scheduleReload(true); if (e.by === 'outside') status('The agent updated its requests', 4000); } break;
+    case 'feedback': if (samePlace(e)) { renderFeedback(); scheduleReload(true); if (e.by === 'outside') status('The agent updated its requests', 4000); } break;
     case 'disk': onDisk(e); break;
     case 'sets_changed': loadSets(); break;
-    case 'tags_changed': api('GET', '/api/tags').then(t => { S.registry = t; renderPills(); }).catch(() => {}); break;
-    case 'docs_changed': if (e.slug === S.slug) scheduleReload(); else refreshSetCounts(); S.setTags.delete(e.slug); break;
+    case 'tags_changed': api('GET', withRoot('/api/tags')).then(t => { S.registry = t; renderPills(); }).catch(() => {}); break;
+    case 'docs_changed':
+      if (samePlace(e)) scheduleReload(); else refreshSetCounts();
+      if (e.slug) { S.setTags.delete(placeKey(e.root, e.slug)); S.setTags.delete(e.slug); }
+      break;
     case 'labels_updated':
-      if (e.slug === S.slug) { scheduleReload(); if (S.cur === e.uuid) { refreshLabels(); renderFiles(); } }
-      if (S.ed && S.ed.uuid === e.uuid && S.ed.slug === e.slug) edLoad(e.slug, e.uuid, false, true);
-      status('Labels updated', 3000); break;
+      if (samePlace(e)) {
+        scheduleReload(); if (S.cur === e.uuid) { refreshLabels(); renderFiles(); }
+        if (S.ed && S.ed.uuid === e.uuid && S.ed.slug === e.slug) edLoad(e.slug, e.uuid, false, true);
+        status('Labels updated', 3000);
+      }
+      break;
     case 'label_error': status(`Labels: ${e.error}`, 8000, true); break;
     case 'open':
       (async () => {
-        if (e.slug && e.slug !== S.slug) await selectSet(e.slug);
+        if (e.slug && (e.slug !== S.slug || (e.root && e.root !== (S.root || 'main')))) await selectSet(e.slug, e.root);
         if (e.uuid) { selectRow(e.uuid); if ((e.pane || 'label') === 'label') await openEditor(e.slug || S.slug, e.uuid); }
       })();
       break;
@@ -1056,29 +1112,40 @@ async function poll() {
   setTimeout(poll, S.waiters.size ? 400 : 1000);
 }
 
-// ── sidebar: sets (foldable: a set opens to its tags) ────────────────────────
+// ── sidebar: trunks (a data directory) and their sets ────────────────────────
+
+function takeRoots(roots) {
+  S.roots = roots;
+  S.sets = roots.flatMap(r => (r.sets || []).map(s => Object.assign(s, { root: r.id, rootName: r.name, rootPath: r.path })));
+}
 
 async function loadSets(select) {
-  S.sets = await api('GET', '/api/sets');
-  const want = select || S.slug || load('slug', null);
+  takeRoots(await api('GET', '/api/roots'));
+  const wantSlug = (select && select.slug) || (typeof select === 'string' ? select : '') || S.slug || load('slug', null);
+  const wantRoot = (select && select.root) || S.root || load('root', 'main') || 'main';
   renderSets();
-  const pick = S.sets.find(s => s.slug === want) || S.sets[0];
-  if (pick && pick.slug !== S.slug) selectSet(pick.slug);
-  else if (!pick) { S.slug = null; S.docs = []; renderDocs(); }
+  const pick = S.sets.find(s => s.slug === wantSlug && (s.root || 'main') === wantRoot)
+    || S.sets.find(s => s.slug === wantSlug)
+    || S.sets[0];
+  if (pick && (pick.slug !== S.slug || (pick.root || 'main') !== (S.root || 'main'))) await selectSet(pick.slug, pick.root);
+  else if (!pick) {
+    if (!S.roots.some(r => r.id === (S.root || 'main'))) { S.root = 'main'; store('root', 'main'); }
+    S.slug = null; S.docs = []; renderDocs();
+  }
 }
 
-// Re-read the per-set document counts (after a copy into another set).
+// Re-read every trunk (after a copy, or a directory connected elsewhere).
 async function refreshSetCounts() {
-  const fresh = await api('GET', '/api/sets');
-  const by = new Map(fresh.map(s => [s.slug, s]));
-  for (const s of S.sets) if (by.has(s.slug)) { s.docs = by.get(s.slug).docs; s.agents = by.get(s.slug).agents; }
+  takeRoots(await api('GET', '/api/roots'));
   renderSets();
 }
 
-async function setTagsOf(slug) {
-  if (slug === S.slug) return tagCounts(S.docs);
-  if (!S.setTags.has(slug)) S.setTags.set(slug, tagCounts(await api('GET', setUrl(slug, '/docs'))));
-  return S.setTags.get(slug);
+async function setTagsOf(s) {
+  const root = s.root || 'main';
+  const key = placeKey(root, s.slug);
+  if (s.slug === S.slug && root === (S.root || 'main')) return tagCounts(S.docs);
+  if (!S.setTags.has(key)) S.setTags.set(key, tagCounts(await api('GET', setUrl(s.slug, '/docs', root))));
+  return S.setTags.get(key);
 }
 
 // Fold the set tree into a strip that names the present set (Ctrl+B).
@@ -1090,9 +1157,11 @@ function setFold(on) {
   renderMini();
 }
 function renderMini() {
-  const set = S.sets.find(x => x.slug === S.slug);
-  const name = set ? set.name : 'no set';
+  const set = currentSet();
+  const many = S.roots.length > 1;
+  const name = set ? (many ? `${set.rootName} · ${set.name}` : set.name) : 'no set';
   $('#mini-name').textContent = name; $('#curset').textContent = set ? name : '';
+  $('#curset').title = set && many ? `${set.rootPath || ''} · ${set.slug}` : '';
   $('#sidemini').title = `${name}${set ? ` · ${set.docs} document(s)` : ''} — click or Ctrl+B to show all sets`;
   $('#mini-agent').replaceChildren(set && set.agents ? el('span', { class: 'ag' + (set.agents.alive ? ' live' : ''), text: agentBadge(set.agents.names) }) : '');
 }
@@ -1102,58 +1171,118 @@ function maskIcon() {  // the anon-set marker, the same in the workbench
   s.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9c0-1.7 4-3 9-3s9 1.3 9 3c0 4-2.2 7-4.6 7-1.8 0-2.7-1.6-4.4-1.6S9.4 16 7.6 16C5.2 16 3 13 3 9z"/><circle cx="8" cy="10.2" r="1.5" fill="currentColor"/><circle cx="16" cy="10.2" r="1.5" fill="currentColor"/></svg>';
   return s;
 }
+function toggleTags(s) {
+  const key = placeKey(s.root, s.slug);
+  if (isOpen(s)) { S.expanded.delete(key); S.expanded.delete(s.slug); }
+  else S.expanded.add(key);
+  store('expanded', [...S.expanded]);
+  renderSets();
+}
+function sameSet(s) {
+  return s.slug === S.slug && (s.root || 'main') === (S.root || 'main');
+}
 async function renderSets() {
   renderMini();
   const box = $('#sets');
-  if (!S.sets.length) { box.replaceChildren(el('div', { class: 'muted', style: 'padding:8px', text: 'No sets yet — + New set' })); return; }
+  const roots = S.roots.length ? S.roots : [{ id: 'main', name: 'global', path: CFG.data_dir, primary: true, sets: [] }];
   const rows = [];
-  for (const s of S.sets) {
-    const open = S.expanded.has(s.slug);
-    const tw = el('span', { class: 'tw', text: open ? '▾' : '▸', title: open ? 'Hide tags' : 'Show tags' });
-    tw.onclick = e => { e.stopPropagation(); open ? S.expanded.delete(s.slug) : S.expanded.add(s.slug); store('expanded', [...S.expanded]); renderSets(); };
-    const anon = s.type === 'anon';
-    const row = el('div', { class: 'set' + (s.slug === S.slug ? ' cur' : '') + (anon ? ' anon' : ''), role: 'treeitem',
-      title: (anon ? 'Anonymised by did — case data. ' : '') + (s.description || s.slug), 'data-slug': s.slug }, tw,
-      anon ? maskIcon() : null, el('span', { class: 'nm', text: s.name }),
-      anon ? el('span', { class: 'anonb', text: 'anon' }) : null,
-      s.agents ? el('span', { class: 'ag' + (s.agents.alive ? ' live' : ''), text: agentBadge(s.agents.names),
-        title: `${(s.agents.names || []).join(', ')} on this set: ${s.agents.terms} terminal(s), ${s.agents.alive} running — open the Agent pane on this set to see it` }) : null,
-      el('span', { class: 'n', title: `${s.docs} document(s)`, text: s.docs }));
-    row.onclick = () => selectSet(s.slug);
-    row.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('application/x-evid-doc') && s.slug !== S.slug) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; row.classList.add('drop'); } });
-    row.addEventListener('dragleave', () => row.classList.remove('drop'));
-    row.addEventListener('drop', e => { row.classList.remove('drop'); const d = e.dataTransfer.getData('application/x-evid-doc'); if (d) { e.preventDefault(); const p = JSON.parse(d); copyDocs(p.src, p.uuids, s.slug); } });
-    rows.push(row);
-    if (open) {
-      const sub = el('div', { class: 'subtags' }, el('div', { class: 'subtag', text: '…' }));
-      rows.push(sub);
-      setTagsOf(s.slug).then(tags => {
-        sub.replaceChildren(...(tags.length ? tags.map(([t, n]) => {
-          const on = s.slug === S.slug && S.tagFilter.has(t);
-          return el('div', { class: 'subtag' + (on ? ' on' : ''), title: `Filter ${s.name} by ${t}`, text: `${t.startsWith(s.slug + '.') ? t.slice(s.slug.length + 1) : t}  × ${n}`,
-            onclick: async () => { if (s.slug !== S.slug) { S.tagFilter = new Set(); await selectSet(s.slug); } toggleFilter(t); } });
-        }) : [el('div', { class: 'subtag', text: '(no tags)' })]));
-      }).catch(e => sub.replaceChildren(el('div', { class: 'subtag', text: e.message })));
+  for (const r of roots) {
+    const closed = S.trunkClosed.has(r.id);
+    const tw = el('span', { class: 'tw', text: closed ? '▸' : '▾', title: closed ? 'Show sets' : 'Hide sets' });
+    tw.onclick = e => {
+      e.stopPropagation();
+      closed ? S.trunkClosed.delete(r.id) : S.trunkClosed.add(r.id);
+      store('trunkClosed', [...S.trunkClosed]);
+      renderSets();
+    };
+    const head = el('div', { class: 'trunk', title: r.path, role: 'treeitem' }, tw, el('span', { class: 'nm', text: r.name }));
+    if (!r.primary) {
+      const x = el('button', { class: 'x', type: 'button', text: '×', title: 'Disconnect this directory. Files stay on disk.' });
+      x.onclick = e => { e.stopPropagation(); disconnectRoot(r); };
+      head.append(x);
     }
+    head.onclick = () => focusTrunk(r);
+    rows.push(head);
+    if (closed) continue;
+    const sets = S.sets.filter(s => (s.root || 'main') === r.id);
+    if (!sets.length) { rows.push(el('div', { class: 'subtags under' }, el('div', { class: 'subtag', text: '(no sets)' }))); continue; }
+    for (const s of sets) rows.push(...setRows(s));
   }
   box.replaceChildren(...rows);
 }
-
-async function selectSet(slug) {
+function setRows(s) {
+  const open = isOpen(s);
+  const tw = el('span', { class: 'tw', text: open ? '▾' : '▸', title: open ? 'Hide tags' : 'Show tags' });
+  tw.onclick = e => { e.stopPropagation(); toggleTags(s); };
+  const anon = s.type === 'anon';
+  const here = sameSet(s);
+  const row = el('div', { class: 'set under' + (here ? ' cur' : '') + (anon ? ' anon' : ''), role: 'treeitem',
+    title: (anon ? 'Anonymised by did — case data. ' : '') + (s.description || s.slug), 'data-slug': s.slug, 'data-root': s.root || 'main' }, tw,
+    anon ? maskIcon() : null, el('span', { class: 'nm', text: s.name }),
+    anon ? el('span', { class: 'anonb', text: 'anon' }) : null,
+    s.agents ? el('span', { class: 'ag' + (s.agents.alive ? ' live' : ''), text: agentBadge(s.agents.names),
+      title: `${(s.agents.names || []).join(', ')} on this set: ${s.agents.terms} terminal(s), ${s.agents.alive} running — open the Agent pane on this set to see it` }) : null,
+    el('span', { class: 'n', title: `${s.docs} document(s)`, text: s.docs }));
+  row.onclick = () => selectSet(s.slug, s.root);
+  row.addEventListener('dragover', e => { if (e.dataTransfer.types.includes('application/x-evid-doc') && !here) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; row.classList.add('drop'); } });
+  row.addEventListener('dragleave', () => row.classList.remove('drop'));
+  row.addEventListener('drop', e => {
+    row.classList.remove('drop');
+    const d = e.dataTransfer.getData('application/x-evid-doc');
+    if (!d) return;
+    e.preventDefault();
+    const p = JSON.parse(d);
+    copyDocs(p.src, p.uuids, s.slug, p.srcRoot, s.root);
+  });
+  const rows = [row];
+  if (open) {
+    const sub = el('div', { class: 'subtags under' }, el('div', { class: 'subtag', text: '…' }));
+    rows.push(sub);
+    setTagsOf(s).then(tags => {
+      sub.replaceChildren(...(tags.length ? tags.map(([t, n]) => {
+        const on = here && S.tagFilter.has(t);
+        return el('div', { class: 'subtag' + (on ? ' on' : ''), title: `Filter ${s.name} by ${t}`, text: `${t.startsWith(s.slug + '.') ? t.slice(s.slug.length + 1) : t}  × ${n}`,
+          onclick: async () => { if (!sameSet(s)) { S.tagFilter = new Set(); await selectSet(s.slug, s.root); } toggleFilter(t); } });
+      }) : [el('div', { class: 'subtag', text: '(no tags)' })]));
+    }).catch(e => sub.replaceChildren(el('div', { class: 'subtag', text: e.message })));
+  }
+  return rows;
+}
+async function focusTrunk(r) {
+  const first = S.sets.find(s => (s.root || 'main') === r.id);
+  if (first) { await selectSet(first.slug, r.id); return; }
+  if ((S.root || 'main') === r.id && !S.slug) return;
   if (S.detailDirty && !(await confirmDlg('Unsaved changes', 'Discard the unsaved changes in the detail pane?', 'Discard'))) return;
-  if (slug !== S.slug && !(await edLeave())) return;
-  if (slug !== S.slug) { S.tagFilter = new Set(); S.sel = new Set(); S.cur = null; S.anchor = null; S.sres = []; leaveHits(); }
-  S.slug = slug; store('slug', slug);
+  if (!(await edLeave())) return;
+  S.root = r.id; S.slug = null; S.docs = []; S.tagFilter = new Set(); S.sel = new Set(); S.cur = null;
+  store('root', r.id); store('slug', null);
+  renderSets(); renderDocs();
+  await loadTags();
+}
+
+async function selectSet(slug, root) {
+  root = root || rootOf(slug);
+  const same = slug === S.slug && root === (S.root || 'main');
+  if (!same && S.detailDirty && !(await confirmDlg('Unsaved changes', 'Discard the unsaved changes in the detail pane?', 'Discard'))) return;
+  if (!same && !(await edLeave())) return;
+  if (!same) { S.tagFilter = new Set(); S.sel = new Set(); S.cur = null; S.anchor = null; S.sres = []; leaveHits(); }
+  S.slug = slug; S.root = root || 'main'; store('slug', slug); store('root', S.root);
   renderSets();
-  if (T.open && T.slug !== slug) termLoad();  // the pane follows the set
+  await loadTags();
+  if (T.open && (T.slug !== slug || (T.root || 'main') !== S.root)) termLoad();
   await loadDocs(false);
+}
+async function loadTags() {
+  try { S.registry = await api('GET', withRoot('/api/tags')); }
+  catch (e) { status(e.message, 6000, true); }
 }
 
 async function newSet() {
   const name = await promptDlg('New evidence set', 'Name:');
   if (!name) return;
-  const r = await api('POST', '/api/sets', { name });
-  await loadSets(r.slug);
+  const root = S.root || 'main';
+  const r = await api('POST', withRoot('/api/sets', root), { name });
+  await loadSets({ slug: r.slug, root });
   status(`Created set '${r.name}'`, 3000);
 }
 
@@ -1163,31 +1292,50 @@ async function importDir() {
   const name = await promptDlg('Import evid directory', 'Set name:', dir.split('/').filter(Boolean).pop());
   if (name === null) return;
   try {
-    const r = await api('POST', '/api/sets/import', { path: dir, name });
+    const r = await api('POST', withRoot('/api/sets/import'), { path: dir, name });
     await loadSets();
     await alertDlg('Import complete', `Imported ${r.count} set(s) from\n${dir}`);
   } catch (e) { await alertDlg('Import failed', e.message); }
 }
 
+async function connectDir() {
+  const dir = await pickPaths({ dir: true, title: 'Connect a data directory' });
+  if (!dir) return;
+  try {
+    const r = await api('POST', '/api/roots', { path: dir });
+    await loadSets();
+    status(`Connected ${r.name}`, 3000);
+  } catch (e) { await alertDlg('Could not connect', e.message); }
+}
+async function disconnectRoot(r) {
+  if (!(await confirmDlg('Disconnect directory', `Remove “${r.name}” from the tree?\n\n${r.path}\n\nFiles stay on disk.`, 'Disconnect'))) return;
+  try {
+    await api('DELETE', `/api/roots/${enc(r.id)}`);
+    if ((S.root || 'main') === r.id) { S.root = 'main'; S.slug = null; store('root', 'main'); store('slug', null); }
+    await loadSets();
+    status(`Disconnected ${r.name}`, 3000);
+  } catch (e) { await alertDlg('Could not disconnect', e.message); }
+}
+
 // ── docs table ───────────────────────────────────────────────────────────────
 
 async function loadDocs(keep, keepDetail) {
-  const seq = ++S.loadSeq, slug = S.slug;
+  const seq = ++S.loadSeq, slug = S.slug, root = S.root || 'main';
   if (!slug) return;
   if (!keep) { S.docs = []; renderDocs('Loading…'); }
   let docs;
-  try { docs = await api('GET', setUrl(slug, '/docs')); }
+  try { docs = await api('GET', setUrl(slug, '/docs', root)); }
   catch (e) { if (seq === S.loadSeq) renderDocs(e.message); return; }
-  if (seq !== S.loadSeq || slug !== S.slug) return;  // a newer set switch won
+  if (seq !== S.loadSeq || slug !== S.slug || root !== (S.root || 'main')) return;  // a newer set switch won
   if (keep) docs = keepOrder(S.docs.map(d => d.uuid), docs);  // rows stay put while you work
   S.docs = docs; S.byUuid = new Map(docs.map(d => [d.uuid, d]));
-  S.setTags.set(slug, tagCounts(docs));
-  const cs = S.sets.find(s => s.slug === slug);
+  S.setTags.set(placeKey(root, slug), tagCounts(docs));
+  const cs = currentSet();
   if (cs && cs.docs !== docs.length) { cs.docs = docs.length; renderSets(); }
   for (const u of [...S.sel]) if (!S.byUuid.has(u)) S.sel.delete(u);
   if (S.cur && !S.byUuid.has(S.cur)) S.cur = null;
   renderDocs(); renderPills();
-  if (S.expanded.has(slug)) renderSets();
+  if (cs && isOpen(cs)) renderSets();
   if (!keep || (S.cur && !S.detailDirty && !keepDetail)) loadDetail();
 }
 
@@ -1211,7 +1359,7 @@ function renderDocs(msg) {
             f > 0 ? el('span', { class: 'chgmark', style: `opacity:${(0.35 + 0.65 * f).toFixed(2)}`, text: '◆' }) : null, d.label,
             d.note && !S.showNotes ? el('span', { class: 'ndot', title: d.note, text: ' ●' }) : null,
             d.fb_open ? el('span', { class: 'fbadge', title: `${d.fb_open} open request(s) to the agent`, text: `● ${d.fb_open}` }) : null),
-          d.note && S.showNotes ? el('div', { class: 'dnote', title: 'Click to edit the annotation', 'data-note': '1', text: noteLine(d.note) }) : null),
+          d.note && S.showNotes ? el('div', { class: 'dnote', title: 'Click to open whole-document notes in the Label pane', 'data-note': '1', text: noteLine(d.note) }) : null),
         d.dates ? el('td', { text: d.dates }) : el('td', { class: 'muted', style: 'font-style:italic', text: d.added }));
       if (f > 0) tr.style.setProperty('--chgbg', `color-mix(in srgb, var(--hl-lab) ${(4 + 14 * f).toFixed(1)}%, transparent)`);
       return tr;
@@ -1228,7 +1376,7 @@ function updateActions() {
   for (const id of ['#b-opendir', '#d-save', '#d-view', '#d-copy']) $(id).disabled = !one;
   $('#b-index').disabled = !S.slug;
   $('#b-index').title = CFG.has_vec ? 'Vector-index every unindexed document' : CFG.vec_install;
-  for (const id of ['#b-ingest', '#b-url']) $(id).disabled = !S.slug;
+  for (const id of ['#b-ingest', '#b-url', '#b-shots']) $(id).disabled = !S.slug;
 }
 
 function selectRow(uuid, ev) {
@@ -1254,7 +1402,7 @@ async function setCur(uuid) {
 }
 
 const dtbody = $('#dtbl tbody');
-dtbody.addEventListener('click', e => { const tr = e.target.closest('tr[data-uuid]'); if (tr && e.target.closest('.dnote') && !(e.ctrlKey || e.metaKey || e.shiftKey)) { selectRow(tr.dataset.uuid); annotateDoc(S.slug, tr.dataset.uuid); return; } if (tr) { selectRow(tr.dataset.uuid, e); $('#dtbl').focus({ preventScroll: true }); } });
+dtbody.addEventListener('click', e => { const tr = e.target.closest('tr[data-uuid]'); if (tr && e.target.closest('.dnote') && !(e.ctrlKey || e.metaKey || e.shiftKey)) { openEditor(S.slug, tr.dataset.uuid); return; } if (tr) { selectRow(tr.dataset.uuid, e); $('#dtbl').focus({ preventScroll: true }); } });
 dtbody.addEventListener('dblclick', e => { const tr = e.target.closest('tr[data-uuid]'); if (tr) openEditor(S.slug, tr.dataset.uuid); });
 dtbody.addEventListener('contextmenu', e => {
   const tr = e.target.closest('tr[data-uuid]'); if (!tr) return;
@@ -1266,7 +1414,7 @@ dtbody.addEventListener('dragstart', e => {
   const tr = e.target.closest('tr[data-uuid]'); if (!tr) return;
   if (!S.sel.has(tr.dataset.uuid)) selectRow(tr.dataset.uuid);
   const uuids = selectedUuids();
-  e.dataTransfer.setData('application/x-evid-doc', JSON.stringify({ src: S.slug, uuids }));
+  e.dataTransfer.setData('application/x-evid-doc', JSON.stringify({ src: S.slug, srcRoot: S.root || 'main', uuids }));
   e.dataTransfer.setData('text/plain', uuids.join(','));
   e.dataTransfer.effectAllowed = 'copy';
 });
@@ -1319,7 +1467,7 @@ function docMenu(slug, uuids, canDelete) {
     one && { label: 'Open PDF', off: !one.has_pdf, fn: () => openDoc(slug, uuids[0], 'pdf') },
     one && { label: 'Open URL', off: !one.url, fn: () => openDoc(slug, uuids[0], 'url') },
     one && '-',
-    one && { label: one.note ? 'Edit annotation…' : 'Annotate…', fn: () => annotateDoc(slug, uuids[0]) },
+    one && { label: 'Document notes…', fn: () => openEditor(slug, uuids[0]) },
     { label: `Tag ${n} selected…`, fn: () => tagSelected(slug, uuids) },
     carried.length && { label: 'Remove tag', sub: carried.map(t => ({ label: t, fn: () => untag(slug, uuids, t) })) },
     '-',
@@ -1344,7 +1492,7 @@ async function untag(slug, uuids, tag) {
   await api('POST', setUrl(slug, '/tag'), { uuids, tag, remove: true });
   status(`Removed '${tag}'`, 3000); await afterTagChange();
 }
-async function afterTagChange() { S.registry = await api('GET', '/api/tags'); await loadDocs(true); }
+async function afterTagChange() { S.registry = await api('GET', withRoot('/api/tags')); await loadDocs(true); }
 async function copyQuotes(slug, uuids) {
   const r = await api('POST', setUrl(slug, '/quotes'), { uuids, format: 'yaml' });
   if (!r.text) { status('No labelled quotes in the selection', 4000); return; }
@@ -1358,18 +1506,22 @@ async function deleteDocs(slug, uuids) {
     status(`Deleted ${uuids.length} document(s)`, 3000); await loadDocs(true); loadDetail();
   } catch (e) { await alertDlg('Delete failed', e.message); }
 }
-async function copyDocs(src, uuids, dest) {
+async function copyDocs(src, uuids, dest, srcRoot, destRoot) {
+  srcRoot = srcRoot || S.root || 'main';
+  destRoot = destRoot || rootOf(dest);
   status(`Copying ${uuids.length} doc(s) to '${dest}'…`);
   try {
-    const r = await api('POST', setUrl(src, '/copy'), { uuids, dest });
+    const r = await api('POST', setUrl(src, '/copy', srcRoot), { uuids, dest, destRoot });
     status(r.copied ? `Copied ${r.copied} doc(s) to '${dest}'` : `Already in '${dest}'`, 4000);
-    S.setTags.delete(dest); renderSets();
+    S.setTags.delete(placeKey(destRoot, dest));
+    S.setTags.delete(dest);
+    renderSets();
   } catch (e) { await alertDlg('Copy failed', e.message); status(''); }
 }
 
 // ── detail pane ──────────────────────────────────────────────────────────────
 
-const FIELDS = ['title', 'authors', 'dates', 'tags', 'label', 'url', 'notes'];
+const FIELDS = ['title', 'authors', 'dates', 'tags', 'label', 'url'];
 let detailSeq = 0;
 async function loadDetail() {
   const seq = ++detailSeq, d = curDoc();
@@ -1468,23 +1620,6 @@ async function setNote(path, text) {
     const r = await api('PUT', docUrl(slug, uuid, '/annotations'), { path, text });
     if (S.detail && S.detail.uuid === uuid) { S.detail.annotations = r.annotations; S.detail.missing_annotated = (S.detail.missing_annotated || []).filter(p => p in r.annotations); renderFiles(); }
     status(text.trim() ? `Annotated ${path}` : `Removed the note on ${path}`, 2500);
-  } catch (e) { status(e.message, 6000, true); }
-}
-// The note on the document as a whole (path "."), from the list.
-async function annotateDoc(slug, uuid) {
-  const d = S.byUuid.get(uuid); if (!d) return;
-  const ta = el('textarea', { rows: 6, style: 'width:100%;resize:vertical', placeholder: 'About this document, for the people and agents using the set (empty removes the note)' });
-  ta.value = d.note || '';
-  ta.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $('#dlg-foot [data-primary]').click(); } });
-  const text = await dialog(`Annotation: ${d.label}`, [el('div', { class: 'muted', text: 'Saved in annotations.yml next to the document. Agents read it (evid doc notes, MCP doc_notes).' }), ta],
-    [{ label: 'Cancel', value: () => null }, d.note ? { label: 'Remove', value: () => '' } : null, { label: 'Save', primary: true, value: () => ta.value }].filter(Boolean));
-  if (text === null || text === undefined) return;
-  try {
-    await api('PUT', docUrl(slug, uuid, '/annotations'), { path: '.', text });
-    status(text.trim() ? `Annotated ${d.label}` : `Removed the annotation on ${d.label}`, 2500);
-    if (S.cur === uuid && !S.detailDirty) loadDetail();
-    else if (S.cur === uuid) { $('#d-notes').value = text; S.detailBase.notes = text.trimEnd(); }
-    await loadDocs(true, true);
   } catch (e) { status(e.message, 6000, true); }
 }
 async function annotate(path, current) {
@@ -1717,7 +1852,7 @@ async function newTag() {
   if (!name) return;
   const d = curDoc();
   if (d) { const r = await api('POST', setUrl(S.slug, '/tag'), { uuids: [d.uuid], tag: name }); status(`Tagged with '${r.tag}'`, 2500); }
-  else { const r = await api('POST', '/api/tags', { slug: S.slug, name }); status(`Created tag '${r.tag}'`, 2500); }
+  else { const r = await api('POST', withRoot('/api/tags'), { slug: S.slug, name }); status(`Created tag '${r.tag}'`, 2500); }
   await afterTagChange();
 }
 
@@ -1744,7 +1879,7 @@ function addDocDialog(meta, title) {
   const file = el('div', { class: 'row' }, el('span', { class: 'mono', style: 'flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap', title: meta.path, text: meta.path }),
     el('button', { text: 'View', onclick: () => api('POST', '/api/open-path', { path: meta.path }).catch(e => status(e.message, 5000, true)) }));
   return dialog(title || 'Add document', [file, form, el('label', { class: 'muted', text: 'Preview:' }), prev, el('label', {}, openLab, ' Open in labeller after adding')],
-    [{ label: 'Cancel', value: () => null }, { label: 'Add', primary: true, value: () => ({ ...Object.fromEntries(rows.map(([, k]) => [k, f[k].value.trim()])), tags: splitTags(f.tags.value), path: meta.path, token: meta.token, source_name: meta.source_name || '', openLabel: openLab.checked }) }]);
+    [{ label: 'Cancel', value: () => null }, { label: 'Add', primary: true, value: () => ({ ...Object.fromEntries(rows.map(([, k]) => [k, f[k].value.trim()])), tags: splitTags(f.tags.value), path: meta.path, token: meta.token, source_name: meta.source_name || '', screenshot: !!meta.screenshot, openLabel: openLab.checked }) }]);
 }
 
 async function ingestPdf() {
@@ -1775,15 +1910,15 @@ async function ingestPdf() {
 }
 
 async function startIngest(v) {
-  const slug = S.slug;
+  const slug = S.slug, root = S.root || 'main';
   status(`Adding ${v.path.split('/').pop()}…`);
   try {
-    const { job } = await api('POST', '/api/ingest', { slug, ...v });
+    const { job } = await api('POST', withRoot('/api/ingest', root), { slug, ...v });
     const r = await waitJob(job);
     await loadDocs(true);
     if (r.existing) { status(`Already in set: ${r.uuid.slice(0, 8)}`, 4000); return; }
     status(`Added ${r.uuid.slice(0, 8)}`, 3000);
-    if (v.openLabel && S.slug === slug) openEditor(slug, r.uuid);
+    if (v.openLabel && S.slug === slug && (S.root || 'main') === root) openEditor(slug, r.uuid);
   } catch (e) { status(''); await alertDlg('Ingest failed', e.message); }
 }
 
@@ -1802,6 +1937,146 @@ async function addFromUrl() {
     const v = await addDocDialog(r, 'Add document from URL');
     if (v) startIngest(v);
   } catch (e) { if (!cancelled) { closeDialog(null); await alertDlg('URL fetch failed', e.message); } }
+}
+
+function shotMove(pages, sel, d) {
+  if (sel < 0 || sel >= pages.length) return { pages, sel };
+  const j = sel + d;
+  if (j < 0 || j >= pages.length) return { pages, sel };
+  const next = pages.slice();
+  const [row] = next.splice(sel, 1);
+  next.splice(j, 0, row);
+  return { pages: next, sel: j };
+}
+function shotRemove(pages, sel) {
+  if (sel < 0 || sel >= pages.length) return { pages, sel: -1 };
+  const next = pages.slice();
+  next.splice(sel, 1);
+  return { pages: next, sel: next.length ? Math.min(sel, next.length - 1) : -1 };
+}
+function bytesToB64(bytes) {
+  let s = '';
+  const n = 0x8000;
+  for (let i = 0; i < bytes.length; i += n) s += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + n, bytes.length)));
+  return btoa(s);
+}
+function pasteName(type) {
+  return type && type.includes('jpeg') ? 'paste.jpg' : type && type.includes('webp') ? 'paste.webp' : 'paste.png';
+}
+async function blobPage(blob, type) {
+  const b64 = bytesToB64(new Uint8Array(await blob.arrayBuffer()));
+  return { b64, name: pasteName(type || blob.type) };
+}
+
+function shotDialog(pages, lang) {
+  const list = el('div', { class: 'files', style: 'height:220px', tabindex: '0' });
+  let sel = pages.length ? pages.length - 1 : -1;
+  function draw() {
+    list.replaceChildren(...pages.map((p, i) => {
+      const row = el('div', { class: i === sel ? 'sel' : '' }, el('span', { class: 'ic', text: String(i + 1) }), p.label);
+      row.onclick = () => { sel = i; draw(); };
+      return row;
+    }));
+    if (!pages.length) list.append(el('div', { class: 'muted', text: 'No pages yet. Add files, a folder, or paste a screenshot.' }));
+  }
+  function apply(r) { pages.splice(0, pages.length, ...r.pages); sel = r.sel; draw(); }
+  draw();
+  const langIn = el('input', { value: lang || 'dan+eng', style: 'width:8em' });
+  async function takeItems(items) {
+    let added = 0;
+    for (const item of items) {
+      let type = item.type && item.type.startsWith('image/') ? item.type : '';
+      let blob = null;
+      if (type && item.getAsFile) blob = item.getAsFile();
+      else if (item.types && item.getType) {
+        type = item.types.find(t => t.startsWith('image/')) || '';
+        if (type) blob = await item.getType(type);
+      }
+      if (!blob) continue;
+      const img = await blobPage(blob, type);
+      pages.push({ label: `Paste ${pages.length + 1}`, b64: img.b64, name: img.name });
+      added += 1;
+    }
+    if (added) { sel = pages.length - 1; draw(); }
+    return added;
+  }
+  const pasteBtn = el('button', { text: 'Paste', title: 'Paste a screenshot from the clipboard', onclick: async () => {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.read) throw new Error('clipboard');
+      const items = await navigator.clipboard.read();
+      const n = await takeItems(items);
+      if (!n) status('Clipboard has no image', 4000, true);
+    } catch { status('Paste blocked — press Ctrl+V, or use Add files', 5000, true); }
+  }});
+  const onPaste = async (e) => {
+    if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    const items = e.clipboardData && [...e.clipboardData.items];
+    if (!items || !items.some(it => it.type && it.type.startsWith('image/'))) return;
+    e.preventDefault();
+    const n = await takeItems(items);
+    if (!n) status('Clipboard has no image', 4000, true);
+  };
+  dlg.addEventListener('paste', onPaste);
+  const opened = dialog('Add screenshots', [
+    el('div', { class: 'muted', text: 'Each image is one page, in this order. For a viewer that will not give you the PDF, screenshot a page and paste it, then the next page.' }),
+    el('div', { class: 'row' },
+      el('button', { text: 'Up', onclick: () => apply(shotMove(pages, sel, -1)) }),
+      el('button', { text: 'Down', onclick: () => apply(shotMove(pages, sel, 1)) }),
+      el('button', { text: 'Remove', onclick: () => apply(shotRemove(pages, sel)) }),
+      pasteBtn),
+    list,
+    el('div', { class: 'row' }, el('label', { text: 'Language' }), langIn, el('span', { class: 'muted', text: 'Tesseract, dan+eng reads Danish and English' })),
+  ], [
+    { label: 'Cancel', value: () => null },
+    { label: 'Add files…', value: () => ({ kind: 'files', lang: langIn.value.trim() || 'dan+eng' }) },
+    { label: 'Folder…', value: () => ({ kind: 'folder', lang: langIn.value.trim() || 'dan+eng' }) },
+    { label: 'Next', primary: true, value: () => pages.length ? ({ kind: 'build', lang: langIn.value.trim() || 'dan+eng' }) : undefined },
+  ]);
+  const dropPaste = () => dlg.removeEventListener('paste', onPaste);
+  opened.then(dropPaste, dropPaste);
+  return opened;
+}
+
+async function addScreenshots() {
+  if (!needSet()) return;
+  const pages = [];
+  let lang = 'dan+eng';
+  for (;;) {
+    const action = await shotDialog(pages, lang);
+    if (!action) return;
+    lang = action.lang || lang;
+    if (action.kind === 'build') break;
+    if (action.kind === 'files') {
+      const paths = await pickPaths({ images: true, multi: true, title: 'Screenshots' });
+      if (paths) for (const p of paths) pages.push({ label: p.split('/').pop(), path: p });
+      continue;
+    }
+    if (action.kind === 'folder') {
+      const dir = await pickPaths({ dir: true, title: 'Screenshot folder' });
+      if (!dir) continue;
+      let r;
+      try { r = await api('GET', `/api/files?dir=${enc(dir)}&images=1`); }
+      catch (e) { status(e.message, 5000, true); continue; }
+      const imgs = r.entries.filter(e => !e.dir);
+      if (!imgs.length) { status('No screenshots in that folder', 4000, true); continue; }
+      const base = r.dir.replace(/\/$/, '');
+      for (const en of imgs) pages.push({ label: en.name, path: base + '/' + en.name });
+    }
+  }
+  const body = pages.map(p => p.b64 ? { png_base64: p.b64, name: p.name || 'paste.png' } : { path: p.path });
+  let job;
+  try { ({ job } = await api('POST', withRoot('/api/ingest/screenshots'), { lang, pages: body })); }
+  catch (e) { return alertDlg('Screenshots', e.message); }
+  let cancelled = false;
+  dialog('Reading screenshots', el('div', { class: 'row' }, el('span', { class: 'spinner' }), ' Reading pages…'),
+    [{ label: 'Cancel', value: () => { cancelled = true; api('POST', `/api/jobs/${job}/cancel`, {}); return null; } }]);
+  try {
+    const r = await waitJob(job);
+    if (!cancelled) closeDialog(null);
+    if (!r || cancelled) return;
+    const v = await addDocDialog(r, 'Add screenshots');
+    if (v) startIngest(v);
+  } catch (e) { if (!cancelled) { closeDialog(null); await alertDlg('Screenshots', e.message); } }
 }
 
 async function indexDocs() {
@@ -1935,12 +2210,19 @@ function edPaint() {
   edCur.anchor = Math.max(0, Math.min(n, edCur.anchor | 0));
   const box = $('#edbox');
   const top = box.scrollTop, left = box.scrollLeft;
-  const sel = window.getSelection();
-  if (sel) {
-    const range = edCur.at === edCur.anchor ? null : edDomRange(edCur.at, edCur.anchor);
-    if (edCur.at === edCur.anchor || range) {
-      sel.removeAllRanges();
-      if (range) sel.addRange(range);
+  // A window selection inside #edbox takes the caret from the find field. The
+  // field can stay activeElement and still drop the next key, so while it has
+  // the caret the CSS highlights mark the matches and this selection stays put.
+  const findBar = $('#edfind');
+  const typingFind = !!(findBar && !findBar.hidden && document.activeElement && findBar.contains(document.activeElement));
+  if (!typingFind) {
+    const sel = window.getSelection();
+    if (sel) {
+      const range = edCur.at === edCur.anchor ? null : edDomRange(edCur.at, edCur.anchor);
+      if (edCur.at === edCur.anchor || range) {
+        sel.removeAllRanges();
+        if (range) sel.addRange(range);
+      }
     }
   }
   box.scrollTop = top; box.scrollLeft = left;
@@ -1968,7 +2250,7 @@ function showText(slug, uuid, r, focus) {
   const rec = same ? S.ed.rec : null;
   const keepCur = same ? edCur : null;
   clearHit();  // its range dies with the old text
-  S.ed = { slug, uuid, text: r.text, pages: r.pages || [], labels: r.labels || [], annotations: r.annotations || [], passes: r.passes || [], unplaced: r.unplaced || [], stale: r.stale || [], rec };
+  S.ed = { slug, uuid, text: r.text, pages: r.pages || [], labels: r.labels || [], annotations: r.annotations || [], document: r.document || [], passes: r.passes || [], unplaced: r.unplaced || [], stale: r.stale || [], rec };
   edShow(true);
   const doc = S.byUuid.get(uuid) || { label: uuid };
   $('#edtitle').textContent = doc.label; $('#edtitle').title = doc.label;
@@ -2012,6 +2294,7 @@ function findRec(kind, id, passId) {
   if (!S.ed) return null;
   if (kind === 'h') return (S.ed.labels || []).find(l => l.key === id) || null;
   if (kind === 'a') return (S.ed.annotations || []).find(a => a.id === id) || null;
+  if (kind === 'd') return (S.ed.document || []).find(a => a.id === id) || null;
   const passes = S.ed.passes || [];
   const ordered = passId
     ? passes.filter(p => p.id === passId).concat(passes.filter(p => p.id !== passId))
@@ -2039,9 +2322,23 @@ function edGo(kind, id, passId) {
 function edSide() {
   if (!S.ed) return;
   const labels = S.ed.labels || [], anns = S.ed.annotations || [], passes = S.ed.passes || [];
+  const docs = S.ed.document || [];
   const nq = passes.reduce((n, p) => n + (p.quotes || []).filter(q => !q.lost).length, 0);
+  $('#ed-ndoc').textContent = docs.length ? `(${docs.length})` : '';
   $('#ed-nlabels').textContent = (labels.length + anns.length) ? `(${labels.length + anns.length})` : '';
   $('#ed-nmachine').textContent = nq ? `(${nq})` : '';
+  const whole = [];
+  for (const rec of docs) {
+    const notes = rec.notes || [];
+    const tip = notes.map(n => n.text).filter(Boolean).join('\n');
+    if (rec.kind === 'label') whole.push(sideRow('d', rec.id, rec.key || rec.id, `doc · ${notes.length}`, tip || rec.key, notes));
+    else {
+      const preview = (notes[0] || {}).text || rec.id;
+      const short = preview.length > 32 ? preview.slice(0, 31) + '…' : preview;
+      whole.push(sideRow('d', rec.id, short, `doc · ${notes.length}`, tip || preview, notes));
+    }
+  }
+  $('#ed-document').replaceChildren(...(whole.length ? whole : [el('div', { class: 'empty', text: '(none yet)' })]));
   const human = [];
   for (const l of labels) {
     const notes = l.notes || [];
@@ -2067,7 +2364,7 @@ function edSide() {
     human.push(el('button', { class: 'repairbtn', text: 'Re-anchor stale labels…',
       title: 'A model picks where each stale label now points; only passages found verbatim in the text are kept',
       onclick: async () => {
-        try { await api('POST', `/api/sets/${encodeURIComponent(S.ed.slug)}/repair`, {}); status('Re-anchoring in the background…', 4000); }
+        try { await api('POST', setUrl(S.ed.slug, '/repair'), {}); status('Re-anchoring in the background…', 4000); }
         catch (e) { status(e.message, 6000); }
       } }));
   }
@@ -2109,7 +2406,12 @@ function edMenu(e, kind, id) {
   else if (kind === 'a') items.push(
     { label: 'Notes…', fn: () => openNotes('a', id) },
     { label: 'Delete', fn: () => deleteAnn(id) });
-  else items.push(
+  else if (kind === 'd') {
+    const rec = findRec('d', id);
+    items.push({ label: 'Notes…', fn: () => openNotes('d', id) });
+    if (rec && rec.kind === 'label') items.push({ label: 'Rename', fn: () => renameDocLabel(id) });
+    items.push({ label: 'Delete', fn: () => deleteDocRec(id) });
+  } else items.push(
     { label: 'Notes…', fn: () => openNotes('m', id, passId) },
     { label: 'Copy as YAML', fn: () => copyLabelYaml([id]) });
   showMenu(e.clientX, e.clientY, items);
@@ -2172,6 +2474,9 @@ async function noteWrite(op, kind, id, passId, index, text) {
   } else if (kind === 'a') {
     if (op === 'add') r = await api('PUT', docUrl(slug, uuid, `/annotations-on-text/${enc(id)}`), { text });
     else r = await api(op === 'edit' ? 'PUT' : 'DELETE', docUrl(slug, uuid, `/annotations-on-text/${enc(id)}/notes/${index}`), op === 'del' ? undefined : { text });
+  } else if (kind === 'd') {
+    const path = `/document/${enc(id)}/notes` + (op === 'add' ? '' : `/${index}`);
+    r = await api(op === 'add' ? 'POST' : op === 'edit' ? 'PUT' : 'DELETE', docUrl(slug, uuid, path), op === 'del' ? undefined : { text });
   } else {
     const q = passId ? `?pass=${enc(passId)}` : '';
     if (op === 'add') r = await api('POST', docUrl(slug, uuid, `/quotes/${enc(id)}/notes`), { text, pass: passId || '' });
@@ -2180,7 +2485,9 @@ async function noteWrite(op, kind, id, passId, index, text) {
   const rec = { kind, id };
   if (passId) rec.pass = passId;
   S.ed.rec = rec;
-  const msg = op === 'del' ? `Removed a note on ${id}` : op === 'edit' ? `Updated the note on ${id}` : `Noted ${id}`;
+  const named = findRec(kind, id, passId);
+  const who = kind === 'd' ? ((named && named.key) || 'the document') : id;
+  const msg = op === 'del' ? `Removed a note on ${who}` : op === 'edit' ? `Updated the note on ${who}` : `Noted ${who}`;
   await afterWrite(r, msg);
   if (dlg.open && !findRec(kind, id, passId)) closeDialog(null);
 }
@@ -2249,27 +2556,13 @@ function openNotes(kind, id, passId, focus) {
     finally { addBtn.disabled = false; }
   };
   paint();
-  const title = kind === 'a' ? 'Notes on this annotation' : `Notes on ${id}`;
+  const title = kind === 'a' ? 'Notes on this annotation' : kind === 'd' ? (rec0.key ? `Notes on ${rec0.key}` : 'Notes on this document') : `Notes on ${id}`;
   const body = [rec0.text ? el('pre', { class: 'box', text: rec0.text }) : null, list, el('label', { text: 'New note' }), add, el('div', { class: 'row' }, addBtn)];
   const pending = dialog(title, body, [{ label: 'Close', value: () => null }]);
   const boxes = [...list.querySelectorAll('textarea')];
   const want = focus == null ? add : boxes[focus];
   if (want) want.focus();
   return pending;
-}
-async function addAnn() {
-  if (!S.ed) return;
-  const inMachine = document.activeElement && document.activeElement.closest && document.activeElement.closest('#ed-machine');
-  const hit = machineRec();
-  if (hit && (inMachine || !textSel())) { openNotes('m', hit.key, hit.pass); return; }
-  const sel = textSel();
-  if (!sel) { status('Select a passage to annotate', 4000, true); return; }
-  const note = await promptDlg('Annotate', 'Note on the selected passage:', '');
-  if (!note) return;
-  try {
-    const r = await api('POST', docUrl(S.ed.slug, S.ed.uuid, '/annotations-on-text'), { start: sel.start, end: sel.end, text: note });
-    await afterWrite(r, 'Annotated');
-  } catch (e) { status(e.message, 6000, true); }
 }
 async function renameLabel(key) {
   const neu = await promptDlg('Rename label', `New key for ${key}:`, key);
@@ -2288,6 +2581,37 @@ async function deleteLabel(key) {
     await afterWrite(r, `Deleted ${key}`);
   } catch (e) { status(e.message, 6000, true); }
 }
+async function addDocAnn() {
+  if (!S.ed) return;
+  const note = await promptDlg('Note', 'Note on the whole document:', '');
+  if (!note || !S.ed) return;
+  const before = new Set((S.ed.document || []).map(r => r.id));
+  try {
+    const r = await api('POST', docUrl(S.ed.slug, S.ed.uuid, '/document/annotations'), { text: note });
+    const made = (r.document || []).find(x => x.kind === 'annotation' && !before.has(x.id));
+    S.ed.rec = made ? { kind: 'd', id: made.id } : null;
+    await afterWrite(r, 'Noted the document');
+  } catch (e) { status(e.message, 6000, true); }
+}
+async function renameDocLabel(id) {
+  const rec = findRec('d', id);
+  if (!rec || !S.ed) return;
+  const neu = await promptDlg('Rename label', `New key for ${rec.key}:`, rec.key || '');
+  if (!neu || neu === rec.key || !S.ed) return;
+  try {
+    const r = await api('PUT', docUrl(S.ed.slug, S.ed.uuid, `/document/${enc(id)}`), { key: neu });
+    S.ed.rec = { kind: 'd', id };
+    await afterWrite(r, `Renamed ${rec.key} to ${neu}`);
+  } catch (e) { status(e.message, 6000, true); }
+}
+async function deleteDocRec(id) {
+  if (!S.ed) return;
+  try {
+    const r = await api('DELETE', docUrl(S.ed.slug, S.ed.uuid, `/document/${enc(id)}`));
+    if (S.ed.rec && S.ed.rec.id === id) S.ed.rec = null;
+    await afterWrite(r, 'Deleted the document note');
+  } catch (e) { status(e.message, 6000, true); }
+}
 async function deleteAnn(id) {
   if (!S.ed) return;
   try {
@@ -2302,7 +2626,7 @@ async function copyLabelYaml(keys) {
   copyText(r.text, keys.length > 1 ? `${keys.length} labels as YAML` : 'label as YAML');
 }
 $('#ed-lab').onclick = addLabel;
-$('#ed-ann').onclick = addAnn;
+$('#ed-doc-ann').onclick = addDocAnn;
 $('#ed-reload').onclick = () => { if (S.ed) edLoad(S.ed.slug, S.ed.uuid, true, true); };
 $('#edbox').addEventListener('keydown', e => {
   if (dlg.open || !S.ed || !edCur) return;
@@ -2336,7 +2660,7 @@ function edListKey(box, e) {
   edGo(hit.kind, hit.id);
   hit.row.scrollIntoView({ block: 'nearest' });
 }
-for (const id of ['#ed-labels', '#ed-machine']) {
+for (const id of ['#ed-document', '#ed-labels', '#ed-machine']) {
   const box = $(id);
   box.addEventListener('mousedown', e => { if (!e.target.closest('button')) box.focus(); });
   box.addEventListener('keydown', e => edListKey(box, e));
@@ -2390,11 +2714,12 @@ if (!CFG.has_vec) { $('#st-vec').disabled = true; $('#st-vec').title = CFG.vec_i
 
 function searchReq(kind) {
   const q = $('#filter').value, n = Math.max(1, Math.min(100, parseInt($('#n-hits').value, 10) || 50));
-  if (kind === 'meta') return { kind, slug: S.slug, pattern: q, query: q };
-  if (kind === 'vec') return { kind, slug: S.slug, query: q, n };
+  const root = S.root || 'main';
+  if (kind === 'meta') return { kind, slug: S.slug, root, pattern: q, query: q };
+  if (kind === 'vec') return { kind, slug: S.slug, root, query: q, n };
   // Text: every occurrence (the regex search), so each one can be labelled.
   const rx = $('#rx-text').checked, pat = rx ? q : q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return { kind, slug: S.slug, query: pat, regex: true, n, shown: q };
+  return { kind, slug: S.slug, root, query: pat, regex: true, n, shown: q };
 }
 function runSearch() {
   if (!needSet()) return;
@@ -2407,8 +2732,8 @@ function runSearch() {
 async function execSearch(req) {
   status(req.kind === 'vec' ? 'Searching (the first vector search loads the model)…' : 'Searching…');
   try {
-    const res = await api('POST', `/api/search/${req.kind}`, req);
-    if (req.slug === S.slug) {
+    const res = await api('POST', withRoot(`/api/search/${req.kind}`, req.root), req);
+    if (req.slug === S.slug && (req.root || 'main') === (S.root || 'main')) {
       S.sres = res.map(r => ({ ...r, kind: req.kind, q: req.query, rx: req.regex })); S.ssel = new Set(); S.scur = -1;
       S.sq.last = req; setHits(true); renderSearch();
       if (S.sres.length) sSelect(0); $('#stbl').focus({ preventScroll: true });
@@ -2541,18 +2866,33 @@ function findCount() {
   $('#ef-n').textContent = !q ? '' : n ? `${EF.i + 1}/${n}` : 'none';
   $('#ef-n').classList.toggle('err', !!q && !n);
 }
+// edHit selects the match in the text. Done from #ef-q, that selection swallows
+// the next key even though the field stays activeElement, so put its caret back.
+function findHold(fn) {
+  const q = $('#ef-q');
+  const hold = document.activeElement === q;
+  const start = q.selectionStart, end = q.selectionEnd;
+  fn();
+  if (!hold) return;
+  if (document.activeElement !== q) q.focus();
+  if (start != null && end != null) q.setSelectionRange(start, end);
+}
 // Recompute the matches; the current one is the first at or after the selection.
 function findRun() {
-  EF.hits = S.ed ? findAll(S.ed.text, $('#ef-q').value) : [];
-  const at = edCur ? Math.min(edCur.at, edCur.anchor) : 0, k = EF.hits.findIndex(h => h.start >= at);
-  EF.i = EF.hits.length ? (k < 0 ? 0 : k) : -1;
-  findPaint();
-  if (EF.i >= 0) edHit(EF.hits[EF.i]); else clearHit();
-  findCount();
+  findHold(() => {
+    EF.hits = S.ed ? findAll(S.ed.text, $('#ef-q').value) : [];
+    const at = edCur ? Math.min(edCur.at, edCur.anchor) : 0, k = EF.hits.findIndex(h => h.start >= at);
+    EF.i = EF.hits.length ? (k < 0 ? 0 : k) : -1;
+    findPaint();
+    if (EF.i >= 0) edHit(EF.hits[EF.i]); else clearHit();
+    findCount();
+  });
 }
 function findGo(d) {
-  const n = EF.hits.length; if (!n) return;
-  EF.i = (EF.i + d + n) % n; edHit(EF.hits[EF.i]); findCount();
+  findHold(() => {
+    const n = EF.hits.length; if (!n) return;
+    EF.i = (EF.i + d + n) % n; edHit(EF.hits[EF.i]); findCount();
+  });
 }
 // The text was drawn again (a label added, another doc): the old ranges are gone.
 function findRefresh(sameDoc) {
@@ -2597,28 +2937,31 @@ const HELP = `<p>Humans and agents share one legal document set. Cited wording i
 <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> (label text)</td><td>move the cursor</td></tr>
 <tr><td><kbd>Ctrl</kbd>+<kbd>←</kbd> / <kbd>→</kbd> (label text)</td><td>previous / next word</td></tr>
 <tr><td><kbd>Shift</kbd>+arrows (label text)</td><td>start the selection and extend it, by word when Ctrl is held</td></tr>
-<tr><td><kbd>↑</kbd> <kbd>↓</kbd> (Human or Machine list)</td><td>move through that list</td></tr>
+<tr><td><kbd>↑</kbd> <kbd>↓</kbd> (All doc, Snippets, or Machine)</td><td>move through that list</td></tr>
 <tr><td><kbd>Ctrl+F</kbd> (Label pane)</td><td>find words in the text: Enter / Shift+Enter (or F3) next / previous; the match is selected, so <kbd>Ctrl+L</kbd> labels it; Esc closes</td></tr>
-<tr><td><kbd>Ctrl+L</kbd> (Label pane)</td><td>label the selected passage (saved at once)</td></tr>
-<tr><td><kbd>Ctrl+M</kbd> (Label pane)</td><td>annotate the selected passage, or open the notes on the selected machine quote</td></tr>
+<tr><td><kbd>Ctrl+L</kbd> (Label pane)</td><td>Label: mark the selected passage</td></tr>
+<tr><td><kbd>Ctrl+M</kbd> (Label pane)</td><td>Note: a note on the whole document. On a selected machine quote, opens its notes</td></tr>
 <tr><td>notes (Label pane)</td><td>each label, annotation, and machine quote lists its notes. Notes… reads them, edits or deletes one, and adds another</td></tr>
 <tr><td><kbd>Ctrl++</kbd> / <kbd>Ctrl+−</kbd> / <kbd>Ctrl+0</kbd>, Ctrl+wheel (Label pane)</td><td>text size</td></tr>
 <tr><td><kbd>Ctrl+S</kbd></td><td>Detail pane: save the detail. The Label pane saves as you label.</td></tr>
-${CFG.app ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr>' : ''}
+${(CFG.app || window.parent !== window) ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr>' : ''}
 <tr><td><kbd>Ctrl+B</kbd></td><td>fold the set tree away / show it</td></tr>
 <tr><td><kbd>F1</kbd></td><td>help</td></tr>
 <tr><td>Agent (top right)</td><td>terminals running your agent or a shell for the selected set (marked <i>agent</i> in the set tree): they start in the set's folder, and <span class="mono">evid</span> there uses this data dir and set. Selection types what you selected into the terminal. Ctrl+Shift+C / V copy and paste.</td></tr>
 <tr><td>drag rows onto a set</td><td>copy the documents there</td></tr>
 <tr><td>drag a tag pill onto a row</td><td>tag that document</td></tr></table>
-<p><b>Docs</b> — Ingest PDF · Add from URL · Index · Open dir</p>
+<p><b>Docs</b> — Ingest PDF · Add from URL · Add screenshots · Index · Open dir</p>
 <p class="muted">Data: ${CFG.data_dir.replace(/&/g, '&amp;').replace(/</g, '&lt;')}<br>Editor: ${String(CFG.editor).replace(/</g, '&lt;')} (set <span class="mono">editor:</span> in evid.yml)</p>`;
 function help() { const d = el('div', { class: 'help' }); d.innerHTML = HELP; dialog('evid help', d, [{ label: 'Close', primary: true }]); }
 $('#b-help').onclick = help;
 
 document.addEventListener('keydown', e => {
+  if (window.parent !== window && e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && (e.key === 'PageUp' || e.key === 'PageDown')) {
+    e.preventDefault(); window.parent.postMessage({ type: 'workbench-tab', step: e.key === 'PageDown' ? 1 : -1 }, '*'); return;  // the workbench cycles its tabs
+  }
   if (dlg.open) return;
   if (e.target.closest && e.target.closest('#termpane')) {  // keys belong to the shell / agent (Ctrl+W deletes a word there)
-    if (CFG.app && e.ctrlKey && !e.shiftKey && e.code === 'KeyQ') { e.preventDefault(); quitApp(); }
+    if ((CFG.app || window.parent !== window) && e.ctrlKey && !e.shiftKey && e.code === 'KeyQ') { e.preventDefault(); quitApp(); }
     return;
   }
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
@@ -2636,14 +2979,18 @@ document.addEventListener('keydown', e => {
     const back = document.activeElement === $('#ef-q');  // labelling from the find bar: stay in it for the next match
     addLabel().then(() => { if (back && findIsOpen()) $('#ef-q').focus(); });
   } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'm' && S.pane === 'label' && S.ed) {
-    e.preventDefault(); addAnn();
+    e.preventDefault();
+    const hit = machineRec();
+    const inMachine = document.activeElement && document.activeElement.closest && document.activeElement.closest('#ed-machine');
+    if (hit && (inMachine || !textSel())) openNotes('m', hit.key, hit.pass);
+    else addDocAnn();
   } else if (isSaveKey(e)) {
     e.preventDefault();
     if (S.pane === 'detail' && curDoc()) saveDetail();
   } else if (e.altKey && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
     e.preventDefault(); const d = e.key === 'ArrowDown' ? 1 : -1;
     if (S.hits) stepHit(d); else stepDoc(d);
-  } else if (CFG.app && e.ctrlKey && (e.key === 'w' || e.key === 'q')) {
+  } else if ((CFG.app || window.parent !== window) && e.ctrlKey && (e.key === 'w' || e.key === 'q')) {
     e.preventDefault(); quitApp();
   } else if (e.key === '/' && !typing) { e.preventDefault(); $('#filter').focus(); $('#filter').select(); }
   else if (e.key === 'Escape') hideMenu();
@@ -2663,6 +3010,7 @@ async function stepDoc(d) {
 async function quitApp() {
   const dirty = S.detailDirty || edDirty();
   if (dirty && !(await confirmDlg('Quit evid', 'There are unsaved changes. Quit anyway?', 'Quit'))) return;
+  if (window.parent !== window) { window.parent.postMessage({ type: 'workbench-quit' }, '*'); return; }
   api('POST', '/api/quit', {}).catch(() => {});
 }
 window.addEventListener('beforeunload', e => { if (!CFG.app && (S.detailDirty || edDirty())) { e.preventDefault(); e.returnValue = ''; } });
@@ -2671,8 +3019,10 @@ $('#b-newset').onclick = newSet;
 $('#b-fold').onclick = () => setFold(!S.folded);
 $('#sidemini').onclick = () => setFold(false);
 $('#b-import').onclick = importDir;
+$('#b-connect').onclick = connectDir;
 $('#b-ingest').onclick = ingestPdf;
 $('#b-url').onclick = addFromUrl;
+$('#b-shots').onclick = addScreenshots;
 $('#b-index').onclick = indexDocs;
 $('#b-opendir').onclick = () => curDoc() && openDoc(S.slug, S.cur, 'dir');
 $('#loghead').onclick = () => { const w = $('#logwrap'); w.classList.toggle('fold'); $('#logtw').textContent = w.classList.contains('fold') ? '▸' : '▾'; store('logopen', !w.classList.contains('fold')); };
@@ -2698,7 +3048,7 @@ function ago(at) {
 }
 const WHAT = { 'info.yml': 'details', 'annotations.yml': 'notes', 'label/labels.json': 'labels', pass: 'quotes', folder: 'files' };
 function onDisk(e) {
-  if (e.slug !== S.slug) { S.setTags.delete(e.slug); refreshSetCounts(); return; }
+  if (!samePlace(e)) { S.setTags.delete(placeKey(e.root, e.slug)); refreshSetCounts(); return; }
   const now = Date.now() / 1000, outside = [];
   for (const c of [...e.changed, ...e.added]) {
     if (c.by !== 'outside') continue;
@@ -2721,19 +3071,36 @@ setInterval(() => { if (S.changes.size && !S.hits) renderDocs(); }, 30000);  // 
 
 // ── agent pane: terminals on the right (from treedit) ────────────────────────
 
-const T = { open: false, list: [], active: null };  // one entry per server terminal, top to bottom
+const T = { open: false, list: [], active: null, key: '', slug: null, root: 'main' };  // one entry per server terminal, top to bottom
 const LIGHT_ANSI = { black: '#2e2b26', red: '#b23b2e', green: '#2f7d4f', yellow: '#946400', blue: '#3f6fb5', magenta: '#8a3ab9',
   cyan: '#0f7b85', white: '#8a857b', brightBlack: '#6b665d', brightRed: '#cf4436', brightGreen: '#38945c', brightYellow: '#b07a00',
   brightBlue: '#4f82cc', brightMagenta: '#a050d0', brightCyan: '#14909e', brightWhite: '#a9a397' };
 const darkMode = () => document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-function setForcedTheme(name) {  // 'light' | 'dark' from the workbench; anything else follows the system
+function setForcedTheme(name) {  // 'light' | 'dark'; anything else follows the system
   if (name === 'light' || name === 'dark') document.documentElement.dataset.theme = name;
   else delete document.documentElement.dataset.theme;
   for (const P of T.list) P.term.options.theme = termTheme();
 }
+// In the workbench the theme arrives as data: a light or dark base, the workbench's core colours
+// (mapped onto this page's own) and its fonts. Alone, evid stays on ?theme= or the system.
+const WB_VARS = { bg: ['--bg'], panel: ['--panel'], sunk: ['--panel2', '--hover', '--pill'], line: ['--line'], ink: ['--fg'],
+  muted: ['--muted', '--hl-note'], accent: ['--accent', '--pill-active', '--hl-head'], 'accent-low': ['--sel'], 'on-accent': ['--accent-fg'], err: ['--err'] };
+function workbenchTheme(d) {
+  const st = document.documentElement.style, t = d.tokens || {}, f = d.fonts || {};
+  for (const [k, vars] of Object.entries(WB_VARS)) for (const v of vars) t[k] ? st.setProperty(v, t[k]) : st.removeProperty(v);
+  for (const [v, x] of [['--sans', f.sans], ['--sans-weight', f.weight], ['--mono', f.mono]]) x ? st.setProperty(v, x) : st.removeProperty(v);
+  if (/^https?:\/\//.test(f.css || '')) {
+    let l = document.getElementById('wb-fonts');
+    if (!l) { l = document.createElement('link'); l.id = 'wb-fonts'; l.rel = 'stylesheet'; document.head.append(l); }
+    if (l.href !== f.css) l.href = f.css;
+  }
+  setForcedTheme(d.scheme);
+}
 setForcedTheme(new URLSearchParams(location.search).get('theme'));
+const EMBED = new URLSearchParams(location.search).get('embed') === '1';
+if (EMBED) document.body.classList.add('embed');  // hide the agent pane: the workbench owns the terminals
 window.addEventListener('message', e => {
-  if (e.source === window.parent && e.data && e.data.type === 'workbench-theme') setForcedTheme(e.data.theme);
+  if (e.source === window.parent && e.data && e.data.type === 'workbench-theme') workbenchTheme(e.data);
 });
 if (window.parent !== window) window.parent.postMessage({ type: 'workbench-hello' }, '*');
 function termTheme() {
@@ -2742,7 +3109,7 @@ function termTheme() {
     selectionBackground: darkMode() ? 'rgba(127,167,224,.35)' : 'rgba(63,111,181,.25)', ...(darkMode() ? {} : LIGHT_ANSI) };
 }
 function termMake(info) {  // the pane, the xterm and (once shown) the socket of one server terminal
-  const P = { id: info.id, slug: T.slug, agent: info.agent, ws: null, retry: 0, queue: [], closed: false };
+  const P = { id: info.id, slug: T.slug, root: T.root || 'main', agent: info.agent, ws: null, retry: 0, queue: [], closed: false };
   P.dot = el('span', { class: 'tdot' }); P.lab = el('b', { text: info.label }); P.body = el('div', { class: 'tbody' });
   const restart = el('button', { text: '↻', title: 'End this session and start a new one',
     onclick: async () => { if (await confirmDlg('Restart terminal', `End "${P.lab.textContent}" and start it again?`, 'Restart')) termSend(P, { t: 'restart' }); } });
@@ -2756,7 +3123,7 @@ function termMake(info) {  // the pane, the xterm and (once shown) the socket of
   P.fit = new FitAddon.FitAddon(); P.term.loadAddon(P.fit);
   P.term.onData(d => termSend(P, { t: 'in', d }));
   P.term.attachCustomKeyEventHandler(e => {  // Ctrl+Shift+C / V copy and paste, as in Ptyxis
-    if (CFG.app && e.ctrlKey && !e.shiftKey && !e.altKey && e.code === 'KeyQ') return false;  // quit, handled by the page
+    if ((CFG.app || window.parent !== window) && e.ctrlKey && !e.shiftKey && !e.altKey && e.code === 'KeyQ') return false;  // quit, handled by the page
     if (e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey) return true;
     if (e.code === 'KeyC') { const t = P.term.getSelection(); if (t) navigator.clipboard?.writeText(t).catch(() => {}); return false; }
     if (e.code === 'KeyV') { navigator.clipboard?.readText().then(t => P.term.paste(t)).catch(() => status('Paste blocked — try middle-click', 4000, true)); return false; }
@@ -2797,7 +3164,8 @@ function termSend(P, m) { if (P && P.ws && P.ws.readyState === 1) { P.ws.send(JS
 function termState(P, st) { P.dot.className = 'tdot ' + st; P.dot.title = { live: 'connected', ended: 'session ended', off: 'disconnected' }[st] || ''; }
 function termConnect(P) {
   if (P.closed || (P.ws && P.ws.readyState <= 1)) return;
-  const ws = new WebSocket(`ws://${location.host}/api/term?token=${encodeURIComponent(CFG.token)}&slug=${encodeURIComponent(P.slug)}&id=${encodeURIComponent(P.id)}`);
+  const rootQ = P.root && P.root !== 'main' ? `&root=${encodeURIComponent(P.root)}` : '';
+  const ws = new WebSocket(`ws://${location.host}/api/term?token=${encodeURIComponent(CFG.token)}&slug=${encodeURIComponent(P.slug)}&id=${encodeURIComponent(P.id)}${rootQ}`);
   ws.binaryType = 'arraybuffer'; P.ws = ws;
   ws.onopen = () => { P.retry = 0; termState(P, 'live'); termFit(P); const q = P.queue; P.queue = []; q.forEach(f => f()); };
   ws.onmessage = ev => {
@@ -2815,15 +3183,18 @@ function termConnect(P) {
   };
 }
 // The pane shows the selected set's terminals only; other sets' keep running in the background.
+function termKey() { return (S.root || 'main') + '/' + (S.slug || ''); }
 async function termLoad() {
-  if (T.slug !== S.slug) { for (const P of T.list.slice()) termDrop(P); T.slug = S.slug; }
-  const set = S.sets.find(x => x.slug === S.slug);
-  $('#t-title').textContent = set ? `Agent · ${set.name}` : 'Agent';
+  const key = termKey();
+  if (T.key !== key) { for (const P of T.list.slice()) termDrop(P); T.key = key; T.slug = S.slug; T.root = S.root || 'main'; }
+  const set = currentSet();
+  const where = set && S.roots.length > 1 ? `${set.rootName} · ${set.name}` : (set ? set.name : '');
+  $('#t-title').textContent = where ? `Agent · ${where}` : 'Agent';
   if (!S.slug) { termSync([]); return; }
-  try { termSync((await api('GET', `/api/terms?slug=${enc(S.slug)}`)).terms); } catch (e) { status(e.message, 6000, true); }
+  try { termSync((await api('GET', withRoot(`/api/terms?slug=${enc(S.slug)}`))).terms); } catch (e) { status(e.message, 6000, true); }
 }
 function termEmpty() {
-  const empty = !T.list.length, set = S.sets.find(x => x.slug === S.slug);
+  const empty = !T.list.length, set = currentSet();
   $('#tempty').hidden = !empty;
   if (!empty) return;
   $('#tempty-msg').textContent = set ? `No agent on “${set.name}”. An agent here works on this set only: it starts in the set's folder, and evid there defaults to this set.` : 'Pick an evidence set first.';
@@ -2831,7 +3202,7 @@ function termEmpty() {
   $('#t-start').textContent = `Start ${CFG.agent || 'a shell'} on this set`;
 }
 async function termNew(cmd) {
-  const r = await api('POST', '/api/term/new', { slug: S.slug, agent: cmd });
+  const r = await api('POST', withRoot('/api/term/new'), { slug: S.slug, agent: cmd });
   termSync(r.terms);
   const P = T.list.find(x => x.id === r.id);
   if (P) { termActive(P); requestAnimationFrame(() => P.term.focus()); }
@@ -2848,7 +3219,7 @@ async function termAdd(agentOnly) {
 }
 async function termClose(P) {
   if (!(await confirmDlg('Close terminal', `Close "${P.lab.textContent}"? Its session ends.`, 'Close'))) return;
-  try { termSync((await api('POST', '/api/term/close', { slug: P.slug, id: P.id })).terms); } catch (e) { status(e.message, 6000, true); }
+  try { termSync((await api('POST', withRoot('/api/term/close', P.root), { slug: P.slug, id: P.id })).terms); } catch (e) { status(e.message, 6000, true); }
 }
 async function openTerm(open) {
   T.open = open; store('term', open);
@@ -2885,7 +3256,7 @@ function currentSelection() {  // documents (the hits, else the docs table), lab
   }
   return c;
 }
-if (CFG.term) {
+if (CFG.term && !EMBED) {  // the agent pane is hidden when embedded in the workbench
   $('#b-term').hidden = false;
   $('#b-term').onclick = () => openTerm(!T.open);
   $('#t-close').onclick = () => openTerm(false);
@@ -2919,9 +3290,8 @@ if (CFG.term) {
     S.evSince = r.last;
   } catch (e) { status(e.message, 0, true); }
   poll();
-  try { S.registry = await api('GET', '/api/tags'); } catch (e) { status(e.message, 6000, true); }
   const open = openTarget(location.search);
-  await loadSets(open && open.slug || undefined);
+  await loadSets(open && open.slug ? { slug: open.slug, root: S.root } : undefined);
   if (open && open.uuid) { selectRow(open.uuid); if (open.pane === 'label') openEditor(S.slug, open.uuid); }
   $('#dtbl').focus({ preventScroll: true });
 })();

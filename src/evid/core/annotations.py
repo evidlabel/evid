@@ -1,19 +1,20 @@
-"""Annotations: notes on a document and on the files in its folder.
+"""Annotations: notes on the files in a document's folder.
 
 They are for the people and agents who use or handle the evidence set (what a
 file is, what to watch out for, what is still missing). They live next to the
 document in ``annotations.yml``, a plain mapping:
 
-    .: note on the document as a whole
     original.pdf: note on that file
     attachments/scan-2.pdf: note on a file in a sub-folder
 
-Keys are paths relative to the document folder (``.`` is the document itself).
-An empty note removes the key. The file is kept in git by ``evid set track`` and
-copied with the document.
+Keys are paths relative to the document folder. An empty note removes the key.
+The file is kept in git by ``evid set track`` and copied with the document.
 
-Older documents kept one free-text ``notes`` string in ``evid_meta.yml``; it is
-read as the document note until a note is written here.
+A note on the document as a whole is not stored here. It is a list of
+whole-document labels and annotations in ``label/labels.json`` (see
+:mod:`evid.core.labels`). Older documents kept that note as the ``.`` key in
+this file, or as a ``notes`` string in ``evid_meta.yml``. Those are still read
+until :func:`evid.core.labels.adopt_legacy_document_note` moves them.
 """
 
 from __future__ import annotations
@@ -75,8 +76,51 @@ def read_annotations(doc_dir: Path) -> dict[str, str]:
 
 
 def doc_note(doc_dir: Path) -> str:
-    """The note on the document as a whole ('' if none)."""
-    return read_annotations(doc_dir).get(DOC, "")
+    """Whole-document notes joined, else the legacy single note ('' if none)."""
+    from evid.core.labels import document_blurb
+
+    return document_blurb(doc_dir)
+
+
+def note_rows(doc_dir: Path) -> list[dict]:
+    """Whole-document records, then the file notes.
+
+    A whole-document row has ``path`` ``.``, ``kind`` (``label`` or
+    ``annotation``), ``id``, and ``key`` when it is a label. A file row has
+    ``path``, ``note``, and ``missing``. The legacy ``.`` string is included
+    only when no whole-document record already carries that text.
+    """
+    from evid.core.labels import notes_text
+    from evid.core.labels import read as read_labels
+
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for rec in read_labels(doc_dir).get("document") or []:
+        if not isinstance(rec, dict):
+            continue
+        text = notes_text(rec)
+        kind = rec.get("kind") or "annotation"
+        if kind != "label" and not text:
+            continue
+        row = {
+            "path": DOC,
+            "note": text,
+            "missing": False,
+            "kind": kind,
+            "id": rec.get("id") or "",
+        }
+        if rec.get("key"):
+            row["key"] = rec["key"]
+        rows.append(row)
+        if text:
+            seen.add(text.strip())
+    notes = read_annotations(doc_dir)
+    gone = set(missing_targets(doc_dir, notes))
+    for key, note in notes.items():
+        if key == DOC and note.strip() in seen:
+            continue
+        rows.append({"path": key, "note": note, "missing": key in gone})
+    return rows
 
 
 def write_annotation(doc_dir: Path, path: str, text: str) -> dict[str, str]:

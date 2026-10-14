@@ -50,6 +50,26 @@ def test_label_json_notes():
     assert summarise("label/labels.json", "M", old, old) is None
 
 
+def test_document_annotation_is_its_own_history():
+    old = json.dumps({"labels": [], "document": []})
+    new = json.dumps(
+        {
+            "labels": [],
+            "document": [
+                {
+                    "id": "abc",
+                    "kind": "annotation",
+                    "notes": [{"text": "Key exhibit."}],
+                },
+                {"id": "def", "kind": "label", "key": "exhibit", "notes": []},
+            ],
+        }
+    )
+    got = summarise("label/labels.json", "M", old, new)
+    assert got["added"] == ["exhibit"] and got["removed"] == []
+    assert got["documents"] == ["+ doc: Key exhibit."]
+
+
 def test_not_tracked(tmp_path):
     assert doc_history(tmp_path) == {"tracked": False, "entries": []}
 

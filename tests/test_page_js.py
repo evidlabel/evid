@@ -48,6 +48,8 @@ FUNCS = [
     "storedNoteIndex",
     "hitSpan",
     "findAll",
+    "shotMove",
+    "shotRemove",
 ]
 
 
@@ -468,6 +470,7 @@ def test_history_chips(js):
                 "file": "label/labels.json",
                 "added": ["k1"],
                 "removed": ["k0"],
+                "documents": ["+ doc: Key exhibit"],
             },
             {
                 "kind": "pass",
@@ -486,6 +489,7 @@ def test_history_chips(js):
         "✎ title, tags",
         "+ k1",
         "− k0",  # noqa: RUF001 — the chip uses a real minus
+        "+ doc: Key exhibit",
         "pass: dates (2/3)",
         "🗨 note on original.pdf",
         "added scan.pdf",
@@ -496,6 +500,15 @@ def test_agent_badge(js):
     assert js(
         "return [agentBadge(['claude']), agentBadge(['claude', 'fish', 'codex']), agentBadge([]), agentBadge(undefined)];"
     ) == ["claude", "claude +2", "agent", "agent"]
+
+
+def test_label_header_is_note_and_label():
+    src = (resources.files("evid.web") / "page.html").read_text("utf-8")
+    head = src.split('id="edhead"', 1)[1].split("</div>", 1)[0]
+    assert ">Note</button>" in head and ">Label</button>" in head
+    assert 'id="ed-doc-ann"' in head and 'id="ed-lab"' in head
+    assert "ed-doc-lab" not in src and 'id="ed-ann"' not in src
+    assert "All doc →" not in src
 
 
 def test_stored_note_index_skips_pass_notes(js):
@@ -525,3 +538,22 @@ def test_note_line_and_filter_by_note(js):
     assert js(f"return filterDocs({docs}, 'board', new Set()).map(d => d.uuid);") == [
         "a"
     ]
+
+
+def test_screenshot_page_order(js):
+    pages = json.dumps(["a", "b", "c"])
+    assert js(f"return shotMove({pages}, 0, -1);") == {
+        "pages": ["a", "b", "c"],
+        "sel": 0,
+    }
+    assert js(f"return shotMove({pages}, 0, 1);") == {
+        "pages": ["b", "a", "c"],
+        "sel": 1,
+    }
+    assert js(f"return shotMove({pages}, 2, 1);") == {
+        "pages": ["a", "b", "c"],
+        "sel": 2,
+    }
+    assert js(f"return shotRemove({pages}, 1);") == {"pages": ["a", "c"], "sel": 1}
+    assert js(f"return shotRemove({pages}, 0);") == {"pages": ["b", "c"], "sel": 0}
+    assert js("return shotRemove(['only'], 0);") == {"pages": [], "sel": -1}

@@ -22,6 +22,7 @@ from evid.cli.dataset import (
 )
 from evid.cli.evidence import (
     add_evidence,
+    add_screenshots,
     get_evidence_list,
     select_evidence,
 )
@@ -38,6 +39,7 @@ from evid.core.quote_pass import (
     record_pass,
     resolve_pass_meta,
 )
+from evid.core.share import write_share
 from evid.models import Document
 
 # Logging is configured centrally in evid.logging_config (called from main()).
@@ -336,6 +338,39 @@ def gather_callback(
     )
 
 
+def share_callback(db: str = None, dataset: str = None, output: str = None):
+    """Write a json.gz catalog of this set's public documents.
+
+    Each kept document has its url, tags, labels, and the sha256 of the PDF
+    and of the canonical text when those files exist. A document with no
+    http(s) url is left out.
+    """
+    dataset = _resolve_dataset(dataset, "Select dataset to share", allow_create=False)
+    if not output:
+        sys.exit("--output / -o is required.")
+    dest = Path(output).expanduser()
+    kept, dropped = write_share(set_dir(DIRECTORY, dataset), dataset, dest)
+    print(
+        f"Wrote {dest} ({kept} document(s), {dropped} without a public URL left out)."
+    )
+
+
+def merge_refs_callback(
+    db: str = None, inputs: str | list[str] = None, output: str = None
+):
+    """Merge gathered Hayagriva .yml files into one store."""
+    from evid.core.gather import merge_hayagriva
+
+    if not output:
+        sys.exit("--output / -o is required.")
+    paths = [Path(p).expanduser() for p in (inputs or [])]
+    if not paths:
+        sys.exit("give at least one gathered .yml to merge.")
+    out = Path(output).expanduser()
+    merged = merge_hayagriva(paths, out)
+    print(f"merged {len(paths)} file(s) → {out} ({len(merged)} entries)")
+
+
 # ── doc callbacks ──────────────────────────────────────────────────────────────
 
 
@@ -350,6 +385,33 @@ def add_callback(
     """Add one or more documents (PDFs, a directory, or URLs) to a dataset."""
     dataset = _resolve_dataset(dataset, "Select dataset for adding document")
     add_evidence(DIRECTORY, dataset, source, label, autolabel, no_index=no_index)
+
+
+def screenshot_callback(
+    db: str = None,
+    source: str | list[str] = None,
+    dataset: str = None,
+    title: str = "",
+    authors: str = "",
+    dates: str = "",
+    url: str = "",
+    lang: str = "dan+eng",
+    no_index: bool = False,
+):
+    """Add screenshots as one document. Each image is a page; the text is OCR."""
+    dataset = _resolve_dataset(dataset, "Select dataset for adding screenshots")
+    sources = source if isinstance(source, (list, tuple)) else [source]
+    add_screenshots(
+        DIRECTORY,
+        dataset,
+        [s for s in sources if s],
+        title=title or "",
+        authors=authors or "",
+        dates=dates or "",
+        url=url or "",
+        lang=lang or "dan+eng",
+        no_index=no_index,
+    )
 
 
 def _have_display() -> bool:
@@ -595,6 +657,44 @@ def _doc_dir_or_exit(dataset: str, uuid: str) -> Path:
     return doc_dir
 
 
+def _is_doc_path(path: str | None) -> bool:
+    raw = (path if path is not None else ".").replace("\\", "/").strip()
+    return raw in ("", ".", "./")
+
+
+def _document_blocks(doc_dir: Path) -> list[str]:
+    """Printable whole-document notes, oldest first, plus a legacy note not yet moved."""
+    from evid.core.annotations import read_annotations
+    from evid.core.labels import notes_text, read
+
+    blocks = []
+    seen: set[str] = set()
+    for rec in read(doc_dir).get("document") or []:
+        if not isinstance(rec, dict):
+            continue
+        text = notes_text(rec)
+        if rec.get("kind") == "label" and rec.get("key"):
+            blocks.append(
+                f"[{rec['key']}] {text}".rstrip() if text else f"[{rec['key']}]"
+            )
+        elif text:
+            blocks.append(text)
+        else:
+            continue
+        if text:
+            seen.add(text.strip())
+    legacy = (read_annotations(doc_dir).get(".") or "").strip()
+    if legacy and legacy not in seen:
+        blocks.append(legacy)
+    return blocks
+
+
+def _print_note_blocks(blocks: list[str]) -> None:
+    for block in blocks:
+        for line in block.splitlines() or [""]:
+            print(f"  {line}")
+
+
 def note_callback(
     db: str = None,
     dataset: str = None,
@@ -603,8 +703,15 @@ def note_callback(
     text: str = None,
     clear: bool = False,
 ):
-    """Show or set the annotation on a document (-p .) or a file in its folder."""
+    """Show or add a whole-document annotation, or show or set a file note."""
     from evid.core.annotations import read_annotations, write_annotation
+    from evid.core.bibtex_utils import load_title
+    from evid.core.gitops import commit_labels
+    from evid.core.labels import (
+        add_document_annotation,
+        adopt_legacy_document_note,
+        clear_document_annotations,
+    )
 
     dataset = _resolve_dataset(dataset, "Select dataset", allow_create=False)
     if not uuid:
@@ -612,10 +719,31 @@ def note_callback(
     doc_dir = _doc_dir_or_exit(dataset, uuid)
     try:
         if text is not None or clear:
+            if _is_doc_path(path):
+                if clear or not (text or "").strip():
+                    write_annotation(doc_dir, ".", "")
+                    clear_document_annotations(doc_dir)
+                    title = load_title(doc_dir / "info.yml") or doc_dir.name[:8]
+                    commit_labels(doc_dir, f"label: {title} (-document notes)")
+                    print("Removed the note on .")
+                    return
+                adopt_legacy_document_note(doc_dir)
+                rec = add_document_annotation(doc_dir, text)
+                title = load_title(doc_dir / "info.yml") or doc_dir.name[:8]
+                commit_labels(doc_dir, f"label: {title} (+document {rec['id']})")
+                print("Added a note on .")
+                return
             write_annotation(doc_dir, path or ".", "" if clear else text)
+            where = path or "."
             print(
-                f"{'Removed' if clear or not text.strip() else 'Set'} the note on {path or '.'}"
+                f"{'Removed' if clear or not (text or '').strip() else 'Set'} the note on {where}"
             )
+            return
+        if path is not None and _is_doc_path(path):
+            blocks = _document_blocks(doc_dir)
+            if not blocks:
+                sys.exit(1)
+            print("\n".join(blocks))
             return
         notes = read_annotations(doc_dir)
     except (ValueError, FileNotFoundError) as exc:
@@ -626,10 +754,15 @@ def note_callback(
             sys.exit(1)
         print(note)
         return
+    blocks = _document_blocks(doc_dir)
+    if blocks:
+        print(".:")
+        _print_note_blocks(blocks)
     for key, note in notes.items():
+        if key == ".":
+            continue
         print(f"{key}:")
-        for line in note.splitlines() or [""]:
-            print(f"  {line}")
+        _print_note_blocks([note])
 
 
 def notes_callback(
@@ -638,8 +771,8 @@ def notes_callback(
     uuid: str = None,
     format: str = "table",
 ):
-    """List annotations on the documents of a set (or of one document)."""
-    from evid.core.annotations import missing_targets, read_annotations
+    """List whole-document labels and annotations, and notes on files."""
+    from evid.core.annotations import note_rows
 
     dataset = _resolve_dataset(dataset, "Select dataset", allow_create=False)
     docs = get_evidence_list(DIRECTORY, dataset)
@@ -650,17 +783,9 @@ def notes_callback(
     rows = []
     for doc in docs:
         doc_dir = docs_dir(DIRECTORY, dataset) / doc["uuid"]
-        notes = read_annotations(doc_dir)
-        gone = set(missing_targets(doc_dir, notes))
         rows.extend(
-            {
-                "uuid": doc["uuid"],
-                "title": doc["title"],
-                "path": key,
-                "note": note,
-                "missing": key in gone,
-            }
-            for key, note in notes.items()
+            {"uuid": doc["uuid"], "title": doc["title"], **row}
+            for row in note_rows(doc_dir)
         )
     if format == "json":
         print(json.dumps(rows, ensure_ascii=False, indent=2))
@@ -674,11 +799,10 @@ def notes_callback(
             if r["uuid"] != last:
                 print(f"\n## {r['title']} `{r['uuid']}`\n")
                 last = r["uuid"]
-            where = (
-                "document"
-                if r["path"] == "."
-                else f"`{r['path']}`" + (" (missing)" if r["missing"] else "")
-            )
+            if r["path"] == ".":
+                where = f"document `{r['key']}`" if r.get("key") else "document"
+            else:
+                where = f"`{r['path']}`" + (" (missing)" if r["missing"] else "")
             print(f"- {where}: " + r["note"].replace("\n", "\n  "))
         return
     table = Table(title=f"Annotations in {dataset}")
@@ -704,6 +828,13 @@ def _fb_set(dataset: str | None) -> Path:
     return set_dir(DIRECTORY, dataset)
 
 
+def _fb_slug(sdir: Path) -> str:
+    """Slug of a set directory. The directory name is ``plain_set_<slug>``."""
+    from evid.services.layout import read_slug
+
+    return read_slug(sdir) or sdir.name
+
+
 def fb_ls_callback(
     db: str = None,
     dataset: str = None,
@@ -715,7 +846,9 @@ def fb_ls_callback(
     from evid.core import feedback
 
     sdir = _fb_set(dataset)
-    titles = {d["uuid"]: d["title"] for d in get_evidence_list(DIRECTORY, sdir.name)}
+    titles = {
+        d["uuid"]: d["title"] for d in get_evidence_list(DIRECTORY, _fb_slug(sdir))
+    }
     items = [
         x
         for x in feedback.read(sdir)
@@ -777,8 +910,8 @@ def fb_add_callback(
 
     sdir = _fb_set(dataset)
     if not uuid:
-        uuid = select_evidence(DIRECTORY, sdir.name)
-    doc_dir = _doc_dir_or_exit(sdir.name, uuid)
+        uuid = select_evidence(DIRECTORY, _fb_slug(sdir))
+    doc_dir = _doc_dir_or_exit(_fb_slug(sdir), uuid)
     if path and path != "." and not (doc_dir / path).exists():
         sys.exit(f"No file {path} in the document.")
     try:
@@ -1059,6 +1192,7 @@ def gui_callback(
     port: int = 8790,
     browser: bool = False,
     headless: bool = False,
+    replace: bool = False,
     agent: str = None,
 ):
     """Launch the GUI (evid-app window, else the browser).
@@ -1077,7 +1211,12 @@ def gui_callback(
     config = EvidConfig.load()
     config.data_dir = Path(DIRECTORY)
     serve_gui(
-        config, port=port or 8790, browser=browser, headless=headless, agent=agent or ""
+        config,
+        port=port or 8790,
+        browser=browser,
+        headless=headless,
+        replace=replace,
+        agent=agent or "",
     )
 
 

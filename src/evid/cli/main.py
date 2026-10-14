@@ -23,6 +23,7 @@ from evid.cli.callbacks import (
     list_datasets_callback,
     list_docs_callback,
     mcp_callback,
+    merge_refs_callback,
     migrate_labels_callback,
     note_callback,
     notes_callback,
@@ -31,9 +32,11 @@ from evid.cli.callbacks import (
     reindex_callback,
     repair_callback,
     replace_callback,
+    screenshot_callback,
     search_meta_callback,
     search_text_callback,
     search_vec_callback,
+    share_callback,
     show_callback,
     stale_callback,
     tag_assign_callback,
@@ -125,7 +128,7 @@ app = cli(
 app.commands.append(
     command(
         name="gui",
-        help="Launch the GUI: the evid-app window, or your browser when evid-app is not installed. Closing the window quits; a second launch raises the running one. Pass -d/--db PATH to open a project-local data directory (the directory that contains sets/).",
+        help="Launch the evid-app window, or your browser when evid-app is not installed. If a GUI is already serving this data directory, open the window on that server instead of starting another. Pass -d/--db PATH to open a project-local data directory (the directory that contains sets/).",
         callback=gui_callback,
         arguments=[
             argument(
@@ -152,6 +155,11 @@ app.commands.append(
                 flags=["--headless"],
                 flag=True,
                 help="Serve only; open nothing (stop with Ctrl+C)",
+            ),
+            option(
+                flags=["--replace"],
+                flag=True,
+                help="Quit the evid GUI already serving this data directory and take its place",
             ),
             option(
                 flags=["--agent"],
@@ -270,6 +278,43 @@ set_group.commands.append(
     )
 )
 
+set_group.commands.append(
+    command(
+        name="share",
+        help="Write a json.gz catalog of this set's public documents (url, tags, labels, content hashes). Documents with no http(s) URL are left out.",
+        callback=share_callback,
+        options=[
+            _DATASET_OPTION,
+            option(
+                flags=["-o", "--output"],
+                arg_type=str,
+                help="[required] Output file (.json.gz)",
+            ),
+        ],
+    )
+)
+
+# ── refs ───────────────────────────────────────────────────────────────────────
+
+refs_group = group(name="refs", help="Gathered citation files")
+app.subgroups.append(refs_group)
+
+refs_group.commands.append(
+    command(
+        name="merge",
+        help="Merge gathered Hayagriva .yml files into one store (first key wins)",
+        callback=merge_refs_callback,
+        arguments=[argument(name="inputs", arg_type=str, nargs="+")],
+        options=[
+            option(
+                flags=["-o", "--output"],
+                arg_type=str,
+                help="[required] Output .yml",
+            ),
+        ],
+    )
+)
+
 # ── doc ────────────────────────────────────────────────────────────────────────
 
 doc_group = group(name="doc", help="Document management")
@@ -304,6 +349,44 @@ doc_group.commands.append(
 
 doc_group.commands.append(
     command(
+        name="screenshot",
+        help="Add screenshots as one document (one image per page, text from OCR)",
+        callback=screenshot_callback,
+        arguments=[
+            argument(
+                name="source",
+                arg_type=str,
+                nargs="+",
+                help="Image files, or a directory of page images",
+            )
+        ],
+        options=[
+            _DATASET_OPTION,
+            option(flags=["--title"], arg_type=str, help="Document title"),
+            option(flags=["--authors"], arg_type=str, help="Authors"),
+            option(flags=["--dates"], arg_type=str, help="Document date"),
+            option(
+                flags=["--url"],
+                arg_type=str,
+                help="Viewer link, when the PDF itself could not be downloaded",
+            ),
+            option(
+                flags=["--lang"],
+                arg_type=str,
+                default="dan+eng",
+                help="Tesseract languages, for example dan+eng",
+            ),
+            option(
+                flags=["--no-index"],
+                flag=True,
+                help="Skip building the vector index (faster, quieter; not searchable until re-indexed)",
+            ),
+        ],
+    )
+)
+
+doc_group.commands.append(
+    command(
         name="list",
         help="List documents in a dataset",
         callback=list_docs_callback,
@@ -314,7 +397,7 @@ doc_group.commands.append(
 doc_group.commands.append(
     command(
         name="note",
-        help="Show or set the annotation on a document or a file in its folder (notes for people and agents using the set)",
+        help="Show or add a whole-document annotation, or show or set the note on a file",
         callback=note_callback,
         options=[
             _DATASET_OPTION,
@@ -322,12 +405,18 @@ doc_group.commands.append(
             option(
                 flags=["-p", "--path"],
                 arg_type=str,
-                help="File in the document folder, e.g. original.pdf ('.' = the document); omit to show all notes of the document",
+                help="File in the folder, e.g. original.pdf. Omit, or '.', for the whole document",
             ),
             option(
-                flags=["-t", "--text"], arg_type=str, help="Set the note to this text"
+                flags=["-t", "--text"],
+                arg_type=str,
+                help="On a file, set its note. On the document, add a whole-document annotation",
             ),
-            option(flags=["--clear"], flag=True, help="Remove the note"),
+            option(
+                flags=["--clear"],
+                flag=True,
+                help="On a file, remove its note. On the document, remove whole-document annotations (keyed labels stay)",
+            ),
         ],
     )
 )
@@ -335,7 +424,7 @@ doc_group.commands.append(
 doc_group.commands.append(
     command(
         name="notes",
-        help="List annotations on a set's documents and their files",
+        help="List whole-document labels and annotations, and notes on files",
         callback=notes_callback,
         options=[
             _DATASET_OPTION,

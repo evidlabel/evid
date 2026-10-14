@@ -1,9 +1,13 @@
 """ImportService — import an existing evid directory into a set.
 
 Current layout:
+    {data_dir}/anon/anon_set_{slug}/docs/{uuid}/info.yml
+    {data_dir}/plain/plain_set_{slug}/docs/{uuid}/info.yml
+
+Older layout, still read:
     {data_dir}/sets/{slug}/docs/{uuid}/info.yml
 
-Pre-sets (legacy) layout:
+Pre-sets layout:
     {db_dir}/{dataset}/{uuid}/info.yml
 """
 
@@ -16,6 +20,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import yaml
+
+from evid.services.layout import read_slug
 
 if TYPE_CHECKING:
     from evid.models import EvidenceSet
@@ -51,21 +57,24 @@ def _scan_sets_root(root: Path) -> dict[str, list[Path]]:
         if not set_dir.is_dir():
             continue
         uuid_dirs = _uuid_dirs_in(set_dir / "docs")
-        if uuid_dirs:
-            datasets[set_dir.name] = uuid_dirs
+        if not uuid_dirs:
+            continue
+        key = read_slug(set_dir) or set_dir.name
+        datasets.setdefault(key, uuid_dirs)
     return datasets
 
 
 def _scan_evid_dir(evid_dir: Path) -> dict[str, list[Path]]:
     """Return {dataset_name: [uuid_dir, …]}.
 
-    Tries current layout first:
-        {data_dir}/sets/{slug}/docs/{uuid}/info.yml
-        {sets_dir}/{slug}/docs/{uuid}/info.yml
-    then the pre-sets layout:
-        {db_dir}/{dataset}/{uuid}/info.yml
+    Tries the current layout first (``anon/``, ``plain/``, then legacy
+    ``sets/``), then a directory whose children are themselves sets,
+    then the pre-sets layout ``{db_dir}/{dataset}/{uuid}/info.yml``.
     """
-    found = _scan_sets_root(evid_dir / "sets")
+    found: dict[str, list[Path]] = {}
+    for bucket in ("anon", "plain", "sets"):
+        for key, dirs in _scan_sets_root(evid_dir / bucket).items():
+            found.setdefault(key, dirs)
     if found:
         return found
     found = _scan_sets_root(evid_dir)

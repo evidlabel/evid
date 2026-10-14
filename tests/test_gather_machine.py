@@ -126,3 +126,39 @@ def test_gather_nothing_to_gather_exits(tmp_path):
     root, _ = _make_dataset(tmp_path, labels=False, quotes=False)
     with pytest.raises(SystemExit):
         gather_dataset(root, "demo", tmp_path / "x.yml")
+
+
+def test_gather_prefixes_stay_distinct(tmp_path):
+    """Two docs sharing the first uuid chars get distinct prefixes: labquote groups by prefix."""
+    for uuid in ("1a2b0001", "1a2b0002"):
+        doc = tmp_path / "sets" / "demo" / "docs" / uuid
+        doc.mkdir(parents=True)
+        (doc / "info.yml").write_text(
+            yaml.safe_dump({"uuid": uuid, "title": f"Doc {uuid}"}), encoding="utf-8"
+        )
+        label_doc(doc, labels=[{"key": "a", "text": f"text {uuid}", "page": 1}])
+    out = tmp_path / "refs.yml"
+    gather_dataset(tmp_path, "demo", out)
+    data = yaml.safe_load(out.read_text(encoding="utf-8"))
+    prefixes = {k.split(":", 1)[0] for k in data}
+    assert len(prefixes) == 2, prefixes  # not merged under one "1a2b"
+    assert sum(len(p) > 4 for p in prefixes) == 1  # the second was widened
+
+
+def test_merge_hayagriva_dedupes_by_key(tmp_path):
+    from evid.core.gather import merge_hayagriva
+
+    a = tmp_path / "a.yml"
+    a.write_text(
+        "0001:main:\n  type: article\n  title: Alpha\n0001:q1:\n  title: one\n",
+        encoding="utf-8",
+    )
+    b = tmp_path / "b.yml"
+    b.write_text(
+        "0001:main:\n  title: Alpha DUP\n0002:q1:\n  title: two\n", encoding="utf-8"
+    )
+    out = tmp_path / "merged.yml"
+    merged = merge_hayagriva([a, b], out)
+    assert list(merged) == ["0001:main", "0001:q1", "0002:q1"]  # first-seen order
+    assert merged["0001:main"]["title"] == "Alpha"  # first file wins
+    assert yaml.safe_load(out.read_text(encoding="utf-8")) == merged

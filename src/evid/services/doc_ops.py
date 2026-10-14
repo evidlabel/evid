@@ -18,9 +18,9 @@ import yaml
 from evid.core.annotations import (
     ANNOTATIONS_FILE,
     DOC,
+    doc_note,
     missing_targets,
     read_annotations,
-    write_annotation,
 )
 
 if TYPE_CHECKING:
@@ -96,11 +96,18 @@ def collect_documents(set_manager: SetManager, slug: str) -> list[Document]:
 
 
 def _doc_note(doc_dir: Path, meta: dict) -> str:
-    """The document note; cheap when there is no annotations.yml (the common case)."""
-    if (doc_dir / ANNOTATIONS_FILE).exists():
+    """Whole-document notes. Cheap when the document has neither store."""
+    from evid.core.labels import LABEL_DIR, LABELS_FILE, document_blurb
+
+    has_labels = (doc_dir / LABEL_DIR / LABELS_FILE).is_file()
+    has_ann = (doc_dir / ANNOTATIONS_FILE).is_file()
+    if not has_labels and not has_ann:
+        legacy = meta.get("notes", "")
+        return legacy.strip() if isinstance(legacy, str) else ""
+    if not has_labels:
         return read_annotations(doc_dir).get(DOC, "")
-    legacy = meta.get("notes", "")
-    return legacy if isinstance(legacy, str) else ""
+    raw = meta.get("notes", "") if not has_ann else None
+    return document_blurb(doc_dir, raw if isinstance(raw, str) else None)
 
 
 def doc_dir_of(evidence_set: EvidenceSet, uuid: str) -> Path:
@@ -144,7 +151,7 @@ def get_doc(doc_dir: Path) -> dict[str, Any]:
         uuid=doc_dir.name,
         path=str(doc_dir),
         source_name=str(model.source_name or ""),
-        notes=annotations.get(DOC, ""),
+        notes=doc_note(doc_dir),
         annotations=annotations,
         missing_annotated=missing_targets(doc_dir, annotations),
         indexed=bool(meta.get("indexed", False)),
@@ -156,9 +163,11 @@ def get_doc(doc_dir: Path) -> dict[str, Any]:
 
 
 def update_doc(doc_dir: Path, fields: dict[str, Any]) -> dict[str, Any]:
-    """Write the editable fields in *fields* to info.yml / evid_meta (notes).
+    """Write the editable fields in *fields* to info.yml.
 
-    Keys not in *fields* are left as they are. Returns the new detail.
+    Keys not in *fields* are left as they are. A ``notes`` string is added as
+    a whole-document annotation (the detail pane no longer sends one). Returns
+    the new detail.
     """
     from evid.core.evid_meta import read_meta, write_meta
     from evid.models import InfoModel
@@ -173,8 +182,12 @@ def update_doc(doc_dir: Path, fields: dict[str, Any]) -> dict[str, Any]:
         logger.exception("InfoModel validation failed on save for %s", doc_dir.name)
     with (doc_dir / "info.yml").open("w", encoding="utf-8") as f:
         yaml.safe_dump(info, f, allow_unicode=True)
-    if "notes" in fields:  # the note on the document as a whole
-        write_annotation(doc_dir, DOC, str(fields["notes"] or ""))
+    text = str(fields.get("notes") or "").strip()
+    if "notes" in fields and text:
+        from evid.core.labels import add_document_annotation, adopt_legacy_document_note
+
+        adopt_legacy_document_note(doc_dir)
+        add_document_annotation(doc_dir, text)
     return get_doc(doc_dir)
 
 

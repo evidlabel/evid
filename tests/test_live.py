@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import os
+import sys
 import time
+from pathlib import Path
 
+import pytest
 import yaml
 
 from evid.services.set_manager import SetManager
 from evid.web.jobs import Events
-from evid.web.live import DiskWatch
+from evid.web.live import DiskWatch, _is_watch_dir
 
 
 def _doc(set_path, uuid, title="T"):
@@ -119,6 +122,61 @@ def test_indexing_is_not_an_outside_change(tmp_path, monkeypatch):
     w.poll()
     (disk,) = _events(ev, "disk")
     assert disk["changed"][0]["by"] == "you"
+
+
+def test_watch_dirs_are_the_set_tree_only():
+    root = Path("/data")
+    assert _is_watch_dir(root, root / "sets")
+    assert _is_watch_dir(root, root / "sets" / "litc")
+    assert _is_watch_dir(root, root / "sets" / "litc" / "docs")
+    assert _is_watch_dir(root, root / "sets" / "litc" / "docs" / "u")
+    assert _is_watch_dir(root, root / "sets" / "litc" / "docs" / "u" / "label")
+    assert _is_watch_dir(root, root / "sets" / "litc" / "docs" / "u" / "pass")
+    assert _is_watch_dir(root, root / "plain" / "plain_set_case" / "docs" / "u")
+    assert not _is_watch_dir(root, root / "sets" / "litc" / "vecdb")
+    assert not _is_watch_dir(root, root / "sets" / "litc" / "vecdb" / "chroma")
+    assert not _is_watch_dir(root, root / "other")
+    assert not _is_watch_dir(root, root)
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="inotify")
+def test_watch_thread_sees_a_change_without_polling(tmp_path):
+    """The thread must notice a write while its poll interval is still pending."""
+    sm = SetManager(tmp_path)
+    es = sm.create_set("Case")
+    d = _doc(es.path, "a" * 32)
+    ev = Events()
+    w = DiskWatch(tmp_path, ev, interval=30)
+    w.start()
+    try:
+        assert w._ready.wait(2)
+        _bump(d / "info.yml", yaml.safe_dump({"title": "Edited outside"}))
+        deadline = time.time() + 2
+        while time.time() < deadline and not _events(ev, "disk"):
+            time.sleep(0.02)
+        (disk,) = _events(ev, "disk")
+        assert disk["changed"][0]["by"] == "outside"
+        assert disk["changed"][0]["files"] == ["info.yml"]
+
+        (d / "label").mkdir()
+        (d / "label" / "labels.json").write_text('{"labels": []}\n')
+        deadline = time.time() + 2
+        seen = []
+        while time.time() < deadline:
+            seen = [
+                c
+                for e in _events(ev, "disk")
+                for c in e["changed"]
+                if "label/labels.json" in c["files"]
+            ]
+            if seen:
+                break
+            time.sleep(0.02)
+        assert seen and seen[0]["by"] == "outside"
+    finally:
+        w.stop()
+        w._thread.join(2)
+        assert not w._thread.is_alive()
 
 
 def test_an_agents_reply_is_an_event(tmp_path):

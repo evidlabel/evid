@@ -29,6 +29,7 @@ from evid.core.labels import (
     rename_label,
     span_of,
     suggest_key,
+    taken_keys,
 )
 
 _SHOW_KEYS = 6  # list the keys in the commit message up to this many
@@ -143,9 +144,7 @@ def label_add_callback(
     _dataset, uuid, doc_dir = _doc(dataset, uuid, "Select document to label")
     try:
         span, score, how = span_of(doc_dir, text)
-        chosen = key or suggest_key(
-            span["text"], {r["key"] for r in read(doc_dir)["labels"]}
-        )
+        chosen = key or suggest_key(span["text"], taken_keys(doc_dir))
         rec = add_label(doc_dir, span, chosen, note=note or "")
     except (ValueError, KeyError) as exc:
         sys.exit(str(exc))

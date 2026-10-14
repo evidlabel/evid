@@ -5,7 +5,7 @@ its folder) — "check the date of this letter", "label the findings on p. 4" �
 and the agent working on the set lists the open requests (``evid fb ls``),
 does the work, and answers each with ``evid fb reply ID "…" --done``.
 
-Kept per set in ``sets/<slug>/feedback.yml``, a list of
+Kept per set in ``<set>/feedback.yml``, a list of
 
     id: 3                 # unique in the set
     uuid: 9e0b…           # the document

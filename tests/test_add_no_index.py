@@ -35,7 +35,9 @@ def test_no_index_does_not_construct_vec_service(tmp_path, monkeypatch):
     db = tmp_path / "db"
     add_evidence(db, "demo", str(pdf), no_index=True)
 
-    docs = list((db / "sets" / "demo" / "docs").iterdir())
+    from evid.services.layout import find_set_dir
+
+    docs = list((find_set_dir(db, "demo") / "docs").iterdir())
     assert len(docs) == 1
     assert (docs[0] / "info.yml").exists()
     assert (docs[0] / "original.pdf").exists()

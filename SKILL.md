@@ -14,13 +14,14 @@ The CLI documents itself. Load only the slice you need:
 - `evid --db evid -h` — command tree
 - `evid --db evid <path> -h` — one command (e.g. `evid --db evid doc quote -h`)
 - `evid -j` — machine-readable schema
+- A viewer that will not give you the PDF: `evid --db evid doc screenshot --dataset <slug>` on the page images, or Add screenshots in the GUI.
 
 Rediscover after install or upgrade, and invoke from that output.
 
 ## Rules
 
 - Every command is `evid --db evid …`, run from the case root. Bare `evid` writes to `~/.local/share/evid`; that set never joins the case.
-- First call: `evid --db evid set create --dataset <slug>`. Without `--dataset` it prompts for a name and hangs. Confirm `evid/sets/<slug>/` exists before reporting the set created.
+- First call: `evid --db evid set create --dataset <slug>`. Without `--dataset` it prompts for a name and hangs. A normal set is `evid/plain/plain_set_<slug>/`. An anon set (`--type anon`) is `evid/anon/anon_set_<slug>/`. Confirm that directory exists before reporting the set created. An older set may still be at `evid/sets/<slug>/`.
 - Track the case in Git. Commit `evid/` with each milestone. Keep credentials and identity maps out; add them to `.gitignore` before the first commit.
 - Citable = verbatim `#lab` or `evid --db evid doc quote`. Never retype. Print keys only.
 - `set gather` output is interchange, not the authored document.
@@ -44,6 +45,6 @@ A candidate is one span on one page of that uuid's text, and a `note` saying wha
 
 ## Done
 
-- `evid/sets/<slug>/` exists in the case root.
+- `evid/plain/plain_set_<slug>/` or `evid/anon/anon_set_<slug>/` exists in the case root (an older set may still be `evid/sets/<slug>/`).
 - Every command in the run carried `--db evid`.
 - Changes committed; credentials and identity maps not in Git.

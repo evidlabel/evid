@@ -7,7 +7,7 @@
 **Use.** Ingest PDFs and URLs into an evidence set. Search (semantic, metadata, full text). Make spans citable — by hand (`evid label`, or in the GUI) or by a machine pass (`evid doc quote`). Gather BibTeX / Hayagriva / Markdown / JSON. Author the brief elsewhere (Typst / labquote), keys only.
 
 **Features.**
-- CLI + GUI over one on-disk layout (`sets/<slug>/docs/<uuid>/`)
+- CLI + GUI over one on-disk layout (`anon/anon_set_<slug>/docs/<uuid>/` and `plain/plain_set_<slug>/docs/<uuid>/`; a `normal` set is the plain one)
 - Precise quoting. `evid label add` and `evid doc quote` locate a passage in the document and store that span of `label/text.txt`. The cited words are the document's own.
 - Passes. Each `evid doc quote` run is one job, recorded under `pass/` with its description, model, and match outcomes. Later runs add passes; `evid doc passes` lists the ledger.
 - Human labels in `label/labels.json` are the same kind of span, with notes

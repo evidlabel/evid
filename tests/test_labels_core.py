@@ -152,6 +152,72 @@ def test_edit_and_remove_a_label_note(doc):
     assert labels.read(doc)["annotations"] == []
 
 
+def test_document_labels_have_no_span_and_share_keys(doc):
+    span, _score, _how = labels.span_of(doc, "the municipality did not investigate")
+    labels.add_label(doc, span, "deadline", note="On the passage.")
+    whole = labels.add_document_label(doc, "exhibit", note="Key exhibit.")
+    assert "start" not in whole and "text" not in whole and whole["kind"] == "label"
+    ann = labels.add_document_annotation(doc, "Watch the date.")
+    assert (
+        ann["kind"] == "annotation"
+        and "key" not in ann
+        and ann["notes"][0]["by"] == "you"
+    )
+    with pytest.raises(ValueError, match="already"):
+        labels.add_document_label(doc, "deadline")
+    with pytest.raises(ValueError, match="already"):
+        labels.add_label(doc, span, "exhibit")
+    labels.add_document_note(doc, whole["id"], "Second.", by="agent")
+    edited = labels.edit_document_note(doc, whole["id"], 0, "Key exhibit, revised.")
+    assert edited["notes"][0]["by"] == "you" and edited["notes"][0]["text"].endswith(
+        "revised."
+    )
+    assert edited["notes"][1]["by"] == "agent"
+    labels.remove_document_note(doc, whole["id"], 1)
+    assert [n["text"] for n in labels.read(doc)["document"][0]["notes"]] == [
+        "Key exhibit, revised."
+    ]
+    # a label stays with no notes; an annotation goes with its last note
+    labels.remove_document_note(doc, whole["id"], 0)
+    kept = labels.read(doc)["document"]
+    assert [r["id"] for r in kept if r["kind"] == "label"] == [whole["id"]]
+    assert kept[0]["notes"] == []
+    labels.remove_document_note(doc, ann["id"], 0)
+    assert all(r["id"] != ann["id"] for r in labels.read(doc)["document"])
+    labels.rename_document_label(doc, whole["id"], "exhibit-a")
+    assert labels.read(doc)["document"][0]["key"] == "exhibit-a"
+    # re-anchoring spans leaves the whole-document record alone
+    data = labels.read(doc)
+    assert "start" not in data["document"][0]
+    assert labels.notes_text(data["labels"][0]) == "On the passage."
+
+
+def test_legacy_document_note_is_adopted_once(doc):
+    from evid.core.annotations import doc_note, write_annotation
+    from evid.core.evid_meta import write_meta
+
+    write_meta(doc, {"notes": "From the old field."})
+    assert doc_note(doc) == "From the old field."
+    assert labels.adopt_legacy_document_note(doc) is True
+    recs = labels.read(doc)["document"]
+    assert len(recs) == 1 and recs[0]["kind"] == "annotation"
+    assert recs[0]["notes"][0]["text"] == "From the old field."
+    assert "start" not in recs[0]
+    assert doc_note(doc) == "From the old field."
+    assert labels.adopt_legacy_document_note(doc) is False  # already moved
+    write_annotation(doc, ".", "A second old note.")
+    assert labels.adopt_legacy_document_note(doc) is True
+    assert [labels.notes_text(r) for r in labels.read(doc)["document"]] == [
+        "From the old field.",
+        "A second old note.",
+    ]
+    assert doc_note(doc) == "From the old field.\nA second old note."
+    labels.remove_document(doc, recs[0]["id"])
+    assert "From the old field." not in doc_note(
+        doc
+    )  # the legacy string does not return
+
+
 def test_unmapped_glyph_cannot_be_labelled(tmp_path):
     d = tmp_path / "d"
     d.mkdir()

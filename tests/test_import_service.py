@@ -55,11 +55,11 @@ def _make_evid_db(tmp_path: Path) -> Path:
 
 
 def _make_current_db(tmp_path: Path) -> Path:
-    """Build {data_dir}/sets/{slug}/docs/{uuid}/info.yml."""
+    """Build plain/plain_set_{slug}/docs/{uuid}/info.yml."""
     db = tmp_path / "evid"
     sm = SetManager(db)
-    sm.create_set("emilierasmus")
-    _make_evid_doc(db / "sets" / "emilierasmus" / "docs", "ddd" + "0" * 29, "PHD")
+    created = sm.create_set("emilierasmus")
+    _make_evid_doc(created.path / "docs", "ddd" + "0" * 29, "PHD")
     return db
 
 
@@ -94,7 +94,7 @@ def test_scan_current_data_dir(tmp_path):
 
 def test_scan_sets_folder(tmp_path):
     db = _make_current_db(tmp_path)
-    datasets = _scan_evid_dir(db / "sets")
+    datasets = _scan_evid_dir(db / "plain")
     assert set(datasets.keys()) == {"emilierasmus"}
 
 
@@ -110,7 +110,7 @@ def test_import_evid_dir_single_set_dir(tmp_path):
     src = _make_current_db(tmp_path)
     sm = SetManager(tmp_path / "dest")
     evidence_set = import_evid_dir_single(
-        src / "sets" / "emilierasmus", "emilierasmus", sm
+        SetManager(src).load_set("emilierasmus").path, "emilierasmus", sm
     )
     assert evidence_set.slug == "emilierasmus"
     assert len(sm.list_documents("emilierasmus")) == 1

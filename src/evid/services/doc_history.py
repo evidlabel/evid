@@ -6,7 +6,9 @@ the folder becomes an entry saying what happened to the document:
 
 - ``details``: info.yml fields that changed (title, tags, …)
 - ``notes``: annotations added, changed or removed (per path)
-- ``labels``: keys added or removed in label/labels.json, and notes added
+- ``labels``: keys added or removed in label/labels.json (span labels and
+  whole-document labels), notes added, and whole-document annotations added
+  or removed (``documents``)
 - ``passes``: machine-quote passes added (pass/*.json: job, matched/tried)
 - ``added`` / ``files``: the document appearing, other files touched
 
@@ -71,23 +73,50 @@ def _read(p: Path) -> str | None:
         return None
 
 
-def _label_state(text: str | None) -> tuple[list[str], dict[str, int]]:
-    """Label keys in file order, and how many notes each key has."""
+def _doc_preview(rec: dict) -> str:
+    for note in rec.get("notes") or []:
+        if not isinstance(note, dict):
+            continue
+        text = " ".join(str(note.get("text") or "").split())
+        if text:
+            return text if len(text) <= 48 else text[:47] + "…"
+    return str(rec.get("id") or "annotation")
+
+
+def _label_state(
+    text: str | None,
+) -> tuple[list[str], dict[str, int], dict[str, tuple[int, str]]]:
+    """Label keys in file order, notes per key, and whole-document annotations.
+
+    A whole-document label shares the key list with span labels (keys are
+    unique across both). An annotation has no key: ``id -> (note count, preview)``.
+    """
     try:
         data = json.loads(text or "")
     except ValueError:
-        return [], {}
+        return [], {}, {}
     if not isinstance(data, dict):
-        return [], {}
+        return [], {}, {}
     keys: list[str] = []
     notes: dict[str, int] = {}
+    anns: dict[str, tuple[int, str]] = {}
     for rec in data.get("labels") or []:
         if not isinstance(rec, dict) or not rec.get("key"):
             continue
         key = str(rec["key"])
         keys.append(key)
         notes[key] = len(rec.get("notes") or [])
-    return keys, notes
+    for rec in data.get("document") or []:
+        if not isinstance(rec, dict):
+            continue
+        if rec.get("kind") == "label" and rec.get("key"):
+            key = str(rec["key"])
+            if key not in notes:
+                keys.append(key)
+            notes[key] = notes.get(key, 0) + len(rec.get("notes") or [])
+        elif rec.get("kind") == "annotation" and rec.get("id"):
+            anns[str(rec["id"])] = (len(rec.get("notes") or []), _doc_preview(rec))
+    return keys, notes, anns
 
 
 def _yaml(text: str | None) -> dict:
@@ -125,12 +154,22 @@ def summarise(
             else None
         )
     if name == "label/labels.json":
-        before, before_n = _label_state(old)
-        after, after_n = _label_state(new)
+        before, before_n, before_d = _label_state(old)
+        after, after_n, after_d = _label_state(new)
         added = [k for k in after if k not in before]
         removed = [k for k in before if k not in after]
         noted = [k for k in after if k in before_n and after_n[k] > before_n[k]]
-        if not (added or removed or noted):
+        documents = []
+        for ann_id, (count, preview) in after_d.items():
+            prev = before_d.get(ann_id)
+            if prev is None:
+                documents.append(f"+ doc: {preview}")
+            elif count > prev[0]:
+                documents.append(f"note on doc: {preview}")
+        for ann_id, (_count, preview) in before_d.items():
+            if ann_id not in after_d:
+                documents.append(f"- doc: {preview}")
+        if not (added or removed or noted or documents):
             return None
         item: dict[str, Any] = {
             "kind": "labels",
@@ -140,6 +179,8 @@ def summarise(
         }
         if noted:
             item["notes"] = noted
+        if documents:
+            item["documents"] = documents
         return item
     if name.startswith("pass/") and name.endswith(".json") and status[:1] == "A":
         try:

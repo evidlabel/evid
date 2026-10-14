@@ -10,6 +10,7 @@ import yaml
 
 from evid.models import InfoModel
 from evid.services.doc_tags import parse_tags_field
+from evid.services.layout import existing_set_dir, iter_set_dirs, read_slug
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -24,23 +25,21 @@ def iter_docs(
     """Yield (slug, uuid_dir, InfoModel) for every doc with a valid info.yml.
 
     If *dataset* is given only that dataset's docs directory is scanned;
-    otherwise every dataset under ``directory/sets/`` is scanned.
+    otherwise every set under ``anon/``, ``plain/`` and legacy ``sets/``
+    is scanned.
     """
-    sets_dir = directory / "sets"
-    if not sets_dir.exists():
-        return
-
     if dataset:
-        slugs = [dataset]
+        found = existing_set_dir(directory, dataset)
+        chosen = [(dataset, found)] if found is not None else []
     else:
-        slugs = [
-            d.name
-            for d in sorted(sets_dir.iterdir())
-            if d.is_dir() and (d / "set.yml").exists()
-        ]
+        chosen = []
+        for set_dir in iter_set_dirs(directory):
+            slug = read_slug(set_dir)
+            if slug:
+                chosen.append((slug, set_dir))
 
-    for slug in slugs:
-        docs_dir = sets_dir / slug / "docs"
+    for slug, set_dir in chosen:
+        docs_dir = set_dir / "docs"
         if not docs_dir.is_dir():
             continue
         for uuid_dir in sorted(docs_dir.iterdir()):

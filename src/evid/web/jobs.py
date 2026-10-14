@@ -161,7 +161,7 @@ class IndexQueue:
         with self._lock:
             return self._pending
 
-    def enqueue(self, doc_dir: Path, evidence_set: EvidenceSet) -> None:
+    def enqueue(self, doc_dir: Path, evidence_set: EvidenceSet, root: str = "") -> None:
         with self._lock:
             self._pending += 1
             pending = self._pending
@@ -172,7 +172,8 @@ class IndexQueue:
                 self._thread.start()
         if self._before_index:
             self._before_index(evidence_set.slug)
-        self._queue.put((doc_dir, evidence_set))
+        # root is the trunk id when the doc is not in the primary data dir
+        self._queue.put((doc_dir, evidence_set, root))
         self._events.emit("index_queue", pending=pending)
 
     def stop(self, timeout: float = 5.0) -> None:
@@ -202,7 +203,7 @@ class IndexQueue:
                 job = self._queue.get()
                 if job is None:
                     break
-                doc_dir, evidence_set = job
+                doc_dir, evidence_set, root = job
                 ok = False
                 if self._on_write:
                     self._on_write(evidence_set.slug, doc_dir.name)
@@ -231,13 +232,15 @@ class IndexQueue:
                 with self._lock:
                     self._pending = max(0, self._pending - 1)
                     pending = self._pending
-                self._events.emit(
-                    "indexed",
-                    slug=evidence_set.slug,
-                    uuid=doc_dir.name,
-                    ok=ok,
-                    pending=pending,
-                )
+                fields = {
+                    "slug": evidence_set.slug,
+                    "uuid": doc_dir.name,
+                    "ok": ok,
+                    "pending": pending,
+                }
+                if root:
+                    fields["root"] = root
+                self._events.emit("indexed", **fields)
                 if pending == 0:
                     if pool is not None:
                         pool.close()

@@ -52,15 +52,11 @@ def test_notes_listing_json_and_doc_list(setdir, capsys):
     capsys.readouterr()
     cb.notes_callback(dataset="case", format="json")
     rows = json.loads(capsys.readouterr().out)
-    assert rows == [
-        {
-            "uuid": "u1",
-            "title": "Judgment",
-            "path": ".",
-            "note": "Key exhibit.",
-            "missing": False,
-        }
-    ]
+    assert len(rows) == 1
+    assert rows[0]["uuid"] == "u1" and rows[0]["title"] == "Judgment"
+    assert rows[0]["path"] == "." and rows[0]["note"] == "Key exhibit."
+    assert rows[0]["missing"] is False and rows[0]["kind"] == "annotation"
+    assert rows[0]["id"]
     cb.notes_callback(dataset="case", format="md")
     assert "- document: Key exhibit." in capsys.readouterr().out
     cb.list_docs_callback(dataset="case", format="json")

@@ -60,7 +60,7 @@ def _resolve_set(data_dir: Path, dataset: str):
 
 
 def _doc_notes(set_path: Path, uuid: str) -> list[dict] | dict:
-    from evid.core.annotations import missing_targets, read_annotations
+    from evid.core.annotations import note_rows
 
     docs_root = set_path / "docs"
     dirs = (
@@ -72,12 +72,7 @@ def _doc_notes(set_path: Path, uuid: str) -> list[dict] | dict:
     for d in dirs:
         if not d.is_dir():
             return {"error": f"no document {uuid} in this dataset"}
-        notes = read_annotations(d)
-        gone = set(missing_targets(d, notes))
-        out.extend(
-            {"uuid": d.name, "path": k, "note": v, "missing": k in gone}
-            for k, v in notes.items()
-        )
+        out.extend({"uuid": d.name, **row} for row in note_rows(d))
     return out
 
 
@@ -171,11 +166,12 @@ def build_server(data_dir: Path, dataset: str):
 
     @mcp.tool()
     def doc_notes(uuid: str = "") -> str:
-        """Annotations left by the people handling this dataset, as JSON: for each
-        document, notes on the document itself (path ".") and on files in its
-        folder (e.g. "original.pdf"). Pass a uuid for one document, or nothing for
-        all. Read these before using a document: they say what a file is, what to
-        watch out for, and what is missing."""
+        """Notes left by the people handling this dataset, as JSON. Whole-document
+        labels and annotations use path "." (kind "label" or "annotation", plus id;
+        labels also have key). They have no span and live in label/labels.json;
+        each dated note is a revision. File notes use the file path
+        (annotations.yml). Pass a uuid for one document, or nothing for all.
+        Read these before using a document."""
         return json.dumps(_doc_notes(_SET.path, uuid), ensure_ascii=False)
 
     @mcp.tool()

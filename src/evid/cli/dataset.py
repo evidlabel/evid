@@ -12,6 +12,8 @@ try:
 except ImportError:
     Repo = None
 
+from evid.models import SetType
+from evid.services.layout import existing_set_dir, iter_set_dirs, new_set_dir, read_slug
 from evid.services.set_manager import SetManager
 
 logger = logging.getLogger(__name__)
@@ -23,13 +25,21 @@ logger = logging.getLogger(__name__)
 
 
 def set_dir(directory: Path, slug: str) -> Path:
-    """Return the evidmgr set directory: data_dir/sets/{slug}/."""
-    return directory / "sets" / slug
+    """Return the set directory for *slug*.
+
+    A set that is not on disk yet is reported at the plain-set path
+    ``plain/plain_set_{slug}/`` (``anon/anon_set_{slug}/`` once created
+    as anon). An older set under ``sets/{slug}/`` is returned as stored.
+    """
+    found = existing_set_dir(directory, slug)
+    if found is not None:
+        return found
+    return new_set_dir(directory, SetType.NORMAL, slug)
 
 
 def docs_dir(directory: Path, slug: str) -> Path:
-    """Return the evidmgr docs directory: data_dir/sets/{slug}/docs/."""
-    return directory / "sets" / slug / "docs"
+    """Return the docs directory of the set *slug*."""
+    return set_dir(directory, slug) / "docs"
 
 
 # ---------------------------------------------------------------------------
@@ -39,12 +49,12 @@ def docs_dir(directory: Path, slug: str) -> Path:
 
 def get_datasets(directory: Path) -> list[str]:
     """Return slugs of all sets in the evidmgr data directory."""
-    sets_dir = directory / "sets"
-    if not sets_dir.exists():
-        return []
-    return [
-        d.name for d in sets_dir.iterdir() if d.is_dir() and (d / "set.yml").exists()
-    ]
+    slugs = []
+    for d in iter_set_dirs(directory):
+        slug = read_slug(d)
+        if slug:
+            slugs.append(slug)
+    return slugs
 
 
 def list_datasets(directory: Path) -> None:

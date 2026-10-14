@@ -21,9 +21,10 @@ def test_create_and_load_set(sm):
 
 def test_create_set_dirs(sm, tmp_path):
     sm.create_set("Test Set")
-    set_dir = tmp_path / "sets" / "test-set"
+    set_dir = tmp_path / "plain" / "plain_set_test-set"
     assert (set_dir / "docs").is_dir()
     assert (set_dir / "vecdb").is_dir()
+    assert not (tmp_path / "sets").exists()
 
 
 def test_list_sets(sm):
@@ -49,6 +50,7 @@ def test_create_set_adopts_precreated_slug_dir(sm, tmp_path):
     assert s.slug == "emilierasmus"
     assert (slug_dir / "set.yml").is_file()
     assert [x.slug for x in sm.list_sets()] == ["emilierasmus"]
+    assert not (tmp_path / "plain").exists()
 
 
 def test_create_set_adopts_slug_dir_that_already_has_docs(sm, tmp_path):
@@ -89,20 +91,21 @@ def test_list_documents_empty(sm):
 
 
 def test_list_documents_requires_info_yml(sm, tmp_path):
-    sm.create_set("Case")
-    real = tmp_path / "sets" / "case" / "docs" / "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+    created = sm.create_set("Case")
+    real = created.path / "docs" / "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     real.mkdir(parents=True)
     (real / "info.yml").write_text("uuid: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\n")
-    junk = tmp_path / "sets" / "case" / "docs" / "sets"
+    junk = created.path / "docs" / "sets"
     junk.mkdir()
     docs = sm.list_documents("case")
     assert [d.name for d in docs] == ["aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"]
 
 
-def test_anon_set_type(sm):
+def test_anon_set_type(sm, tmp_path):
     """A case's did-pseudonymised documents live in an anon set; GUIs mark it."""
     s = sm.create_set("2026-014 anon", set_type="anon")
     assert s.set_type == SetType.ANON
+    assert s.path == tmp_path / "anon" / "anon_set_2026-014-anon"
     assert sm.load_set("2026-014-anon").set_type == SetType.ANON
 
 
@@ -111,4 +114,39 @@ def test_cli_create_anon(tmp_path, capsys):
 
     assert create_dataset(tmp_path, "c anon", "anon") == "c-anon"
     assert ", anon)" in capsys.readouterr().out
-    assert SetManager(tmp_path).load_set("c-anon").set_type == SetType.ANON
+    loaded = SetManager(tmp_path).load_set("c-anon")
+    assert loaded.set_type == SetType.ANON
+    assert loaded.path == tmp_path / "anon" / "anon_set_c-anon"
+
+
+def _legacy_set(tmp_path, slug="case"):
+    legacy = tmp_path / "sets" / slug
+    legacy.mkdir(parents=True)
+    (legacy / "set.yml").write_text(
+        f"name: Case\nslug: {slug}\ntype: normal\n"
+        "created: '2020-01-01T00:00:00+00:00'\ndescription: ''\n"
+    )
+    return legacy
+
+
+def test_legacy_set_still_loads(sm, tmp_path):
+    legacy = _legacy_set(tmp_path)
+    loaded = sm.load_set("case")
+    assert loaded.path == legacy
+    assert [s.slug for s in sm.list_sets()] == ["case"]
+
+
+def test_create_does_not_fork_an_existing_legacy_set(sm, tmp_path):
+    legacy = _legacy_set(tmp_path)
+    with pytest.raises(FileExistsError):
+        sm.create_set("Case")
+    assert legacy.is_dir()
+    assert not (tmp_path / "plain").exists()
+
+
+def test_new_layout_wins_over_a_legacy_duplicate(sm, tmp_path):
+    created = sm.create_set("Case")
+    legacy = _legacy_set(tmp_path)
+    assert sm.load_set("case").path == created.path
+    assert [s.path for s in sm.list_sets()] == [created.path]
+    assert legacy.is_dir()

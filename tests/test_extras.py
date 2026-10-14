@@ -55,7 +55,9 @@ def test_add_skips_index_when_vec_extra_missing(tmp_path, monkeypatch):
 
     evidence_mod.add_evidence(tmp_path / "db", "demo", str(pdf), no_index=False)
 
-    docs = list((tmp_path / "db" / "sets" / "demo" / "docs").iterdir())
+    from evid.services.layout import find_set_dir
+
+    docs = list((find_set_dir(tmp_path / "db", "demo") / "docs").iterdir())
     assert len(docs) == 1
     assert (docs[0] / "info.yml").exists()
 

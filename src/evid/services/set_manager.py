@@ -1,4 +1,9 @@
-"""SetManager — CRUD for evidence sets stored under data_dir/sets/."""
+"""SetManager — CRUD for evidence sets.
+
+New sets are stored at ``data_dir/anon/anon_set_<slug>/`` or
+``data_dir/plain/plain_set_<slug>/``. A set from the older
+``data_dir/sets/<slug>/`` layout is still read and updated in place.
+"""
 
 from __future__ import annotations
 
@@ -10,31 +15,29 @@ import yaml
 from slugify import slugify
 
 from evid.models import EvidenceSet, SetType
+from evid.services.layout import find_set_dir, iter_set_dirs, place_new_set
 
 logger = logging.getLogger(__name__)
 
 
 class SetManager:
     def __init__(self, data_dir: Path) -> None:
-        self.sets_dir = data_dir / "sets"
-        self.sets_dir.mkdir(parents=True, exist_ok=True)
+        self.data_dir = Path(data_dir)
 
     # ── read ─────────────────────────────────────────────────────────────────
 
     def list_sets(self) -> list[EvidenceSet]:
         sets = []
-        for set_dir in sorted(self.sets_dir.iterdir()):
-            yml = set_dir / "set.yml"
-            if set_dir.is_dir() and yml.exists():
-                try:
-                    sets.append(self._load_set_yml(set_dir))
-                except Exception:
-                    logger.exception("Failed to load set at %s", set_dir)
+        for set_dir in iter_set_dirs(self.data_dir):
+            try:
+                sets.append(self._load_set_yml(set_dir))
+            except Exception:
+                logger.exception("Failed to load set at %s", set_dir)
         return sets
 
     def load_set(self, slug: str) -> EvidenceSet:
-        set_dir = self.sets_dir / slug
-        if not set_dir.exists():
+        set_dir = find_set_dir(self.data_dir, slug)
+        if set_dir is None:
             msg = f"Set '{slug}' not found"
             raise FileNotFoundError(msg)
         return self._load_set_yml(set_dir)
@@ -48,10 +51,8 @@ class SetManager:
         description: str = "",
     ) -> EvidenceSet:
         slug = slugify(name)
-        set_dir = self.sets_dir / slug
-        if (set_dir / "set.yml").exists():
-            msg = f"Set '{slug}' already exists"
-            raise FileExistsError(msg)
+        kind = SetType(set_type)
+        set_dir = place_new_set(self.data_dir, kind, slug)
         set_dir.mkdir(parents=True, exist_ok=True)
         (set_dir / "docs").mkdir(exist_ok=True)
         (set_dir / "vecdb").mkdir(exist_ok=True)
@@ -60,19 +61,19 @@ class SetManager:
         data = {
             "name": name,
             "slug": slug,
-            "type": str(SetType(set_type).value),
+            "type": str(kind.value),
             "created": created.isoformat(),
             "description": description,
         }
         with (set_dir / "set.yml").open("w", encoding="utf-8") as f:
             yaml.safe_dump(data, f, allow_unicode=True)
 
-        logger.info("Created set '%s' (%s) at %s", name, set_type, set_dir)
+        logger.info("Created set '%s' (%s) at %s", name, kind, set_dir)
         return EvidenceSet(
             name=name,
             slug=slug,
             path=set_dir,
-            set_type=SetType(set_type),
+            set_type=kind,
             created=created,
             description=description,
         )
@@ -80,8 +81,8 @@ class SetManager:
     def delete_set(self, slug: str) -> None:
         import shutil
 
-        set_dir = self.sets_dir / slug
-        if not set_dir.exists():
+        set_dir = find_set_dir(self.data_dir, slug)
+        if set_dir is None:
             msg = f"Set '{slug}' not found"
             raise FileNotFoundError(msg)
         shutil.rmtree(set_dir)
@@ -89,7 +90,10 @@ class SetManager:
 
     def update_set_meta(self, slug: str, **kwargs: object) -> EvidenceSet:
         """Update name, description, or set_type in set.yml."""
-        set_dir = self.sets_dir / slug
+        set_dir = find_set_dir(self.data_dir, slug)
+        if set_dir is None:
+            msg = f"Set '{slug}' not found"
+            raise FileNotFoundError(msg)
         yml_path = set_dir / "set.yml"
         with yml_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
@@ -106,7 +110,10 @@ class SetManager:
 
     def list_documents(self, slug: str) -> list[Path]:
         """Return doc UUID paths for a set (unsorted). A document is a docs/ child with info.yml."""
-        docs_dir = self.sets_dir / slug / "docs"
+        set_dir = find_set_dir(self.data_dir, slug)
+        if set_dir is None:
+            return []
+        docs_dir = set_dir / "docs"
         if not docs_dir.exists():
             return []
         return [

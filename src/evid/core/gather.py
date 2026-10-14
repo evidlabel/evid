@@ -25,6 +25,7 @@ from rich.table import Table
 
 from evid.core.hayagriva_fields import hayagriva_author, hayagriva_date
 from evid.models import InfoModel
+from evid.services.layout import existing_set_dir
 
 logger = logging.getLogger(__name__)
 
@@ -180,8 +181,9 @@ def gather_dataset(
       .md          — Markdown report listing all passages
       .json        — JSON keyed by UUID
     """
-    dataset_dir = directory / "sets" / dataset / "docs"
-    if not dataset_dir.is_dir():
+    found = existing_set_dir(directory, dataset)
+    dataset_dir = found / "docs" if found is not None else None
+    if dataset_dir is None or not dataset_dir.is_dir():
         sys.exit(f"Dataset docs directory '{dataset_dir}' does not exist.")
 
     keep: set[str] | None = None
@@ -244,16 +246,43 @@ def _flat(value: str) -> str:
     return " ".join(str(value).split())
 
 
-def _keys(doc: DocRecords) -> list[tuple[str, Passage]]:
+def _keys(doc: DocRecords, prefix: str | None = None) -> list[tuple[str, Passage]]:
     """Unique citation keys ``<prefix>:<key>`` (a clash gets _2, _3 …)."""
+    prefix = prefix or doc.prefix
     seen: set[str] = set()
     out = []
     for p in doc.passages:
-        key, n = f"{doc.prefix}:{p.key}", 2
+        key, n = f"{prefix}:{p.key}", 2
         while key in seen or p.key == "main":
-            key, n = f"{doc.prefix}:{p.key}_{n}", n + 1
+            key, n = f"{prefix}:{p.key}_{n}", n + 1
         seen.add(key)
         out.append((key, p))
+    return out
+
+
+def _unique_prefixes(docs: list[DocRecords]) -> list[str]:
+    """One prefix per document, widened along the uuid when two would share one.
+
+    labquote groups a bibliography by the text before the first ``:``, so two
+    documents with the same 4-char prefix in one file would merge into one source.
+    The later document is widened (``1a2b`` → ``1a2b9``) until it is distinct, which
+    keeps a merged store safe without touching keys that do not collide.
+    """
+    out: list[str] = []
+    taken: set[str] = set()
+    for doc in docs:
+        full = str(doc.info.uuid)
+        width = max(len(doc.prefix), 1)
+        cand = full[:width] if full else doc.prefix
+        while cand in taken and width < len(full):
+            width += 1
+            cand = full[:width]
+        n = 2
+        while cand in taken:  # the same uuid twice: keep them apart anyway
+            cand = f"{doc.prefix}_{n}"
+            n += 1
+        taken.add(cand)
+        out.append(cand)
     return out
 
 
@@ -262,8 +291,7 @@ def to_hayagriva(docs: list[DocRecords]) -> str:
 
     gen = datetime.date.today().isoformat()
     chunks: list[str] = []
-    taken: set[str] = set()
-    for doc in docs:
+    for doc, prefix in zip(docs, _unique_prefixes(docs), strict=True):
         if not doc.passages:
             continue
         info = doc.info
@@ -281,21 +309,14 @@ def to_hayagriva(docs: list[DocRecords]) -> str:
         main.update(
             {k: v for k, v in (("author", author), ("date", date), ("url", url)) if v}
         )
-        main_key = f"{doc.prefix}:main"
-        if main_key in taken:  # two documents share a uuid prefix
-            logger.warning(
-                "Two documents share the key prefix %s; the second is %s",
-                doc.prefix,
-                doc.uuid_dir.name,
-            )
-        taken.add(main_key)
+        main_key = f"{prefix}:main"
         chunks.append(
             wm
             + yaml.safe_dump(
                 {main_key: main}, allow_unicode=True, sort_keys=False, width=1000
             )
         )
-        for key, p in _keys(doc):
+        for key, p in _keys(doc, prefix):
             item = {"type": "article", "title": p.text}
             item.update(
                 {
@@ -340,10 +361,38 @@ def _dump_entry(key: str, item: dict) -> str:
     )
 
 
+def merge_hayagriva(paths: list[Path], output: Path) -> dict:
+    """Merge gathered Hayagriva files into one store. First file's entry for a key wins.
+
+    A workbench case gathers several sets; a document that sits in more than one set
+    would otherwise be written once per file. One entry per key, in first-seen order,
+    lets every document cite from one shared store.
+    """
+    merged: dict = {}
+    for path in paths:
+        try:
+            data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+        except (OSError, ValueError) as exc:
+            sys.exit(f"cannot read {path}: {exc}")
+        if not isinstance(data, dict):
+            sys.exit(f"{path} is not a Hayagriva mapping")
+        for key, entry in data.items():
+            merged.setdefault(key, entry)
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        yaml.dump(
+            merged, Dumper=_Dumper, allow_unicode=True, sort_keys=False, width=1000
+        ),
+        encoding="utf-8",
+    )
+    return merged
+
+
 def to_bibtex(docs: list[DocRecords]) -> str:
     db = BibDatabase()
     entries = []
-    for doc in docs:
+    for doc, prefix in zip(docs, _unique_prefixes(docs), strict=True):
         if not doc.passages:
             continue
         info = doc.info
@@ -359,12 +408,12 @@ def to_bibtex(docs: list[DocRecords]) -> str:
         entries.append(
             {
                 "ENTRYTYPE": "article",
-                "ID": f"{doc.prefix}:main",
+                "ID": f"{prefix}:main",
                 "title": _flat(info.title or info.label),
                 **base,
             }
         )
-        for key, p in _keys(doc):
+        for key, p in _keys(doc, prefix):
             e = {
                 "ENTRYTYPE": "article",
                 "ID": key,
@@ -394,7 +443,7 @@ def to_markdown(
         f"- **Snippets**: {n}",
         "",
     ]
-    for doc in docs:
+    for doc, doc_prefix in zip(docs, _unique_prefixes(docs), strict=True):
         info = doc.info
         lines.append(f"## {info.title}\n")
         for label, value in (
@@ -405,7 +454,7 @@ def to_markdown(
             if value:
                 lines.append(f"- **{label}**: {value}")
         lines.append("")
-        for key, p in _keys(doc):
+        for key, p in _keys(doc, doc_prefix):
             if include_keys:
                 lines.append(f"  ### {key.split(':', 1)[1]}")
             prefix = f"p. {p.page}: " if p.page else ""

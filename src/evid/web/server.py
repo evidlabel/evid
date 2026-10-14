@@ -1,8 +1,14 @@
 """The evid GUI: a loopback HTTP server for ``page.html`` plus a JSON API.
 
 The same page runs in the ``evid-app`` Tauri window and in a browser. Closing
-the window stops the server. A second ``evid gui`` on the same data directory
-raises the running one instead of starting another.
+the window stops a server this process started. A second ``evid gui`` on the
+same data directory does not start another server: it opens the Tauri window
+on the one already running, or raises that window when it is already open.
+
+More than one data directory can be open in that one window. Each directory is
+a trunk in the set tree. The configured directory is the primary trunk
+(``global``). ``GET /api/sets`` without ``?root=`` is that primary directory,
+so callers that list sets keep seeing only it.
 
 Guards (local only): the Host header must be loopback (DNS rebinding), and every
 mutating ``/api`` request carries ``X-Evid: 1`` (a custom header a foreign page
@@ -11,7 +17,9 @@ cannot send without a CORS preflight we never answer).
 
 from __future__ import annotations
 
+import base64
 import contextlib
+import contextvars
 import hashlib
 import json
 import logging
@@ -24,10 +32,12 @@ import sys
 import threading
 import time
 import webbrowser
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError as UrlHTTPError
 from urllib.error import URLError
 from urllib.parse import parse_qs, unquote, urlparse
 from urllib.request import Request, urlopen
@@ -44,12 +54,26 @@ from evid.web.jobs import (
     Jobs,
 )
 from evid.web.live import DiskWatch
+from evid.web.roots import (
+    PRIMARY,
+    disambiguate,
+    is_set_dir,
+    label_for,
+    load_saved,
+    prepare,
+    root_id,
+    save_saved,
+)
+from evid.web.roots import overlaps as paths_overlap
 from evid.web.term import Sessions, ws_accept
 
 logger = logging.getLogger(__name__)
 
 CONTEXT_CHARS = 600  # vector-hit preview: characters each side of the chunk
 LOOPBACK = ("127.0.0.1", "localhost", "::1")
+# Which trunk the request is aimed at. Empty means the primary data directory.
+# Set from ``?root=`` — the body is read once, so the root cannot travel there.
+_ROOT: contextvars.ContextVar[str] = contextvars.ContextVar("evid_root", default="")
 
 
 class HTTPError(Exception):
@@ -62,28 +86,221 @@ class HTTPError(Exception):
 # ── application state ─────────────────────────────────────────────────────────
 
 
+@dataclass
+class Trunk:
+    """One connected data directory: its sets, its tags, and its own disk watch."""
+
+    id: str
+    path: Path
+    name: str
+    primary: bool
+    sets: SetManager
+    tags: TagService
+    disk: DiskWatch
+
+
 class EvidApp:
     """Services and background workers behind the HTTP handler."""
 
     def __init__(self, config: EvidConfig) -> None:
         self.config = config
-        self.data_dir = Path(config.data_dir).expanduser()
+        self.data_dir = Path(config.data_dir).expanduser().resolve()
         self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.sets = SetManager(self.data_dir)
-        self.tags = TagService(self.data_dir)
         self.events = Events()
         self.jobs = Jobs(self.events)
         self.has_vec = extras.has_vec()
         self._vec = None
         self._vec_lock = threading.Lock()
-        self.disk = DiskWatch(
-            self.data_dir, self.events
-        )  # live mode: changes made outside the app
+        self._roots_lock = threading.RLock()
+        self._trunks: dict[str, Trunk] = {}
+        self._order: list[str] = []
+        self._watching = False
+        primary = self._make_trunk(PRIMARY, self.data_dir, primary=True, name="global")
+        self._trunks[PRIMARY] = primary
+        self._order.append(PRIMARY)
+        self._load_saved_roots()
+        # The index thread outlives the request, so it cannot see ``_ROOT``.
+        # ``note_index`` finds the document's trunk by the set slug.
         self.index = IndexQueue(
-            self.events, before_index=self._release_vec, on_write=self.disk.touch
+            self.events, before_index=self._release_vec, on_write=self.note_index
         )
         self.temps: dict[str, object] = {}  # fetch token -> TemporaryDirectory
         self._log_handler: logging.Handler | None = None
+
+    def _make_trunk(self, rid: str, path: Path, *, primary: bool, name: str) -> Trunk:
+        path.mkdir(parents=True, exist_ok=True)
+        return Trunk(
+            id=rid,
+            path=path,
+            name=name,
+            primary=primary,
+            sets=SetManager(path),
+            tags=TagService(path),
+            disk=DiskWatch(path, self.events, root_id="" if primary else rid),
+        )
+
+    def _save_locked(self) -> None:
+        paths = [
+            self._trunks[i].path
+            for i in self._order
+            if i != PRIMARY and i in self._trunks
+        ]
+        save_saved(self.data_dir, paths)
+
+    def _load_saved_roots(self) -> None:
+        saved, dirty = load_saved(self.data_dir)
+        kept: list[Path] = []
+        with self._roots_lock:
+            taken = {t.name for t in self._trunks.values()}
+            for raw in saved:
+                try:
+                    path = Path(raw).expanduser().resolve()
+                except OSError:
+                    dirty = True
+                    continue
+                if not path.is_dir() or is_set_dir(path):
+                    dirty = True
+                    continue
+                if any(
+                    t.path == path or paths_overlap(t.path, path)
+                    for t in self._trunks.values()
+                ):
+                    dirty = True
+                    continue
+                rid = root_id(path)
+                if rid in self._trunks:
+                    dirty = True
+                    continue
+                name = disambiguate(label_for(path, primary=False), taken)
+                taken.add(name)
+                trunk = self._make_trunk(rid, path, primary=False, name=name)
+                self._trunks[rid] = trunk
+                self._order.append(rid)
+                kept.append(path)
+            if dirty or [str(p) for p in kept] != _resolved(saved):
+                self._save_locked()
+
+    def trunks(self) -> list[Trunk]:
+        with self._roots_lock:
+            return [self._trunks[i] for i in self._order if i in self._trunks]
+
+    def trunk(self, root: str | None = None) -> Trunk:
+        """The trunk for *root*, or the one named by ``?root=`` on this request.
+
+        Empty and ``main`` are the primary data directory.
+        """
+        if root is None:
+            root = _ROOT.get()
+        if root == PRIMARY:
+            root = ""
+        with self._roots_lock:
+            if not root:
+                return self._trunks[PRIMARY]
+            found = self._trunks.get(root)
+        if found is None:
+            raise HTTPError(404, f"no such data directory: {root}")
+        return found
+
+    @property
+    def sets(self) -> SetManager:
+        """Set manager of the trunk this request is aimed at (primary when none)."""
+        return self.trunk(None).sets
+
+    @property
+    def tags(self) -> TagService:
+        return self.trunk(None).tags
+
+    @property
+    def disk(self) -> DiskWatch:
+        """The primary directory's watch. Tests and startup use this."""
+        return self._trunks[PRIMARY].disk
+
+    def connect_root(self, raw: str) -> Trunk:
+        """Connect a data directory. The same path again returns the trunk already open."""
+        path = prepare(raw)
+        with self._roots_lock:
+            for t in self._trunks.values():
+                if t.path == path:
+                    return t
+            for t in self._trunks.values():
+                if paths_overlap(t.path, path):
+                    raise ValueError(
+                        f"{path} overlaps the connected directory {t.path}"
+                    )
+            rid = root_id(path)
+            extra = 0
+            while rid in self._trunks:
+                extra += 1
+                rid = hashlib.sha256(
+                    f"{path}\n{extra}".encode(), usedforsecurity=False
+                ).hexdigest()[:8]
+            name = disambiguate(
+                label_for(path, primary=False),
+                {t.name for t in self._trunks.values()},
+            )
+            trunk = self._make_trunk(rid, path, primary=False, name=name)
+            self._trunks[rid] = trunk
+            self._order.append(rid)
+            self._save_locked()
+            watching = self._watching
+        if watching:
+            trunk.disk.start()
+        self.events.emit("sets_changed")
+        logger.info("Connected data directory %s as %s", path, name)
+        return trunk
+
+    def disconnect_root(self, rid: str) -> None:
+        """Drop a trunk from the tree. The directory and its files stay on disk."""
+        if not rid or rid == PRIMARY:
+            raise ValueError("the global data directory stays connected")
+        with self._roots_lock:
+            trunk = self._trunks.get(rid)
+            if trunk is None:
+                raise FileNotFoundError(f"no such data directory: {rid}")
+            if trunk.primary:
+                raise ValueError("the global data directory stays connected")
+            self._order.remove(rid)
+            del self._trunks[rid]
+            self._save_locked()
+        trunk.disk.stop()
+        self.events.emit("sets_changed")
+        logger.info("Disconnected data directory %s", trunk.path)
+
+    def start_watches(self) -> None:
+        """Watch every trunk. A directory connected later is watched too."""
+        with self._roots_lock:
+            self._watching = True
+            trunks = list(self._trunks.values())
+        for t in trunks:
+            t.disk.start()
+
+    def note(self, slug: str, uuid: str = "") -> None:
+        """The GUI is about to write *slug* in the trunk this request is aimed at."""
+        self.trunk(None).disk.touch(slug, uuid)
+
+    def note_index(self, slug: str, uuid: str) -> None:
+        """Mark a GUI write from the index thread, which has no request trunk.
+
+        The same slug in two trunks is touched in both. That is rare, and a
+        touch only tells the page the next change was ours.
+        """
+        from evid.services.layout import find_set_dir
+
+        hit = False
+        for t in self.trunks():
+            if find_set_dir(t.path, slug) is not None:
+                t.disk.touch(slug, uuid)
+                hit = True
+        if not hit:
+            self.disk.touch(slug, uuid)
+
+    def emit_docs(self, slug: str, root: str | None = None) -> None:
+        """``docs_changed`` for *slug*. A non-primary trunk names itself."""
+        rid = self.trunk(root).id
+        if rid == PRIMARY:
+            self.events.emit("docs_changed", slug=slug)
+        else:
+            self.events.emit("docs_changed", slug=slug, root=rid)
 
     # vec ------------------------------------------------------------------
 
@@ -103,18 +320,21 @@ class EvidApp:
             with self._vec_lock:
                 self._vec.close(slug)
 
-    def enqueue_index(self, doc_dir: Path, evidence_set) -> bool:
+    def enqueue_index(
+        self, doc_dir: Path, evidence_set, root: str | None = None
+    ) -> bool:
         if not self.has_vec:
             return False
-        self.index.enqueue(doc_dir, evidence_set)
+        rid = self.trunk(root).id
+        self.index.enqueue(doc_dir, evidence_set, "" if rid == PRIMARY else rid)
         return True
 
     # lookups --------------------------------------------------------------
 
-    def evidence_set(self, slug: str):
+    def evidence_set(self, slug: str, root: str | None = None):
         if not slug or "/" in slug or slug.startswith("."):
             raise HTTPError(400, f"bad set name: {slug!r}")
-        return self.sets.load_set(slug)
+        return self.trunk(root).sets.load_set(slug)
 
     def doc_dir(self, slug: str, uuid: str) -> tuple[Any, Path]:
         es = self.evidence_set(slug)
@@ -135,7 +355,8 @@ class EvidApp:
         if self._log_handler is not None:
             logging.getLogger("evid").removeHandler(self._log_handler)
             self._log_handler = None
-        self.disk.stop()
+        for t in self.trunks():
+            t.disk.stop()
         self.index.stop()
         for tmp in self.temps.values():
             with contextlib.suppress(Exception):
@@ -144,6 +365,16 @@ class EvidApp:
 
 
 # ── serialisation ─────────────────────────────────────────────────────────────
+
+
+def _resolved(paths: list[Path]) -> list[str] | None:
+    out = []
+    for p in paths:
+        try:
+            out.append(str(Path(p).expanduser().resolve()))
+        except OSError:
+            return None
+    return out
 
 
 def doc_name(doc_dir: Path) -> str:
@@ -271,9 +502,10 @@ def label_rows(doc_dir: Path) -> list[dict]:
 
 def text_view(doc_dir: Path) -> dict:
     """Canonical text, page bands, and the human and machine records on it."""
-    from evid.core.labels import ensure_text, read
+    from evid.core.labels import adopt_legacy_document_note, ensure_text, read
     from evid.core.quote_pass import found_with_notes, list_passes
 
+    adopt_legacy_document_note(doc_dir)
     text, pages = ensure_text(doc_dir)
     data = read(doc_dir)
 
@@ -333,6 +565,18 @@ def text_view(doc_dir: Path) -> dict:
         "pages": pages,
         "labels": [one(r, "key") for r in data["labels"] if not r.get("lost")],
         "annotations": [one(r, "id") for r in data["annotations"] if not r.get("lost")],
+        "document": [
+            {
+                "id": rec.get("id") or "",
+                "kind": rec.get("kind") or "annotation",
+                "key": rec.get("key") or "",
+                "created": rec.get("created") or "",
+                "by": rec.get("by") or "",
+                "notes": list(rec.get("notes") or []),
+            }
+            for rec in data.get("document") or []
+            if isinstance(rec, dict)
+        ],
         "stale": [
             {
                 "kind": kind[:-1],
@@ -383,8 +627,38 @@ def _commit_view(doc_dir: Path, verb: str) -> dict:
     return view
 
 
-def list_dir(path: str, pdf_only: bool) -> dict:
+def _screenshot_sources(pages: list, dest: Path) -> list[str]:
+    """Ordered image paths. Pasted pages are written under *dest*."""
+    from evid.services.screenshots import IMAGE_SUFFIXES
+
+    sources: list[str] = []
+    for i, page in enumerate(pages):
+        raw_path = str(page.get("path") or "").strip()
+        if raw_path:
+            sources.append(raw_path)
+            continue
+        payload = str(page.get("png_base64") or "")
+        if "," in payload and payload.lstrip().lower().startswith("data:"):
+            payload = payload.split(",", 1)[1]
+        try:
+            data = base64.b64decode(payload, validate=True)
+        except ValueError as exc:
+            raise ValueError(f"Cannot read pasted image {i + 1}.") from exc
+        if not data:
+            raise ValueError(f"Cannot read pasted image {i + 1}.")
+        suffix = Path(str(page.get("name") or "")).suffix.lower()
+        if suffix not in IMAGE_SUFFIXES:
+            suffix = ".png"
+        out = dest / f"paste-{i:04d}{suffix}"
+        out.write_bytes(data)
+        sources.append(str(out))
+    return sources
+
+
+def list_dir(path: str, pdf_only: bool, images_only: bool = False) -> dict:
     """A directory listing for the page's file / folder picker."""
+    from evid.services.screenshots import IMAGE_SUFFIXES, natural_name
+
     p = Path(path or ".").expanduser()
     p = p.resolve() if p.exists() else Path.cwd()
     if p.is_file():
@@ -399,9 +673,18 @@ def list_dir(path: str, pdf_only: bool) -> dict:
             is_dir = child.is_dir()
             if pdf_only and not is_dir and child.suffix.lower() != ".pdf":
                 continue
+            if (
+                images_only
+                and not is_dir
+                and child.suffix.lower() not in IMAGE_SUFFIXES
+            ):
+                continue
             entries.append({"name": child.name, "dir": is_dir})
     except PermissionError as exc:
         raise HTTPError(403, str(exc)) from exc
+    if images_only:
+        # page2 before page10, so a folder of captures is already page order.
+        entries.sort(key=lambda e: (not e["dir"], natural_name(e["name"])))
     return {
         "dir": str(p),
         "parent": str(p.parent) if p.parent != p else "",
@@ -437,6 +720,7 @@ class Handler(BaseHTTPRequestHandler):
     app: EvidApp
     loopback = True
     in_app = False  # the page is shown in the evid-app window
+    headless = False  # embedded server: /api/raise must not open evid-app or a browser
     window: subprocess.Popen | None = None  # the evid-app process we launched
     url = ""
     raise_file: Path | None = None
@@ -491,6 +775,7 @@ class Handler(BaseHTTPRequestHandler):
     def dispatch(self, method: str) -> None:
         u = urlparse(self.path)
         self.q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        token = _ROOT.set(self.q.get("root") or "")
         try:
             if self.loopback:
                 host = (self.headers.get("Host") or "").rsplit(":", 1)[0].strip("[]")
@@ -522,6 +807,8 @@ class Handler(BaseHTTPRequestHandler):
             logger.exception("%s %s failed", method, u.path)
             with contextlib.suppress(ConnectionError):
                 self.send_json(500, {"error": f"{type(e).__name__}: {e}"})
+        finally:
+            _ROOT.reset(token)
 
     def fail(self, method: str, path: str, status: int, msg: str) -> None:
         """Answer an error, and put it in the log pane (failed actions are not silent)."""
@@ -594,24 +881,57 @@ class Handler(BaseHTTPRequestHandler):
         logger.error("page: %s", msg)
         self.send_json(200, {"ok": True})
 
-    # sets -----------------------------------------------------------------
-
-    @route("GET", "/api/sets")
-    def list_sets(self):
+    def _set_rows(self, trunk: Trunk) -> list[dict]:
         agents = self.agents.summary() if self.agents is not None else {}
-        out = []
-        for s in self.app.sets.list_sets():
-            out.append(
+        rows = []
+        for s in trunk.sets.list_sets():
+            key = s.slug if trunk.primary else f"{trunk.id}/{s.slug}"
+            rows.append(
                 {
                     "slug": s.slug,
                     "name": s.name,
                     "type": s.set_type.value,
                     "description": s.description,
-                    "docs": len(self.app.sets.list_documents(s.slug)),
-                    "agents": agents.get(s.slug),
+                    "docs": len(trunk.sets.list_documents(s.slug)),
+                    "agents": agents.get(key),
+                    "root": trunk.id,
                 }
             )
-        self.send_json(200, out)
+        return rows
+
+    def _root_row(self, trunk: Trunk) -> dict:
+        return {
+            "id": trunk.id,
+            "path": str(trunk.path),
+            "name": trunk.name,
+            "primary": trunk.primary,
+            "sets": self._set_rows(trunk),
+        }
+
+    # data directories (trunks) --------------------------------------------
+
+    @route("GET", "/api/roots")
+    def list_roots(self):
+        self.send_json(200, [self._root_row(t) for t in self.app.trunks()])
+
+    @route("POST", "/api/roots")
+    def connect_root(self):
+        path = str(self.body().get("path", "")).strip()
+        if not path:
+            raise HTTPError(400, "a path is required")
+        self.send_json(200, self._root_row(self.app.connect_root(path)))
+
+    @route("DELETE", "/api/roots/{rid}")
+    def disconnect_root(self, rid: str):
+        self.app.disconnect_root(rid)
+        self.send_json(200, {"ok": True})
+
+    # sets -----------------------------------------------------------------
+
+    @route("GET", "/api/sets")
+    def list_sets(self):
+        # No ``?root=`` (and ``root=main``) is the primary directory only.
+        self.send_json(200, self._set_rows(self.app.trunk(None)))
 
     @route("POST", "/api/sets")
     def create_set(self):
@@ -670,7 +990,7 @@ class Handler(BaseHTTPRequestHandler):
         path = str(b.get("path") or ".")
         if path != ".":
             doc_ops.doc_path(d, path)  # must be a file of the document
-        self.app.disk.touch(slug, "feedback")
+        self.app.note(slug, "feedback")
         item = feedback.add(es.path, d.name, str(b.get("text", "")), path)
         logger.info("Request #%d to the agent on %s", item["id"], doc_name(d))
         self.send_json(200, item)
@@ -681,7 +1001,7 @@ class Handler(BaseHTTPRequestHandler):
 
         es = self.app.evidence_set(slug)
         b = self.body()
-        self.app.disk.touch(slug, "feedback")
+        self.app.note(slug, "feedback")
         try:
             item = feedback.update(
                 es.path,
@@ -699,7 +1019,7 @@ class Handler(BaseHTTPRequestHandler):
         from evid.core import feedback
 
         es = self.app.evidence_set(slug)
-        self.app.disk.touch(slug, "feedback")
+        self.app.note(slug, "feedback")
         try:
             feedback.delete(es.path, int(fid))
         except KeyError as exc:
@@ -747,7 +1067,7 @@ class Handler(BaseHTTPRequestHandler):
                 r = repair(es.path / "docs" / d["uuid"])
                 done["repaired"] += r["repaired"]
                 done["stale"] += r["stale"]
-            self.app.events.emit("docs_changed", slug=slug)
+            self.app.emit_docs(slug)
             return done
 
         self.send_json(
@@ -765,28 +1085,31 @@ class Handler(BaseHTTPRequestHandler):
         for u in uuids:
             _, d = self.app.doc_dir(slug, u)
             name = doc_name(d)
-            self.app.disk.touch(slug, u)
+            self.app.note(slug, u)
             doc_ops.delete_doc(d)
             logger.info("Deleted %s from '%s'", name, slug)
-        self.app.events.emit("docs_changed", slug=slug)
+        self.app.emit_docs(slug)
         self.send_json(200, {"deleted": len(uuids)})
 
     @route("POST", "/api/sets/{slug}/copy")
     def copy_docs(self, slug: str):
         b = self.body()
-        dest = self.app.evidence_set(str(b.get("dest", "")))
-        if dest.slug == slug:
+        src_trunk = self.app.trunk(None)
+        dest_key = str(b.get("destRoot") or "")
+        dest_trunk = self.app.trunk(dest_key) if dest_key else src_trunk
+        dest = self.app.evidence_set(str(b.get("dest", "")), root=dest_trunk.id)
+        if dest_trunk.id == src_trunk.id and dest.slug == slug:
             raise HTTPError(400, "source and destination are the same set")
         copied = 0
         for u in list(b.get("uuids") or []):
             _, src = self.app.doc_dir(slug, u)
-            self.app.disk.touch(dest.slug, u)
+            dest_trunk.disk.touch(dest.slug, u)
             dest_dir, new = doc_ops.copy_doc(src, dest)
             if new:
                 copied += 1
-                self.app.enqueue_index(dest_dir, dest)
+                self.app.enqueue_index(dest_dir, dest, root=dest_trunk.id)
         logger.info("Copied %d doc(s) to '%s'", copied, dest.slug)
-        self.app.events.emit("docs_changed", slug=dest.slug)
+        self.app.emit_docs(dest.slug, root=dest_trunk.id)
         self.send_json(200, {"copied": copied, "dest": dest.slug})
 
     @route("POST", "/api/sets/{slug}/quotes")
@@ -813,7 +1136,7 @@ class Handler(BaseHTTPRequestHandler):
         n = 0
         for u in list(b.get("uuids") or []):
             _, d = self.app.doc_dir(slug, u)
-            self.app.disk.touch(es.slug, u)
+            self.app.note(es.slug, u)
             n += bool(fn(self.app.tags, es.slug, u, d / "info.yml", tag))
         verb = (
             "Removed tag %s from %d document(s)"
@@ -835,7 +1158,7 @@ class Handler(BaseHTTPRequestHandler):
     def put_doc(self, slug: str, uuid: str):
         _, d = self.app.doc_dir(slug, uuid)
         b = self.body()
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         out = doc_ops.update_doc(d, b)
         logger.info("Saved details of %s", doc_name(d))
         self.send_json(200, {**out, "labels": label_rows(d)})
@@ -894,7 +1217,7 @@ class Handler(BaseHTTPRequestHandler):
         _, d = self.app.doc_dir(slug, uuid)
         b = self.body()
         path = str(b.get("path", "."))
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         notes = write_annotation(d, path, str(b.get("text", "")))
         target = "the document" if path in ("", ".") else path
         logger.info(
@@ -903,7 +1226,7 @@ class Handler(BaseHTTPRequestHandler):
             target,
             doc_name(d),
         )
-        self.app.events.emit("docs_changed", slug=slug)
+        self.app.emit_docs(slug)
         self.send_json(200, {"annotations": notes})
 
     @route("GET", "/api/sets/{slug}/docs/{uuid}/history")
@@ -928,16 +1251,15 @@ class Handler(BaseHTTPRequestHandler):
 
     @route("POST", "/api/sets/{slug}/docs/{uuid}/labels")
     def post_label(self, slug: str, uuid: str):
-        from evid.core.labels import add_label, read, suggest_key
+        from evid.core.labels import add_label, suggest_key, taken_keys
 
         _, d = self.app.doc_dir(slug, uuid)
         b = self.body()
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         span = _span_from_body(d, b)
         key = str(b.get("key") or "").strip()
         if not key:
-            taken = {r["key"] for r in read(d)["labels"]}
-            key = suggest_key(span["text"], taken)
+            key = suggest_key(span["text"], taken_keys(d))
         rec = add_label(d, span, key, str(b.get("note") or ""))
         logger.info("Labelled %s of %s", rec["key"], doc_name(d))
         self.send_json(200, _commit_view(d, f"+{rec['key']}"))
@@ -947,7 +1269,7 @@ class Handler(BaseHTTPRequestHandler):
         from evid.core.labels import add_note
 
         _, d = self.app.doc_dir(slug, uuid)
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             add_note(d, key, str(self.body().get("text") or ""))
         except KeyError as exc:
@@ -960,7 +1282,7 @@ class Handler(BaseHTTPRequestHandler):
         from evid.core.labels import edit_note
 
         _, d = self.app.doc_dir(slug, uuid)
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             edit_note(d, key, _note_index(index), str(self.body().get("text") or ""))
         except KeyError as exc:
@@ -973,7 +1295,7 @@ class Handler(BaseHTTPRequestHandler):
         from evid.core.labels import remove_note
 
         _, d = self.app.doc_dir(slug, uuid)
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             remove_note(d, key, _note_index(index))
         except KeyError as exc:
@@ -989,7 +1311,7 @@ class Handler(BaseHTTPRequestHandler):
         new = str(self.body().get("key") or "").strip()
         if not new:
             raise HTTPError(400, "missing key")
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             rename_label(d, key, new)
         except KeyError as exc:
@@ -1002,7 +1324,7 @@ class Handler(BaseHTTPRequestHandler):
         from evid.core.labels import remove_label
 
         _, d = self.app.doc_dir(slug, uuid)
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             remove_label(d, key)
         except KeyError as exc:
@@ -1017,7 +1339,7 @@ class Handler(BaseHTTPRequestHandler):
         _, d = self.app.doc_dir(slug, uuid)
         b = self.body()
         note = str(b.get("note") or b.get("text") or "")
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         if "start" in b and "end" in b:
             span = span_at(d, int(b["start"]), int(b["end"]))
         else:
@@ -1034,7 +1356,7 @@ class Handler(BaseHTTPRequestHandler):
         from evid.core.labels import annotate
 
         _, d = self.app.doc_dir(slug, uuid)
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             annotate(d, ann_id, str(self.body().get("text") or ""))
         except KeyError as exc:
@@ -1049,7 +1371,7 @@ class Handler(BaseHTTPRequestHandler):
         from evid.core.labels import edit_annotation_note
 
         _, d = self.app.doc_dir(slug, uuid)
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             edit_annotation_note(
                 d, ann_id, _note_index(index), str(self.body().get("text") or "")
@@ -1067,7 +1389,7 @@ class Handler(BaseHTTPRequestHandler):
         from evid.core.labels import remove_annotation_note
 
         _, d = self.app.doc_dir(slug, uuid)
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             remove_annotation_note(d, ann_id, _note_index(index))
         except KeyError as exc:
@@ -1080,7 +1402,7 @@ class Handler(BaseHTTPRequestHandler):
         from evid.core.labels import remove_annotation
 
         _, d = self.app.doc_dir(slug, uuid)
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             remove_annotation(d, ann_id)
         except KeyError as exc:
@@ -1088,13 +1410,104 @@ class Handler(BaseHTTPRequestHandler):
         logger.info("Removed annotation %s of %s", ann_id, doc_name(d))
         self.send_json(200, _commit_view(d, f"-annotation {ann_id}"))
 
+    @route("POST", "/api/sets/{slug}/docs/{uuid}/document/labels")
+    def post_document_label(self, slug: str, uuid: str):
+        from evid.core.labels import add_document_label
+
+        _, d = self.app.doc_dir(slug, uuid)
+        b = self.body()
+        self.app.note(slug, uuid)
+        rec = add_document_label(d, str(b.get("key") or ""), str(b.get("note") or ""))
+        logger.info("Labelled document %s of %s", rec["key"], doc_name(d))
+        self.send_json(200, _commit_view(d, f"+{rec['key']}"))
+
+    @route("POST", "/api/sets/{slug}/docs/{uuid}/document/annotations")
+    def post_document_annotation(self, slug: str, uuid: str):
+        from evid.core.labels import add_document_annotation
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.note(slug, uuid)
+        rec = add_document_annotation(d, str(self.body().get("text") or ""))
+        logger.info("Annotated document %s of %s", rec["id"], doc_name(d))
+        self.send_json(200, _commit_view(d, f"+document {rec['id']}"))
+
+    @route("POST", "/api/sets/{slug}/docs/{uuid}/document/{rec_id}/notes")
+    def post_document_note(self, slug: str, uuid: str, rec_id: str):
+        from evid.core.labels import add_document_note
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.note(slug, uuid)
+        try:
+            add_document_note(d, rec_id, str(self.body().get("text") or ""))
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Noted document record %s of %s", rec_id, doc_name(d))
+        self.send_json(200, _commit_view(d, f"document {rec_id} note"))
+
+    @route("PUT", "/api/sets/{slug}/docs/{uuid}/document/{rec_id}/notes/{index}")
+    def put_document_note(self, slug: str, uuid: str, rec_id: str, index: str):
+        from evid.core.labels import edit_document_note
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.note(slug, uuid)
+        try:
+            edit_document_note(
+                d, rec_id, _note_index(index), str(self.body().get("text") or "")
+            )
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Edited a note on document record %s of %s", rec_id, doc_name(d))
+        self.send_json(200, _commit_view(d, f"document {rec_id} note"))
+
+    @route("DELETE", "/api/sets/{slug}/docs/{uuid}/document/{rec_id}/notes/{index}")
+    def delete_document_note(self, slug: str, uuid: str, rec_id: str, index: str):
+        from evid.core.labels import remove_document_note
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.note(slug, uuid)
+        try:
+            remove_document_note(d, rec_id, _note_index(index))
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Removed a note on document record %s of %s", rec_id, doc_name(d))
+        self.send_json(200, _commit_view(d, f"document {rec_id} note"))
+
+    @route("PUT", "/api/sets/{slug}/docs/{uuid}/document/{rec_id}")
+    def put_document_label(self, slug: str, uuid: str, rec_id: str):
+        from evid.core.labels import rename_document_label
+
+        _, d = self.app.doc_dir(slug, uuid)
+        new = str(self.body().get("key") or "").strip()
+        if not new:
+            raise HTTPError(400, "missing key")
+        self.app.note(slug, uuid)
+        try:
+            rename_document_label(d, rec_id, new)
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Renamed document label %s of %s", rec_id, doc_name(d))
+        self.send_json(200, _commit_view(d, f"document {rec_id} -> {new}"))
+
+    @route("DELETE", "/api/sets/{slug}/docs/{uuid}/document/{rec_id}")
+    def delete_document_record(self, slug: str, uuid: str, rec_id: str):
+        from evid.core.labels import remove_document
+
+        _, d = self.app.doc_dir(slug, uuid)
+        self.app.note(slug, uuid)
+        try:
+            remove_document(d, rec_id)
+        except KeyError as exc:
+            raise _missing(exc) from exc
+        logger.info("Removed document record %s of %s", rec_id, doc_name(d))
+        self.send_json(200, _commit_view(d, f"-document {rec_id}"))
+
     @route("POST", "/api/sets/{slug}/docs/{uuid}/quotes/{key}/notes")
     def post_quote_note(self, slug: str, uuid: str, key: str):
         from evid.core.quote_pass import note_quote
 
         _, d = self.app.doc_dir(slug, uuid)
         b = self.body()
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             note_quote(
                 d,
@@ -1113,7 +1526,7 @@ class Handler(BaseHTTPRequestHandler):
 
         _, d = self.app.doc_dir(slug, uuid)
         b = self.body()
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             edit_quote_note(
                 d,
@@ -1132,7 +1545,7 @@ class Handler(BaseHTTPRequestHandler):
         from evid.core.quote_pass import remove_quote_note
 
         _, d = self.app.doc_dir(slug, uuid)
-        self.app.disk.touch(slug, uuid)
+        self.app.note(slug, uuid)
         try:
             remove_quote_note(
                 d,
@@ -1252,7 +1665,7 @@ class Handler(BaseHTTPRequestHandler):
         )
 
         def run(progress, _job):
-            app.disk.touch(es.slug)  # the new doc's id is not known yet
+            app.note(es.slug)  # the new doc's id is not known yet
             ing = DocIngester(vec_service=None)
             ing.progress = lambda _s, _n, msg: progress(f"{msg}…")
             doc = ing.ingest(
@@ -1268,11 +1681,15 @@ class Handler(BaseHTTPRequestHandler):
                 do_index=False,
                 source_name=str(b.get("source_name", "")),
             )
-            app.disk.touch(es.slug, doc.uuid)
+            app.note(es.slug, doc.uuid)
             existing = bool(ing.last_was_existing)
             if not existing:
+                if b.get("screenshot"):
+                    from evid.services.screenshots import annotate_screenshot
+
+                    annotate_screenshot(doc.path)
                 app.enqueue_index(es.path / "docs" / doc.uuid, es)
-            app.events.emit("docs_changed", slug=es.slug)
+            app.emit_docs(es.slug)
             if existing:
                 logger.info(
                     "%s is already in '%s' (%s)", pdf.name, es.slug, doc.uuid[:8]
@@ -1288,6 +1705,75 @@ class Handler(BaseHTTPRequestHandler):
 
         self.send_json(
             200, {"job": app.jobs.start("ingest", run, f"Adding {pdf.name}")}
+        )
+
+    @route("POST", "/api/ingest/screenshots")
+    def ingest_screenshots(self):
+        """OCR page images into a temp PDF. The Add document dialog ingests it."""
+        import tempfile
+
+        from evid.services.screenshots import resolve_screenshots
+
+        b = self.body()
+        pages = b.get("pages")
+        if not isinstance(pages, list) or not pages:
+            raise HTTPError(400, "add at least one screenshot")
+        for page in pages:
+            if not isinstance(page, dict) or not (
+                str(page.get("path") or "").strip() or page.get("png_base64")
+            ):
+                raise HTTPError(400, "each page needs a path or an image")
+        lang = str(b.get("lang") or "dan+eng").strip() or "dan+eng"
+        app = self.app
+
+        class ShotCancelledError(Exception):
+            pass
+
+        def run(progress, job):
+            work = tempfile.TemporaryDirectory()
+            resolved = None
+            try:
+                sources = _screenshot_sources(pages, Path(work.name))
+
+                def on_page(i: int, n: int, _name: str) -> None:
+                    if job["cancelled"]:
+                        raise ShotCancelledError
+                    progress(f"Reading page {i} of {n}…")
+
+                resolved = resolve_screenshots(sources, lang=lang, progress=on_page)
+            except ShotCancelledError:
+                return None
+            finally:
+                work.cleanup()
+            if job["cancelled"] or resolved is None:
+                if resolved is not None and resolved.temp_dir is not None:
+                    with contextlib.suppress(Exception):
+                        resolved.temp_dir.cleanup()
+                return None
+            token = secrets.token_hex(8)
+            if resolved.temp_dir is not None:
+                app.temps[token] = resolved.temp_dir
+            logger.info(
+                "Screenshots ready — %d page(s), %s",
+                len(pages),
+                resolved.original_name,
+            )
+            title = resolved.title or resolved.pdf_path.stem
+            return {
+                "path": str(resolved.pdf_path),
+                "title": title,
+                "authors": "",
+                "dates": "",
+                "label": title,
+                "url": "",
+                "source_name": resolved.original_name or "",
+                "token": token,
+                "screenshot": True,
+            }
+
+        self.send_json(
+            200,
+            {"job": app.jobs.start("screenshots", run, "Reading screenshots")},
         )
 
     @route("POST", "/api/jobs/{jid}/cancel")
@@ -1380,7 +1866,14 @@ class Handler(BaseHTTPRequestHandler):
 
     @route("GET", "/api/files")
     def files(self):
-        self.send_json(200, list_dir(self.q.get("dir", ""), self.q.get("pdf") == "1"))
+        self.send_json(
+            200,
+            list_dir(
+                self.q.get("dir", ""),
+                self.q.get("pdf") == "1",
+                self.q.get("images") == "1",
+            ),
+        )
 
     @route("POST", "/api/open-path")
     def open_path(self):
@@ -1413,8 +1906,10 @@ class Handler(BaseHTTPRequestHandler):
         """The terminals of one evidence set (an agent never spans sets)."""
         if self.agents is None:
             raise HTTPError(404, "the agent pane is off")
+        trunk = self.app.trunk(None)
         es = self.app.evidence_set(slug)
-        return self.agents.get(es, create=create)
+        root = "" if trunk.primary else trunk.id
+        return self.agents.get(es, create=create, data_dir=trunk.path, root=root)
 
     @route("GET", "/api/terms")
     def list_terms(self):
@@ -1474,10 +1969,14 @@ class Handler(BaseHTTPRequestHandler):
     @route("POST", "/api/quit")
     def quit(self):
         self.send_json(200, {"ok": True})
-        if Handler.window is not None:
-            Handler.window.terminate()  # serve_gui() then stops the server
-        else:
-            threading.Thread(target=self.server.shutdown, daemon=True).start()
+        win = Handler.window
+        # raise() on a headless server records a window. That process exiting,
+        # or still being open, must not leave the server running: a windowed
+        # launch stops when its window does, and a headless one is blocked in
+        # serve_forever until this shutdown.
+        if win is not None and win.poll() is None:
+            win.terminate()
+        threading.Thread(target=self.server.shutdown, daemon=True).start()
 
 
 class SetAgents:
@@ -1493,14 +1992,24 @@ class SetAgents:
         self.lock = threading.Lock()
         self.by_slug: dict[str, Sessions] = {}
 
-    def get(self, evidence_set, create: bool = True) -> Sessions | None:
+    def get(
+        self,
+        evidence_set,
+        create: bool = True,
+        *,
+        data_dir: Path | None = None,
+        root: str = "",
+    ) -> Sessions | None:
         slug = evidence_set.slug
+        # The primary directory stays keyed by slug, so an existing session is found.
+        key = slug if not root or root == PRIMARY else f"{root}/{slug}"
+        db = self.data_dir if data_dir is None else Path(data_dir)
         with self.lock:
-            if slug not in self.by_slug and create:
-                ping = (lambda: self.on_change(slug)) if self.on_change else None
-                env = terminal_env(self.data_dir, self.url, slug)
-                self.by_slug[slug] = Sessions(str(evidence_set.path), env, None, ping)
-            return self.by_slug.get(slug)
+            if key not in self.by_slug and create:
+                ping = (lambda k=key: self.on_change(k)) if self.on_change else None
+                env = terminal_env(db, self.url, slug)
+                self.by_slug[key] = Sessions(str(evidence_set.path), env, None, ping)
+            return self.by_slug.get(key)
 
     def summary(self) -> dict[str, dict]:
         """{slug: {terms, alive, names}} for the sets that have terminals; names are the
@@ -1558,6 +2067,10 @@ def raise_window() -> None:
     ) == "1"
     if app_alive and Handler.raise_file is not None:
         Handler.raise_file.write_text(str(time.time()))  # evid-app polls this file
+        return
+    # A headless server is the page inside workbench. A second `evid gui` asks
+    # this process to come forward; opening evid-app here is a loose window.
+    if Handler.headless:
         return
     exe = find_app()
     if exe:
@@ -1651,6 +2164,47 @@ def ask_raise(url: str, open_at: dict | None = None) -> bool:
         return False
 
 
+def lacks_roots(url: str) -> bool:
+    """True when this GUI was started before connected directories existed.
+
+    Only a 404 counts. Any other answer, including a failure to connect, leaves
+    the running GUI in place.
+    """
+    try:
+        with urlopen(Request(url.rstrip("/") + "/api/roots"), timeout=2) as resp:
+            resp.read()
+    except UrlHTTPError as exc:
+        return exc.code == 404
+    except (OSError, URLError):
+        return False
+    return False
+
+
+def ask_quit(url: str) -> bool:
+    try:
+        with urlopen(
+            Request(
+                url.rstrip("/") + "/api/quit",
+                data=b"{}",
+                method="POST",
+                headers={"X-Evid": "1", "Content-Type": "application/json"},
+            ),
+            timeout=3,
+        ):
+            return True
+    except (OSError, URLError):
+        return False
+
+
+def _wait_down(data_dir: Path, timeout: float = 5.0) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if running_instance(data_dir) is None:
+            return True
+        time.sleep(0.05)
+    return running_instance(data_dir) is None
+
+
 def _open_query(open_at: dict | None) -> str:
     """Query string that opens one document in the GUI (``set``, ``doc``, ``pane``)."""
     if not open_at:
@@ -1667,12 +2221,143 @@ def _open_query(open_at: dict | None) -> str:
     return urlencode(fields)
 
 
+def _server_in_app(url: str) -> bool:
+    """True when that GUI is already shown in an evid-app window."""
+    try:
+        with urlopen(Request(url.rstrip("/") + "/api/config"), timeout=2) as resp:
+            return bool(json.loads(resp.read()).get("app"))
+    except (OSError, ValueError, URLError):
+        return False
+
+
+def _window_note(data_dir: Path) -> Path:
+    return lock_path(data_dir).with_suffix(".window")
+
+
+def _app_process_alive(pid: int) -> bool:
+    cmd = Path(f"/proc/{pid}/cmdline")
+    if cmd.exists():
+        try:
+            return b"evid-app" in cmd.read_bytes().replace(b"\x00", b" ")
+        except OSError:
+            return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _focus_attached(data_dir: Path) -> bool:
+    """Bring forward the evid-app this data directory already opened.
+
+    A headless server (workbench) ignores raise, so the window is remembered
+    next to the lock file and brought forward by touching its raise file.
+    """
+    try:
+        info = json.loads(_window_note(data_dir).read_text())
+        pid = int(info["pid"])
+        raise_path = Path(info["raise"])
+    except (OSError, ValueError, KeyError):
+        return False
+    if not _app_process_alive(pid):
+        return False
+    raise_path.write_text(str(time.time()))
+    return True
+
+
+def _open_url(url: str, open_at: dict | None) -> str:
+    query = _open_query(open_at)
+    base = url if url.endswith("/") else url + "/"
+    return f"{base}?{query}" if query else base
+
+
+def _open_attached(config: EvidConfig, url: str, open_at: dict | None) -> None:
+    """Show *url* in evid-app and wait until that window closes.
+
+    The server keeps running. Closing this window does not stop it.
+    """
+    open_url = _open_url(url, open_at)
+    exe = find_app()
+    if not exe:
+        print(
+            "  (evid-app not built — `make app-build` or set EVID_APP; using the browser)"
+        )
+        webbrowser.open(open_url)
+        print(f"Opened the browser on the running GUI ({open_url}).")
+        return
+    raise_path = lock_path(config.data_dir).with_suffix(".app-raise")
+    raise_path.write_text(str(time.time()))
+    proc = subprocess.Popen([exe, "--url", open_url, "--raise-file", str(raise_path)])
+    _window_note(config.data_dir).write_text(
+        json.dumps({"pid": proc.pid, "raise": str(raise_path)})
+    )
+    print(f"Opened evid-app on the running GUI ({open_url}).")
+    try:
+        proc.wait()
+    except KeyboardInterrupt:
+        proc.terminate()
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=5)
+
+
+def _claim_running(
+    config: EvidConfig,
+    open_at: dict | None,
+    replace: bool,
+    *,
+    browser: bool = False,
+    headless: bool = False,
+) -> bool:
+    """True when this process should serve. False when an existing GUI was used.
+
+    ``replace`` quits the GUI already serving this data directory so the caller,
+    usually the workbench, keeps the new process as its own child. A GUI from
+    before connected directories is replaced either way: it cannot take the
+    case directory.
+
+    A windowed launch opens evid-app on a server that has no window of its own
+    (workbench's ``evid gui --headless``). The server is left running.
+    """
+    url = running_instance(config.data_dir)
+    if not url:
+        return True
+    # Do not raise first when this process is taking over. raise() on a
+    # headless GUI opens a window and records it, and quit then used to
+    # close only that window.
+    if replace or lacks_roots(url):
+        reason = (
+            "this launch takes its place" if replace else "it has no directory list"
+        )
+        print(f"Restarting the evid GUI at {url}: {reason}.")
+        # A connection error from quit still counts when the GUI is gone: the
+        # request can lose the race with the process exiting.
+        ask_quit(url)
+        if _wait_down(config.data_dir):
+            return True
+        if replace:
+            sys.exit(f"evid: the GUI at {url} did not stop")
+    if not headless and not browser and not _server_in_app(url):
+        if _focus_attached(config.data_dir):
+            if not ask_raise(url, open_at):
+                return True
+            print(f"Raised the running evid GUI ({url}).")
+            return False
+        _open_attached(config, url, open_at)
+        return False
+    if not ask_raise(url, open_at):
+        return True
+    print(f"Raised the running evid GUI ({url}).")
+    return False
+
+
 def serve_gui(
     config: EvidConfig,
     *,
     port: int = 8790,
     browser: bool = False,
     headless: bool = False,
+    replace: bool = False,
     agent: str = "",
     open_at: dict | None = None,
 ) -> None:
@@ -1681,13 +2366,12 @@ def serve_gui(
     The agent pane's first terminal runs *agent* (or $EVID_AGENT; empty: a shell)
     in the current directory, with ``EVID_DB`` set to the data dir.
 
-    Closing the window stops the server. With *headless* nothing is opened (the
-    server runs until Ctrl+C or ``/api/quit``).
+    Closing the window stops a server this process started. A server that is
+    already running keeps going; the window only attaches to it. With *headless*
+    nothing is opened (the server runs until Ctrl+C or ``/api/quit``).
     """
     config.data_dir = Path(config.data_dir).expanduser().resolve()
-    url = running_instance(config.data_dir)
-    if url and ask_raise(url, open_at):
-        print(f"Raised the running evid GUI ({url}).")
+    if not _claim_running(config, open_at, replace, browser=browser, headless=headless):
         return
 
     app = EvidApp(config)
@@ -1715,7 +2399,7 @@ def serve_gui(
     )
 
     app.attach_log()
-    app.disk.start()
+    app.start_watches()
     Handler.agent = agent or os.environ.get("EVID_AGENT", "")
     Handler.agents = SetAgents(
         config.data_dir,
@@ -1728,6 +2412,7 @@ def serve_gui(
         f"evid  {config.data_dir}\n  open {open_url}\n  agent {Handler.agent or 'shell'} (Agent pane)"
     )
     exe = None if headless or browser else find_app()
+    Handler.headless = headless
     Handler.in_app = bool(exe) or os.environ.get("EVID_IN_APP") == "1"
     try:
         if exe:
@@ -1756,6 +2441,7 @@ def serve_gui(
         with contextlib.suppress(KeyboardInterrupt):
             srv.serve_forever()
     finally:
+        Handler.headless = False
         if Handler.agents is not None:
             Handler.agents.stop()
         app.shutdown()
