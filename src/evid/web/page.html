@@ -17,6 +17,8 @@
   --hl-lab: #8a2be2; --hl-key: #b4530a; --hl-quote: #0d6b3f; --hl-quote-bg: #e3f4e9; --hl-note: #6b6b66;
   --hl-head: #2f6fb3; --hl-hash: #a0306e; --hl-str: #7a5c00; --hl-com: #8c8c86;
   --mk-h: #2e7d32; --mk-a: #c9a227; --mk-m: #7a3ff2;
+  --pass-1: #2f6fb3; --pass-2: #b4530a; --pass-3: #0d6b3f; --pass-4: #8a2be2;
+  --pass-5: #a0306e; --pass-6: #7a5c00; --pass-7: #1f7a8c; --pass-8: #8a4b1f;
   --mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
   --sans: system-ui, -apple-system, "Segoe UI", sans-serif; --sans-weight: 400;
 }
@@ -28,6 +30,8 @@
     --hl-lab: #c792ea; --hl-key: #f0a35e; --hl-quote: #9be0b0; --hl-quote-bg: #203a2a; --hl-note: #9a9a95;
     --hl-head: #82aaff; --hl-hash: #f07178; --hl-str: #ddc27a; --hl-com: #6f6f6a;
     --mk-h: #81c784; --mk-a: #e6c35c; --mk-m: #c9a6ff;
+    --pass-1: #6aa4e0; --pass-2: #f0a35e; --pass-3: #9be0b0; --pass-4: #c792ea;
+    --pass-5: #f08ab5; --pass-6: #e6c35c; --pass-7: #7fd1de; --pass-8: #e0a878;
     --anon: #c9a6ff; --anon-bg: #2e2440;
   }
 }
@@ -38,6 +42,8 @@
     --hl-lab: #c792ea; --hl-key: #f0a35e; --hl-quote: #9be0b0; --hl-quote-bg: #203a2a; --hl-note: #9a9a95;
     --hl-head: #82aaff; --hl-hash: #f07178; --hl-str: #ddc27a; --hl-com: #6f6f6a;
     --mk-h: #81c784; --mk-a: #e6c35c; --mk-m: #c9a6ff;
+    --pass-1: #6aa4e0; --pass-2: #f0a35e; --pass-3: #9be0b0; --pass-4: #c792ea;
+    --pass-5: #f08ab5; --pass-6: #e6c35c; --pass-7: #7fd1de; --pass-8: #e0a878;
     --anon: #c9a6ff; --anon-bg: #2e2440;
 }
 * { box-sizing: border-box; }
@@ -296,7 +302,12 @@ button.mini { padding: 0 7px; font-size: 11px; text-transform: none; letter-spac
 #edside .nlines { flex: 1 0 100%; display: flex; flex-direction: column; gap: 1px; padding: 1px 0 3px; white-space: normal; overflow: visible; }
 #edside .nline { white-space: pre-wrap; overflow: visible; text-overflow: unset; word-break: break-word; color: var(--hl-note); font-style: italic; font-size: 11.5px; line-height: 1.35; padding: 1px 0; cursor: pointer; }
 #edside .nline:hover { color: var(--fg); }
-#edside .pass { color: var(--muted); font-size: 11px; background: var(--panel2); }
+#edside .pass { display: flex; gap: 6px; align-items: baseline; color: var(--muted); font-size: 11px; background: var(--panel2); border-left: 3px solid var(--passc, var(--line)); padding: 2px 4px 2px 6px; }
+#edside .pass .pkey { flex: none; color: var(--passc, var(--fg)); font-family: var(--mono); font-weight: 700; }
+#edside .pass .pjob { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#edside .pass .pcnt { flex: none; font-variant-numeric: tabular-nums; }
+#edside .item.bypass { border-left: 3px solid var(--passc, var(--line)); padding-left: 6px; background: color-mix(in srgb, var(--passc, transparent) 8%, transparent); }
+#edside .item.bypass b { color: var(--passc, var(--fg)); }
 .notedlg { display: flex; flex-direction: column; gap: 8px; }
 .notedlg .nrow { display: flex; flex-direction: column; gap: 4px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
 .notedlg textarea { width: 100%; resize: vertical; min-height: 52px; }
@@ -380,7 +391,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
       </div>
       <div class="split-v" id="split"></div>
       <div id="rpane">
-      <div class="ptabs"><button data-p="detail">Detail</button><button data-p="label" id="ptab-label" title="Read the document and label passages">Label</button><span class="hint" id="ptab-hint">Alt+↑/↓: next doc</span></div>
+      <div class="ptabs"><button data-p="detail">Detail</button><button data-p="label" id="ptab-label" title="Read the document and label passages">Label</button><button id="pt-uuid" hidden title="Insert this document's UUID into the agent pane (no Enter)">→</button><span class="hint" id="ptab-hint">Alt+↑/↓: next doc</span></div>
       <div id="detail" class="pview">
         <div class="uuidrow"><span class="mono" id="d-uuid">—</span>
           <button id="d-view" title="Open the URL, or the folder if there is none">View</button>
@@ -2284,11 +2295,11 @@ async function openEditor(slug, uuid) {
 }
 function switchPane(p, focus = true) {
   S.pane = p; store('pane', p);
-  $$('.ptabs button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
+  $$('.ptabs button[data-p]').forEach(b => b.classList.toggle('on', b.dataset.p === p));
   $$('.pview').forEach(v => v.classList.toggle('on', v.id === p));
   if (p === 'label') edLoad(S.slug, S.cur, focus);
 }
-$$('.ptabs button').forEach(b => b.onclick = () => switchPane(b.dataset.p));
+$$('.ptabs button[data-p]').forEach(b => b.onclick = () => switchPane(b.dataset.p));
 
 function findRec(kind, id, passId) {
   if (!S.ed) return null;
@@ -2370,21 +2381,26 @@ function edSide() {
   }
   $('#ed-labels').replaceChildren(...(human.length ? human : [el('div', { class: 'empty', text: '(none yet)' })]));
   const machine = [];
-  for (const p of passes) {
-    const head = [p.job || p.id, p.model].filter(Boolean).join(' · ');
-    machine.push(el('div', { class: 'pass', text: `${head} (${p.matched}/${p.tried})` }));
+  passes.forEach((p, i) => {
+    const color = passColor(i);
+    const head = [p.job, p.model].filter(Boolean).join(' · ') || p.id;
+    machine.push(el('div', { class: 'pass', style: `--passc:${color}`, title: p.job || p.id },
+      el('b', { class: 'pkey', text: p.key || `p${i + 1}` }),
+      el('span', { class: 'pjob', text: head }),
+      el('span', { class: 'pcnt', text: `(${p.matched}/${p.tried})` })));
     for (const q of p.quotes || []) if (!q.lost) {
       const notes = q.notes || [];
       const tip = [q.text, ...notes.map(n => n.text)].filter(Boolean).join('\n');
-      machine.push(sideRow('m', q.key, q.key, `p${q.page ?? '?'} · ${notes.length}`, tip, notes, p.id));
+      machine.push(sideRow('m', q.key, q.key, `p${q.page ?? '?'} · ${notes.length}`, tip, notes, p.id, color));
     }
-  }
+  });
   $('#ed-machine').replaceChildren(...(machine.length ? machine : [el('div', { class: 'empty', text: '(none yet)' })]));
 }
-function sideRow(kind, id, title, meta, tip, notes, passId) {
+function passColor(i) { return `var(--pass-${(i % 8) + 1})`; }
+function sideRow(kind, id, title, meta, tip, notes, passId, color) {
   notes = notes || [];
-  const row = el('div', { class: 'item', 'data-kind': kind, 'data-id': id, title: tip || '', onclick: () => edGo(kind, id, passId),
-    oncontextmenu: e => edMenu(e, kind, id), ...(passId ? { 'data-pass': passId } : {}) },
+  const row = el('div', { class: 'item' + (color ? ' bypass' : ''), 'data-kind': kind, 'data-id': id, title: tip || '', onclick: () => edGo(kind, id, passId),
+    oncontextmenu: e => edMenu(e, kind, id), ...(passId ? { 'data-pass': passId } : {}), ...(color ? { style: `--passc:${color}` } : {}) },
     el('b', { text: title }), el('span', { class: 'meta', text: meta }),
     el('button', { class: 'mini', type: 'button', text: notes.length ? 'notes' : '+ note', title: 'Read, edit, or add notes',
       onclick: ev => { ev.stopPropagation(); openNotes(kind, id, passId); } }));
@@ -3259,6 +3275,13 @@ function currentSelection() {  // documents (the hits, else the docs table), lab
 if (CFG.term && !EMBED) {  // the agent pane is hidden when embedded in the workbench
   $('#b-term').hidden = false;
   $('#b-term').onclick = () => openTerm(!T.open);
+  const ptUuid = $('#pt-uuid');
+  ptUuid.hidden = false;
+  ptUuid.onclick = () => {  // the label pane's document, into the active terminal
+    const uuid = S.cur || (S.ed && S.ed.uuid);
+    if (!uuid) return status('Select a document first', 3000, true);
+    sendToAgent(uuid, false);
+  };
   $('#t-close').onclick = () => openTerm(false);
   $('#t-add').onclick = () => termAdd(false);
   $('#t-agent').onclick = () => termAdd(true);

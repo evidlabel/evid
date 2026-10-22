@@ -569,17 +569,19 @@ def passes_callback(
             tried = s["tried"]
             model = s["model"] or "—"
             job = s["job"] or "—"
-            print(f"- `{s['id']}` **{model}** {matched}/{tried} — {job}")
+            print(f"- `{s['key']}` `{s['id']}` **{model}** {matched}/{tried} — {job}")
         return
 
     console = Console()
     table = Table(title=f"passes: {dataset}/{uuid}", show_header=True)
+    table.add_column("Key")
     table.add_column("When")
     table.add_column("Model")
     table.add_column("Matched", justify="right")
     table.add_column("Job")
     for s in summaries:
         table.add_row(
+            s["key"],
             s["timestamp"],
             s["model"] or "—",
             f"{s['matched']}/{s['tried']}",

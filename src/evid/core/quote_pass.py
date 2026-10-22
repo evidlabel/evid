@@ -24,6 +24,7 @@ import logging
 import os
 import re
 import secrets
+import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -160,18 +161,100 @@ def list_passes(doc_dir: Path) -> list[QuotePass]:
     return out
 
 
+_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*")
+_STOP_WORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "and",
+        "or",
+        "but",
+        "of",
+        "to",
+        "in",
+        "on",
+        "at",
+        "by",
+        "for",
+        "with",
+        "from",
+        "into",
+        "over",
+        "under",
+        "what",
+        "who",
+        "which",
+        "how",
+        "why",
+        "when",
+        "where",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "this",
+        "that",
+        "these",
+        "those",
+        "it",
+        "its",
+        "as",
+        "per",
+        "about",
+        "via",
+        "vs",
+        "versus",
+        "do",
+        "does",
+        "did",
+        "describe",
+        "find",
+        "list",
+        "extract",
+        "quote",
+        "quotes",
+        "passage",
+        "passages",
+    }
+)
+
+
+def pass_word(job: str | None) -> str:
+    """One lowercase ASCII word from the job, for the pass's display key."""
+    text = unicodedata.normalize("NFKD", str(job or ""))
+    text = text.encode("ascii", "ignore").decode("ascii")
+    for word in _WORD_RE.findall(text.lower()):
+        if len(word) >= 3 and word not in _STOP_WORDS:
+            return word[:16]
+    return "pass"
+
+
+def pass_key(number: int, job: str | None) -> str:
+    """``p<number>_<word>`` — one token that names the pass in lists.
+
+    The number keeps it unique; the word is a hint at the job, so the same
+    word on two passes is fine (``p1_cost``, ``p2_cost``).
+    """
+    return f"p{number}_{pass_word(job)}"
+
+
 def pass_summaries(doc_dir: Path) -> list[dict]:
     """List metadata only — no candidate or quote text."""
     return [
         {
             "id": qp.id,
+            "key": pass_key(n, qp.job),
             "timestamp": qp.timestamp,
             "model": qp.model,
             "job": qp.job,
             "matched": sum(1 for r in qp.results if r.matched),
             "tried": len(qp.results),
         }
-        for qp in list_passes(doc_dir)
+        for n, qp in enumerate(list_passes(doc_dir), 1)
     ]
 
 

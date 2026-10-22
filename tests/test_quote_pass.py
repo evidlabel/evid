@@ -14,7 +14,9 @@ from evid.core.quote_pass import (
     found_quotes,
     list_passes,
     load_pass,
+    pass_key,
     pass_summaries,
+    pass_word,
     record_pass,
     resolve_pass_meta,
 )
@@ -236,8 +238,24 @@ def test_pass_summaries_omit_candidate_text(tmp_path):
     blob = json.dumps(pass_summaries(doc))
     assert "SECRET_CANDIDATE_TEXT" not in blob
     assert json.loads(blob)[0]["job"] == "victim share"
+    assert json.loads(blob)[0]["key"] == "p1_victim"
     assert json.loads(blob)[0]["matched"] == 0
     assert json.loads(blob)[0]["tried"] == 0
+
+
+def test_pass_key_is_one_token_with_number_and_word():
+    assert pass_key(1, "Authorship: who wrote it and on whose commission") == (
+        "p1_authorship"
+    )
+    assert pass_key(2, "method description: what made it, cost formula") == "p2_method"
+    assert pass_key(3, None) == "p3_pass"
+    assert " " not in pass_key(4, "Hvem har ansvaret for sagen")
+
+
+def test_pass_word_skips_stopwords_and_non_ascii():
+    assert pass_word("the of and on behalf of the minister") == "behalf"
+    assert pass_word("Hvordan blev sagen behandlet") == "hvordan"
+    assert pass_word("the a an") == "pass"
 
 
 def test_resolve_pass_meta_flag_beats_search_beats_file(monkeypatch):

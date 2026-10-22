@@ -102,6 +102,7 @@ def doc(server, tmp_path):
 def test_page_and_assets(server):
     status, page = call(server, "GET", "/")
     assert status == 200 and '"data_dir"' in page and "/*EVID_CONFIG*/" not in page
+    assert 'id="pt-uuid"' in page  # the Label pane's → (UUID into the agent pane)
     assert call(server, "GET", "/assets/evid.svg")[0] == 200
     assert call(server, "GET", "/assets/nope.js")[0] == 404
     assert call(server, "GET", "/api/config")[1]["has_vec"] is False
@@ -266,6 +267,7 @@ def test_label_reader(server, doc, app):
     )
     assert (
         out["passes"][0]["job"] == "find dates"
+        and out["passes"][0]["key"] == "p1_dates"
         and out["passes"][0]["quotes"][0]["key"] == "q1"
     )
     status, out = call(

@@ -503,7 +503,7 @@ def label_rows(doc_dir: Path) -> list[dict]:
 def text_view(doc_dir: Path) -> dict:
     """Canonical text, page bands, and the human and machine records on it."""
     from evid.core.labels import adopt_legacy_document_note, ensure_text, read
-    from evid.core.quote_pass import found_with_notes, list_passes
+    from evid.core.quote_pass import found_with_notes, list_passes, pass_key
 
     adopt_legacy_document_note(doc_dir)
     text, pages = ensure_text(doc_dir)
@@ -520,7 +520,7 @@ def text_view(doc_dir: Path) -> dict:
         }
 
     passes = []
-    for qp in list_passes(doc_dir):
+    for n, qp in enumerate(list_passes(doc_dir), 1):
         quotes = [
             {
                 "key": q.get("key"),
@@ -536,6 +536,7 @@ def text_view(doc_dir: Path) -> dict:
         passes.append(
             {
                 "id": qp.id,
+                "key": pass_key(n, qp.job),
                 "timestamp": qp.timestamp,
                 "model": qp.model,
                 "job": qp.job,
