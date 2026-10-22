@@ -1196,6 +1196,7 @@ def gui_callback(
     headless: bool = False,
     replace: bool = False,
     agent: str = None,
+    no_sandbox: bool = False,
 ):
     """Launch the GUI (evid-app window, else the browser).
 
@@ -1207,6 +1208,8 @@ def gui_callback(
         if not path.is_dir():
             sys.exit(f"workdir is not a directory: {path}")
         os.chdir(path)
+    if no_sandbox:
+        os.environ["EVID_SANDBOX"] = "0"  # read when a set's terminals are created
     from evid.config import EvidConfig
     from evid.web.server import serve_gui
 

@@ -39,6 +39,13 @@ def new_set_dir(data_dir: Path, set_type: SetType | str, slug: str) -> Path:
     return Path(data_dir) / bucket / f"{prefix}{slug}"
 
 
+def bucket_dirs(data_dir: Path) -> list[Path]:
+    """The directories under DATA_DIR whose children are sets (``anon``, ``plain``, then ``sets``)."""
+    root = Path(data_dir)
+    names = [bucket for bucket, _prefix in _LAYOUT.values()] + [_LEGACY]
+    return [root / name for name in names if (root / name).is_dir()]
+
+
 def read_slug(set_dir: Path) -> str | None:
     """Slug recorded in ``set.yml``, else the one implied by the directory name."""
     yml = set_dir / "set.yml"

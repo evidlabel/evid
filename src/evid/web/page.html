@@ -115,6 +115,8 @@ input:focus, textarea:focus, select:focus, button:focus-visible, .tbl:focus { ou
 body.embed #b-term, body.embed #termpane, body.embed #divider2 { display: none !important; }
 .tbar { display: flex; gap: 6px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel2); font-size: 12.5px; flex-wrap: wrap; }
 .tbar b { margin-right: auto; }
+.tbar .sbx { font-size: 10.5px; color: var(--ok); border: 1px solid var(--ok); border-radius: 999px; padding: 0 6px; }
+.tbar .sbx.off { color: var(--err); border-color: var(--err); }
 .tbar button { padding: 2px 8px; font-size: 12px; }
 #t-close, #t-add { font-size: 15px; line-height: 1; padding: 1px 9px 3px; }
 #terms { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -456,6 +458,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
   <div id="divider2" hidden></div>
   <aside id="termpane" hidden>
     <div class="tbar"><b id="t-title" title="Terminals belong to one evidence set; switching sets switches them">Agents</b>
+      <span class="sbx" id="t-sbx" hidden></span>
       <button id="t-sel" title="Type a reference to what you selected (documents, labels, text in the label editor) into the terminal">Selection</button>
       <button id="t-add" title="Add a terminal below: a shell, or an agent such as claude">+</button>
       <button id="t-close" title="Hide the pane (the sessions keep running)">›</button></div>
@@ -3275,6 +3278,15 @@ function currentSelection() {  // documents (the hits, else the docs table), lab
 if (CFG.term && !EMBED) {  // the agent pane is hidden when embedded in the workbench
   $('#b-term').hidden = false;
   $('#b-term').onclick = () => openTerm(!T.open);
+  const sbx = $('#t-sbx');  // sandboxed: by this app, or by the host app it is embedded in
+  sbx.hidden = false;
+  sbx.textContent = CFG.sandbox ? 'sandbox' : 'no sandbox';
+  sbx.classList.toggle('off', !CFG.sandbox);
+  sbx.title = !CFG.sandbox
+    ? 'Not sandboxed (bubblewrap missing, or --no-sandbox / EVID_SANDBOX=0): a terminal here can read every evidence set'
+    : CFG.sandbox_by === 'host'
+      ? 'Sandboxed by the host app: a terminal on this set runs inside its sandbox, not this window’s'
+      : 'bubblewrap: a terminal here sees this evidence set (read and write), its own config and the network — the other sets are hidden';
   const ptUuid = $('#pt-uuid');
   ptUuid.hidden = false;
   ptUuid.onclick = () => {  // the label pane's document, into the active terminal

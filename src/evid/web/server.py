@@ -47,6 +47,7 @@ from evid.config import EvidConfig
 from evid.services import doc_ops
 from evid.services.set_manager import SetManager
 from evid.services.tag_service import TagService
+from evid.web import sandbox
 from evid.web.jobs import (
     EventLogHandler,
     Events,
@@ -863,6 +864,8 @@ class Handler(BaseHTTPRequestHandler):
             "version": _version(),
             "token": self.token,
             "term": self.agents is not None,
+            "sandbox": sandbox.enabled(),
+            "sandbox_by": sandbox.how(),
             "agent": self.agent,
         }
 
@@ -1984,13 +1987,18 @@ class Handler(BaseHTTPRequestHandler):
 class SetAgents:
     """The Agent pane's terminals, kept per evidence set. A set's terminals start in
     the set's folder with EVID_DB / EVID_SET set, so `evid` there works on that set;
-    the pane only ever shows the selected set's terminals."""
+    the pane only ever shows the selected set's terminals. Each terminal runs in
+    ``sandbox`` (bubblewrap, the other sets hidden) unless ``wrap`` says otherwise."""
+
+    _DEFAULT = object()  # no wrap given: use the pane's sandbox
 
     def __init__(
-        self, data_dir: Path, url: str, agent: str = "", on_change=None
+        self, data_dir: Path, url: str, agent: str = "", on_change=None, wrap=_DEFAULT
     ) -> None:
         self.data_dir, self.url, self.agent = data_dir, url, agent
         self.on_change = on_change  # (slug) -> None, when a set's terminals change
+        # an override for the sandbox hook; None runs the pane unsandboxed
+        self.wrap = wrap
         self.lock = threading.Lock()
         self.by_slug: dict[str, Sessions] = {}
 
@@ -2010,7 +2018,14 @@ class SetAgents:
             if key not in self.by_slug and create:
                 ping = (lambda k=key: self.on_change(k)) if self.on_change else None
                 env = terminal_env(db, self.url, slug)
-                self.by_slug[key] = Sessions(str(evidence_set.path), env, None, ping)
+                wrap = (
+                    sandbox.wrap(Path(evidence_set.path), db, env)
+                    if self.wrap is self._DEFAULT
+                    else self.wrap
+                )
+                self.by_slug[key] = Sessions(
+                    str(evidence_set.path), env, None, on_change=ping, wrap=wrap
+                )
             return self.by_slug.get(key)
 
     def summary(self) -> dict[str, dict]:

@@ -1204,6 +1204,9 @@ def test_vendor_files(server):
 
 
 def _agents(app, monkeypatch, agent=""):
+    monkeypatch.setenv(
+        "EVID_SANDBOX", "0"
+    )  # the pane's bwrap is tested in test_term.py
     agents = web.SetAgents(
         app.data_dir,
         "http://127.0.0.1:1/",
@@ -1317,6 +1320,67 @@ def test_terminals_are_per_set(server, app, monkeypatch):
     agents.stop()
     monkeypatch.setattr(web.Handler, "agents", None)
     assert call(server, "GET", "/api/terms?slug=case")[0] == 404
+
+
+def test_a_terminal_is_sandboxed_to_its_own_set(server, app, monkeypatch):
+    """bwrap: the set's folder is there, the other sets' are gone (a real terminal, no mocks)."""
+    import base64
+    import shutil
+    import socket
+
+    if shutil.which("bwrap") is None:
+        pytest.skip("bubblewrap is not installed")
+    monkeypatch.setenv("SHELL", "/bin/sh")
+    monkeypatch.setenv("PS1", "$ ")
+    monkeypatch.delenv("EVID_SANDBOX", raising=False)
+    agents = web.SetAgents(app.data_dir, "http://127.0.0.1:1/", "")
+    monkeypatch.setattr(web.Handler, "agents", agents)
+    call(server, "POST", "/api/sets", {"name": "Case"})
+    call(server, "POST", "/api/sets", {"name": "Other"})
+    r = call(server, "POST", "/api/term/new", {"slug": "case", "agent": "echo READY"})[
+        1
+    ]
+    host, port = server.removeprefix("http://").split(":")
+    s = socket.create_connection((host, int(port)), timeout=5)
+    key = base64.b64encode(os.urandom(16)).decode()
+    s.sendall(
+        (
+            f"GET /api/term?token={web.Handler.token}&slug=case&id={r['id']} HTTP/1.1\r\nHost: {host}:{port}\r\n"
+            f"Origin: http://{host}:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\n\r\n"
+        ).encode()
+    )
+    data, deadline = b"", time.time() + 15
+    while b"READY" not in data.split(b"echo READY")[-1] and time.time() < deadline:
+        data += s.recv(65536)
+    from evid.web.term import ws_frame
+
+    def send(text):
+        payload = json.dumps({"t": "in", "d": text}).encode()
+        frame = ws_frame(1, payload)
+        s.sendall(
+            frame[:1]
+            + bytes([frame[1] | 0x80])
+            + frame[2 : 2 + (len(frame) - 2 - len(payload))]
+            + b"\0\0\0\0"
+            + payload
+        )
+
+    send("echo SANDBOX=[$EVID_SANDBOXED]\r")
+    data, deadline = b"", time.time() + 15
+    while b"SANDBOX=[1]" not in data and time.time() < deadline:
+        data += s.recv(65536)
+    assert b"SANDBOX=[1]" in data  # the wrapped shell gets EVID_SANDBOXED
+    send(
+        "echo OTHER=$(ls ../../plain)\r"
+    )  # the store's plain bucket, seen from the set
+    data, deadline = b"", time.time() + 15
+    while b"OTHER=" not in data.split(b"echo OTHER")[-1] and time.time() < deadline:
+        data += s.recv(65536)
+    seen = data.split(b"echo OTHER")[-1]
+    assert b"OTHER=plain_set_case" in seen  # its own set is there
+    assert b"plain_set_other" not in seen  # the other case's evidence is not
+    s.close()
+    agents.stop()
 
 
 def test_terminal_env_points_evid_at_the_data_dir_and_set(tmp_path, monkeypatch):

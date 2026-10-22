@@ -166,6 +166,11 @@ app.commands.append(
                 arg_type=str,
                 help="Command for the Agent pane's first terminal, e.g. claude (default $EVID_AGENT, else a shell)",
             ),
+            option(
+                flags=["--no-sandbox"],
+                flag=True,
+                help="Run the Agent pane's terminals without bubblewrap: they can read every evidence set",
+            ),
         ],
     )
 )

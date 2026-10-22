@@ -1,3 +1,4 @@
+# fmt: off
 """The agent pane's terminals: shells on pseudo-terminals, shared by every connected page over WebSocket.
 
 Taken from treedit (same author, MIT).
@@ -5,6 +6,12 @@ Taken from treedit (same author, MIT).
 Standard library only (POSIX). The shell starts lazily on the first connection; with an agent
 preset (e.g. "claude") the command is typed into the shell, so quitting the agent leaves you at
 a prompt. Output is kept in a scrollback buffer and replayed when a page (re)connects.
+
+Each page has its own writer thread, so a page that stops reading (a busy webview) can never
+block the pty: the agent's writes would block behind it and the session would look hung.
+
+A terminal may take a ``wrap`` hook: ``() -> (argv prefix, env)``, read at every start. evid uses
+it for the sandbox (``evid.web.sandbox``); the workbench uses it for its case sandbox.
 """
 
 from __future__ import annotations
@@ -15,13 +22,16 @@ import hashlib
 import json
 import os
 import signal
+import socket
 import struct
 import subprocess
 import termios
 import threading
+from collections import deque
 
 SCROLLBACK = 256 * 1024
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+QUEUE_MAX = 8 * 1024 * 1024  # bytes one page may lag behind by; past it the page is dropped
 
 
 # ---------- WebSocket (RFC 6455, just what a terminal needs) ----------
@@ -43,12 +53,7 @@ def _ws_recv(rfile):
         head = rfile.read(2)
         if len(head) < 2:
             return None
-        fin, op, masked, n = (
-            head[0] & 0x80,
-            head[0] & 0x0F,
-            head[1] & 0x80,
-            head[1] & 0x7F,
-        )
+        fin, op, masked, n = head[0] & 0x80, head[0] & 0x0F, head[1] & 0x80, head[1] & 0x7F
         if n == 126:
             n = struct.unpack(">H", rfile.read(2))[0]
         elif n == 127:
@@ -78,39 +83,92 @@ def ws_frame(op: int, payload: bytes) -> bytes:
 
 
 class Client:
+    """One page's terminal socket: frames are queued and written by this client's own thread.
+
+    The pty must never wait for a page. A webview that is busy (a big re-render, a reload, a
+    suspended window) stops reading, and a synchronous send there fills the socket and blocks the
+    pty reader - which blocks the agent's own writes, so the whole session looks hung. Past
+    QUEUE_MAX the page is dropped instead; it reconnects and gets the scrollback."""
+
     def __init__(self, sock):
-        self.sock, self.lock = sock, threading.Lock()
+        self.sock = sock
+        self.cond = threading.Condition()
+        self.q: deque = deque()
+        self.pending = 0
+        self.closed = False
+        self.thread = threading.Thread(target=self._write, name="term-write", daemon=True)
+        self.thread.start()
 
     def send(self, op: int, payload: bytes) -> bool:
+        with self.cond:
+            if self.closed:
+                return False
+            self.q.append((op, payload))
+            self.pending += len(payload)
+            if self.pending > QUEUE_MAX:
+                self._shut()
+                return False
+            self.cond.notify()
+        return True
+
+    def _shut(self) -> None:
+        """Drop the queue and wake a writer stuck in sendall; the socket's read side ends too."""
+        self.closed = True
+        self.q.clear()
+        self.pending = 0
+        self.cond.notify()
         try:
-            with self.lock:
-                self.sock.sendall(ws_frame(op, payload))
-            return True
+            self.sock.shutdown(socket.SHUT_RDWR)
         except OSError:
-            return False
+            pass
+
+    def close(self) -> None:
+        with self.cond:
+            self.closed = True
+            self.cond.notify()
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+    def _write(self) -> None:
+        while True:
+            with self.cond:
+                while not self.q and not self.closed:
+                    self.cond.wait()
+                if not self.q:
+                    return  # closed and drained, or closed by the page
+                op, payload = self.q.popleft()
+                self.pending -= len(payload)
+            try:
+                self.sock.sendall(ws_frame(op, payload))
+            except OSError:
+                self.close()
+                return
 
 
 # ---------- the shared terminal ----------
 class Terminal:
-    def __init__(self, cwd: str, env: dict, agent: str = "", on_change=None):
+    def __init__(self, cwd: str, env: dict, agent: str = "", wrap=None, name: str = "", on_change=None):
         self.cwd, self.env, self.agent = cwd, env, agent
+        self.name = name  # the agent menu's row ("OpenCode · local"); the title instead of the command
+        self.wrap = wrap  # () -> (argv prefix, env): the sandbox, read at every start
         self.on_change = on_change  # called when the session starts or ends
+        self.sandboxed = False
         self.lock = threading.Lock()
         self.clients: set = set()
         self.buf = bytearray()
         self.proc = None
         self.master = None
         self.size = (24, 80)
-        self.gen = (
-            0  # session number; a finished old session must not report on a new one
-        )
+        self.gen = 0  # session number; a finished old session must not report on a new one
 
     @property
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
     def label(self) -> str:
-        return self.agent or os.path.basename(self.env.get("SHELL") or "sh")
+        return self.name or self.agent or os.path.basename(self.env.get("SHELL") or "sh")
 
     def start(self) -> None:
         with self.lock:
@@ -123,13 +181,15 @@ class Terminal:
             def ctty():  # runs in the child after setsid(): make the pty its controlling terminal
                 fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
+            prefix, env = self.wrap() if self.wrap else ([], self.env)
+            self.sandboxed = bool(prefix)
             self.proc = subprocess.Popen(
-                [shell, "-i"],
+                [*prefix, shell, "-i"],
                 stdin=slave,
                 stdout=slave,
                 stderr=slave,
                 cwd=self.cwd,
-                env=self.env,
+                env=env,
                 start_new_session=True,
                 preexec_fn=ctty,
                 close_fds=True,
@@ -140,9 +200,7 @@ class Terminal:
             self.buf.clear()
             for c in list(self.clients):
                 c.send(1, json.dumps({"t": "reset"}).encode())
-            threading.Thread(
-                target=self._pump, args=(master, self.gen), daemon=True
-            ).start()
+            threading.Thread(target=self._pump, args=(master, self.gen), daemon=True).start()
             if self.agent:
                 self.write((self.agent + "\r").encode())
         if self.on_change:
@@ -168,9 +226,7 @@ class Terminal:
         if gen != self.gen:
             return
         self.master = None
-        self._broadcast(
-            b"\r\n\x1b[2m[session ended - Restart to start a new one]\x1b[0m\r\n"
-        )
+        self._broadcast(b"\r\n\x1b[2m[session ended - Restart to start a new one]\x1b[0m\r\n")
         for c in list(self.clients):
             c.send(1, json.dumps({"t": "exit"}).encode())
         if self.on_change:
@@ -184,7 +240,8 @@ class Terminal:
             clients = list(self.clients)
         for c in clients:
             if not c.send(2, chunk):
-                self.clients.discard(c)
+                with self.lock:
+                    self.clients.discard(c)
 
     def write(self, data: bytes) -> None:
         if self.master is not None:
@@ -209,7 +266,8 @@ class Terminal:
             except (OSError, subprocess.TimeoutExpired):
                 try:
                     os.killpg(self.proc.pid, signal.SIGKILL)
-                except OSError:
+                    self.proc.wait(timeout=5)  # reaped: else it still looks alive and restart starts nothing
+                except (OSError, subprocess.TimeoutExpired):
                     pass
 
     def restart(self) -> None:
@@ -254,6 +312,7 @@ class Terminal:
                     self.restart()
         finally:
             self.clients.discard(client)
+            client.close()
 
 
 # ---------- the sessions of the pane ----------
@@ -261,8 +320,8 @@ class Sessions:
     """The terminals of the agent pane, in the order they were added: each its own shell or agent preset
     on a pseudo-terminal, started in CWD with ENV. The first runs AGENT; more are added from the page."""
 
-    def __init__(self, cwd: str, env: dict, agent: str | None = "", on_change=None):
-        self.cwd, self.env = cwd, env
+    def __init__(self, cwd: str, env: dict, agent: str | None = "", on_change=None, wrap=None):
+        self.cwd, self.env, self.wrap = cwd, env, wrap
         self.on_change = on_change
         self.lock = threading.Lock()
         self.terms: dict = {}
@@ -270,13 +329,11 @@ class Sessions:
         if agent is not None:  # None: start empty; terminals are added from the page
             self.add(agent)
 
-    def add(self, agent: str = "") -> str:
+    def add(self, agent: str = "", name: str = "") -> str:
         with self.lock:
             sid = str(self.next)
             self.next += 1
-            self.terms[sid] = Terminal(
-                self.cwd, self.env, agent.strip(), self.on_change
-            )
+            self.terms[sid] = Terminal(self.cwd, self.env, agent.strip(), self.wrap, name.strip(), self.on_change)
         if self.on_change:
             self.on_change()
         return sid
@@ -299,7 +356,7 @@ class Sessions:
 
     def list(self) -> list:
         return [
-            {"id": sid, "label": t.label(), "agent": t.agent, "alive": t.alive}
+            {"id": sid, "label": t.label(), "agent": t.agent, "alive": t.alive, "sandboxed": t.sandboxed}
             for sid, t in list(self.terms.items())
         ]
 
