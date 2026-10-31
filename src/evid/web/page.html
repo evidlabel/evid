@@ -362,7 +362,7 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
     <div id="tabs">
       <span id="curset" title="The set you are working on — Ctrl+B shows all sets"></span>
       <span id="status"></span>
-      <button id="b-term" hidden title="Agent pane: a terminal running your agent (or a shell) next to the documents">Agent</button>
+      <button id="b-term" hidden title="Agent pane: one click starts your agent (Claude, Codex, Hermes, OpenCode profiles) in the selected set's folder">Agent</button>
       <button id="b-help" title="Help (F1)">Help</button>
     </div>
 
@@ -460,9 +460,9 @@ dialog::backdrop { background: rgba(0,0,0,.28); }
     <div class="tbar"><b id="t-title" title="Terminals belong to one evidence set; switching sets switches them">Agents</b>
       <span class="sbx" id="t-sbx" hidden></span>
       <button id="t-sel" title="Type a reference to what you selected (documents, labels, text in the label editor) into the terminal">Selection</button>
-      <button id="t-add" title="Add a terminal below: a shell, or an agent such as claude">+</button>
+      <button id="t-add" title="Add a terminal: pick an agent harness (Claude Code, Codex, Hermes, OpenCode profiles), a shell, or a custom command">+</button>
       <button id="t-close" title="Hide the pane (the sessions keep running)">›</button></div>
-    <div id="tempty" hidden><span id="tempty-msg"></span><span class="row"><button class="primary" id="t-start"></button><button id="t-agent">Add an agent</button></span></div>
+    <div id="tempty" hidden><span id="tempty-msg"></span><span class="row"><button class="primary" id="t-start"></button><button id="t-agent" title="Pick a harness: Claude Code, Codex, Hermes, OpenCode (with its saved profiles), Gemini — or a shell">Other agents ▾</button></span></div>
     <div id="terms"></div>
   </aside>
 </div>
@@ -2966,7 +2966,7 @@ const HELP = `<p>Humans and agents share one legal document set. Cited wording i
 ${(CFG.app || window.parent !== window) ? '<tr><td><kbd>Ctrl+W</kbd> / <kbd>Ctrl+Q</kbd></td><td>quit</td></tr>' : ''}
 <tr><td><kbd>Ctrl+B</kbd></td><td>fold the set tree away / show it</td></tr>
 <tr><td><kbd>F1</kbd></td><td>help</td></tr>
-<tr><td>Agent (top right)</td><td>terminals running your agent or a shell for the selected set (marked <i>agent</i> in the set tree): they start in the set's folder, and <span class="mono">evid</span> there uses this data dir and set. Selection types what you selected into the terminal. Ctrl+Shift+C / V copy and paste.</td></tr>
+<tr><td>Agent (top right)</td><td>terminals running your agent or a shell for the selected set (marked <i>agent</i> in the set tree): they start in the set's folder, and <span class="mono">evid</span> there uses this data dir and set. One click on Agent opens the pane and starts the default harness in that folder; <span class="mono">+</span> lists the harnesses found on this machine (Claude Code, Codex, Hermes, OpenCode with its saved profiles, Gemini), a shell, and a custom command. Selection types what you selected into the terminal. Ctrl+Shift+C / V copy and paste.</td></tr>
 <tr><td>drag rows onto a set</td><td>copy the documents there</td></tr>
 <tr><td>drag a tag pill onto a row</td><td>tag that document</td></tr></table>
 <p><b>Docs</b> — Ingest PDF · Add from URL · Add screenshots · Index · Open dir</p>
@@ -3212,40 +3212,70 @@ async function termLoad() {
   if (!S.slug) { termSync([]); return; }
   try { termSync((await api('GET', withRoot(`/api/terms?slug=${enc(S.slug)}`))).terms); } catch (e) { status(e.message, 6000, true); }
 }
+let AGENTS = null, AGENTS_AT = 0;
+async function agentHarnesses(force) {  // the harnesses the pane can start; refreshed before the menu (a new OpenCode profile)
+  if (AGENTS === null || (force && Date.now() - AGENTS_AT > 15000)) {
+    try { AGENTS = ((await api('GET', '/api/agents')).agents || []); }
+    catch (e) { if (AGENTS === null) AGENTS = []; }
+    AGENTS_AT = Date.now();
+  }
+  return AGENTS;
+}
+function defaultAgent() {
+  const all = AGENTS || [];
+  return all.find(a => a.default) || all.find(a => a.installed) || null;
+}
 function termEmpty() {
-  const empty = !T.list.length, set = currentSet();
+  const empty = !T.list.length, set = currentSet(), a = defaultAgent();
   $('#tempty').hidden = !empty;
   if (!empty) return;
   $('#tempty-msg').textContent = set ? `No agent on “${set.name}”. An agent here works on this set only: it starts in the set's folder, and evid there defaults to this set.` : 'Pick an evidence set first.';
   $('#t-start').hidden = $('#t-agent').hidden = !set;
-  $('#t-start').textContent = `Start ${CFG.agent || 'a shell'} on this set`;
+  $('#t-start').textContent = `Start ${a ? a.label : (CFG.agent || 'a shell')} on this set`;
+  $('#t-start').title = a ? `One click: start ${a.command} in this set's folder` : 'Start a shell in this set’s folder';
 }
-async function termNew(cmd) {
-  const r = await api('POST', withRoot('/api/term/new'), { slug: S.slug, agent: cmd });
+async function termNew(cmd, name) {
+  const r = await api('POST', withRoot('/api/term/new'), { slug: S.slug, agent: cmd, name: name || '' });
   termSync(r.terms);
   const P = T.list.find(x => x.id === r.id);
   if (P) { termActive(P); requestAnimationFrame(() => P.term.focus()); }
 }
-async function termAdd(agentOnly) {
+async function startAgent(cmd, name) {
   if (!S.slug) return status('Pick an evidence set first', 3000, true);
-  const cmd = await promptDlg(agentOnly ? 'Add an agent' : 'New terminal',
-    agentOnly ? 'Agent command, e.g. claude:' : 'Command (empty for a shell), e.g. claude:', CFG.agent || '');
+  try { await termNew(cmd, name); } catch (e) { status(e.message, 6000, true); }
+}
+async function agentMenu(x, y) {  // one row per harness: clicking a row starts it, no name to type
+  if (!S.slug) return status('Pick an evidence set first', 3000, true);
+  const all = await agentHarnesses(true), def = defaultAgent();
+  const ready = all.filter(a => a.installed), missing = all.filter(a => !a.installed);
+  const items = ready.map(a => ({ label: a.label + (def && a.command === def.command ? '  · default' : ''),
+    fn: () => startAgent(a.command, a.label) }));
+  if (!ready.length) items.push({ label: 'No agent CLI on PATH', off: true });
+  if (missing.length) items.push('-', ...missing.map(a => ({ label: `${a.label} — not installed`, off: true })));
+  items.push('-', { label: 'Shell', fn: () => startAgent('') }, { label: 'Custom command…', fn: () => termAdd() });
+  showMenu(x, y, items);
+}
+async function termAdd() {
+  if (!S.slug) return status('Pick an evidence set first', 3000, true);
+  const cmd = await promptDlg('New terminal', 'Command (empty for a shell), e.g. claude:', CFG.agent || '');
   if (cmd === null) return;
-  if (agentOnly && !cmd) return status('Name the agent to start, e.g. claude', 4000, true);
-  try {
-    await termNew(cmd);
-  } catch (e) { status(e.message, 6000, true); }
+  try { await termNew(cmd); } catch (e) { status(e.message, 6000, true); }
 }
 async function termClose(P) {
   if (!(await confirmDlg('Close terminal', `Close "${P.lab.textContent}"? Its session ends.`, 'Close'))) return;
   try { termSync((await api('POST', withRoot('/api/term/close', P.root), { slug: P.slug, id: P.id })).terms); } catch (e) { status(e.message, 6000, true); }
 }
-async function openTerm(open) {
+async function openTerm(open, opts) {  // opts.start: the Agent button itself starts the default harness
   T.open = open; store('term', open);
   $('#termpane').hidden = $('#divider2').hidden = !open;
   $('#b-term').classList.toggle('on', open);
   if (!open) return;
   await termLoad();
+  if (opts && opts.start && S.slug && !T.list.length) {  // one click: the pane and an agent in the set's folder
+    await agentHarnesses();
+    const a = defaultAgent();
+    if (a) await startAgent(a.command, a.label);
+  }
   T.list.forEach(termConnect);
   requestAnimationFrame(() => { T.list.forEach(termFit); T.active?.term.focus(); });
 }
@@ -3277,7 +3307,7 @@ function currentSelection() {  // documents (the hits, else the docs table), lab
 }
 if (CFG.term && !EMBED) {  // the agent pane is hidden when embedded in the workbench
   $('#b-term').hidden = false;
-  $('#b-term').onclick = () => openTerm(!T.open);
+  $('#b-term').onclick = () => openTerm(!T.open, { start: true });
   const sbx = $('#t-sbx');  // sandboxed: by this app, or by the host app it is embedded in
   sbx.hidden = false;
   sbx.textContent = CFG.sandbox ? 'sandbox' : 'no sandbox';
@@ -3295,9 +3325,13 @@ if (CFG.term && !EMBED) {  // the agent pane is hidden when embedded in the work
     sendToAgent(uuid, false);
   };
   $('#t-close').onclick = () => openTerm(false);
-  $('#t-add').onclick = () => termAdd(false);
-  $('#t-agent').onclick = () => termAdd(true);
-  $('#t-start').onclick = () => termNew(CFG.agent || '').catch(e => status(e.message, 6000, true));
+  const anchorMenu = e => {  // open the harness list under the button that was clicked
+    const r = e.currentTarget.getBoundingClientRect();
+    agentMenu(e.clientX || r.left, e.clientY || r.bottom);
+  };
+  $('#t-add').onclick = anchorMenu;
+  $('#t-agent').onclick = anchorMenu;
+  $('#t-start').onclick = () => { const a = defaultAgent(); return startAgent(a ? a.command : '', a ? a.label : ''); };
   $('#t-sel').onclick = () => { const t = selectionText(currentSelection()); if (!t) return status('Select a document first', 3000, true); sendToAgent(t, false); };
   (() => {  // resizable from its left edge
     const d = $('#divider2'), w = load('termw', null);
@@ -3309,6 +3343,7 @@ if (CFG.term && !EMBED) {  // the agent pane is hidden when embedded in the work
       document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
     };
   })();
+  agentHarnesses().then(termEmpty);  // the empty pane names the default harness
   if (load('term', !!CFG.agent) || CFG.agent) openTerm(true);
 }
 

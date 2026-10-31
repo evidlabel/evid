@@ -48,6 +48,7 @@ from evid.services import doc_ops
 from evid.services.set_manager import SetManager
 from evid.services.tag_service import TagService
 from evid.web import sandbox
+from evid.web.harnesses import agent_name, harnesses
 from evid.web.jobs import (
     EventLogHandler,
     Events,
@@ -666,10 +667,9 @@ def list_dir(path: str, pdf_only: bool, images_only: bool = False) -> dict:
     if p.is_file():
         p = p.parent
     entries = []
+    mtime: dict[str, float] = {}
     try:
-        for child in sorted(
-            p.iterdir(), key=lambda c: (not c.is_dir(), c.name.lower())
-        ):
+        for child in p.iterdir():
             if child.name.startswith("."):
                 continue
             is_dir = child.is_dir()
@@ -681,12 +681,27 @@ def list_dir(path: str, pdf_only: bool, images_only: bool = False) -> dict:
                 and child.suffix.lower() not in IMAGE_SUFFIXES
             ):
                 continue
+            try:
+                mtime[child.name] = child.stat().st_mtime
+            except OSError:
+                mtime[child.name] = 0.0
             entries.append({"name": child.name, "dir": is_dir})
     except PermissionError as exc:
         raise HTTPError(403, str(exc)) from exc
-    if images_only:
+    if pdf_only:
+        # Most recently written PDF first: the file just saved is on top.
+        entries.sort(
+            key=lambda e: (
+                not e["dir"],
+                -mtime.get(e["name"], 0.0),
+                natural_name(e["name"]),
+            )
+        )
+    elif images_only:
         # page2 before page10, so a folder of captures is already page order.
         entries.sort(key=lambda e: (not e["dir"], natural_name(e["name"])))
+    else:
+        entries.sort(key=lambda e: (not e["dir"], e["name"].lower()))
     return {
         "dir": str(p),
         "parent": str(p.parent) if p.parent != p else "",
@@ -1923,12 +1938,19 @@ class Handler(BaseHTTPRequestHandler):
         )  # looking attaches nothing
         self.send_json(200, {"terms": terms.list() if terms else []})
 
+    @route("GET", "/api/agents")
+    def list_agents(self):
+        """The harnesses the pane can start with one click (the default first)."""
+        if self.agents is None:
+            raise HTTPError(404, "the agent pane is off")
+        self.send_json(200, {"agents": harnesses(self.agent)})
+
     @route("POST", "/api/term/new")
     def new_term(self):
         b = self.body()
         slug = str(b.get("slug", ""))
         terms = self.sessions(slug)
-        sid = terms.add(str(b.get("agent") or ""))
+        sid = terms.add(str(b.get("agent") or ""), str(b.get("name") or ""))
         logger.info("Agent pane of '%s': new terminal %s", slug, terms.get(sid).label())
         self.send_json(200, {"id": sid, "terms": terms.list()})
 
@@ -2046,16 +2068,6 @@ class SetAgents:
     def stop(self) -> None:
         for sess in list(self.by_slug.values()):
             sess.stop()
-
-
-def agent_name(command: str) -> str:
-    """'hermes --skills evid' -> 'hermes', '/usr/bin/fish' -> 'fish', 'env X=1 codex' -> 'codex'."""
-    words = [
-        w
-        for w in command.split()
-        if "=" not in w and w not in ("env", "exec", "npx", "uvx")
-    ]
-    return Path(words[0]).name if words else (command.strip() or "shell")
 
 
 def terminal_env(data_dir: Path, url: str, slug: str = "") -> dict:

@@ -592,6 +592,22 @@ def test_screenshot_ingest(server, tmp_path, monkeypatch):
     assert labels["document"][0]["notes"][0]["text"] == shots.SCREENSHOT_NOTE
 
 
+def test_pdf_picker_lists_newest_first(server, tmp_path):
+    import os
+
+    _make_pdf(tmp_path / "old.pdf", "old")
+    _make_pdf(tmp_path / "new.pdf", "new")
+    _make_pdf(tmp_path / "mid.pdf", "mid")
+    (tmp_path / "sub").mkdir()
+    os.utime(tmp_path / "old.pdf", (1_600_000_000, 1_600_000_000))
+    os.utime(tmp_path / "mid.pdf", (1_700_000_000, 1_700_000_000))
+    os.utime(tmp_path / "new.pdf", (1_800_000_000, 1_800_000_000))
+    entries = call(server, "GET", f"/api/files?dir={tmp_path}&pdf=1")[1]["entries"]
+    assert entries[0]["dir"] is True  # folders stay on top
+    files = [e["name"] for e in entries if not e["dir"]]
+    assert files == ["new.pdf", "mid.pdf", "old.pdf"]
+
+
 def test_image_picker_lists_pages_in_order(server, tmp_path):
     _png(tmp_path / "page10.png", 10)
     _png(tmp_path / "page2.png", 12)
@@ -1215,6 +1231,16 @@ def _agents(app, monkeypatch, agent=""):
     )
     monkeypatch.setattr(web.Handler, "agents", agents)
     return agents
+
+
+def test_agents_route_lists_the_harnesses(server, app, monkeypatch):
+    monkeypatch.setattr(web.Handler, "agents", None)
+    assert call(server, "GET", "/api/agents")[0] == 404  # the pane is off
+    monkeypatch.setattr(web.Handler, "agent", "claude")
+    _agents(app, monkeypatch, "claude")
+    rows = call(server, "GET", "/api/agents")[1]["agents"]
+    assert rows[0]["command"] == "claude" and rows[0]["default"] is True
+    assert any(r["id"] == "codex" for r in rows)
 
 
 def test_terminal_websocket(server, app, monkeypatch):
