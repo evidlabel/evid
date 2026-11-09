@@ -502,13 +502,21 @@ def label_rows(doc_dir: Path) -> list[dict]:
     ]
 
 
-def text_view(doc_dir: Path) -> dict:
-    """Canonical text, page bands, and the human and machine records on it."""
+def text_view(doc_dir: Path, *, include_text: bool = True) -> dict:
+    """Canonical text, page bands, and the human and machine records on it.
+
+    A write only changes records, never the canonical text, so ``include_text``
+    is False for the payload a save returns: a book-sized document otherwise
+    crossed the wire again on every label click.
+    """
     from evid.core.labels import adopt_legacy_document_note, ensure_text, read
     from evid.core.quote_pass import found_with_notes, list_passes, pass_key
 
     adopt_legacy_document_note(doc_dir)
-    text, pages = ensure_text(doc_dir)
+    if include_text:
+        text, pages = ensure_text(doc_dir)
+    else:
+        text, pages = None, None
     data = read(doc_dir)
 
     def one(rec: dict, field: str) -> dict:
@@ -563,9 +571,7 @@ def text_view(doc_dir: Path) -> dict:
             for r in raw.get("unplaced") or []
             if isinstance(r, dict)
         ]
-    return {
-        "text": text,
-        "pages": pages,
+    out = {
         "labels": [one(r, "key") for r in data["labels"] if not r.get("lost")],
         "annotations": [one(r, "id") for r in data["annotations"] if not r.get("lost")],
         "document": [
@@ -593,6 +599,9 @@ def text_view(doc_dir: Path) -> dict:
         "passes": passes,
         "unplaced": unplaced,
     }
+    if include_text:
+        out = {"text": text, "pages": pages, **out}
+    return out
 
 
 def _span_from_body(doc_dir: Path, body: dict):
@@ -625,7 +634,7 @@ def _commit_view(doc_dir: Path, verb: str) -> dict:
     from evid.core.gitops import commit_labels
 
     title = load_title(doc_dir / "info.yml") or doc_dir.name[:8]
-    view = text_view(doc_dir)
+    view = text_view(doc_dir, include_text=False)
     view["commit"] = commit_labels(doc_dir, f"label: {title} ({verb})")
     return view
 
@@ -1267,7 +1276,8 @@ class Handler(BaseHTTPRequestHandler):
     @route("GET", "/api/sets/{slug}/docs/{uuid}/text")
     def get_text(self, slug: str, uuid: str):
         _, d = self.app.doc_dir(slug, uuid)
-        self.send_json(200, text_view(d))
+        light = self.q.get("light", "") in ("1", "true", "yes")
+        self.send_json(200, text_view(d, include_text=not light))
 
     @route("POST", "/api/sets/{slug}/docs/{uuid}/labels")
     def post_label(self, slug: str, uuid: str):

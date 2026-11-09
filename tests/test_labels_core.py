@@ -59,6 +59,27 @@ def test_autolabel_one_key_per_paragraph(doc):
     assert paragraph_spans("Only one.", [[0, 1]])[0]["text"] == "Only one."
 
 
+def test_autolabel_writes_the_file_once(doc, monkeypatch):
+    """A book has thousands of paragraphs: one lock and one write, not one per label."""
+    from contextlib import contextmanager
+
+    real = labels._locked
+    calls: list[int] = []
+
+    @contextmanager
+    def counted(doc_dir):
+        calls.append(1)
+        with real(doc_dir) as data:
+            yield data
+
+    monkeypatch.setattr(labels, "_locked", counted)
+    labels._write_text(
+        doc, "\n\n".join(f"Paragraph {i}." for i in range(500)), [[0, 1]]
+    )
+    recs = autolabel(doc)
+    assert len(recs) == 500 and len(calls) == 1
+
+
 def test_locate_exact_spaces_fuzzy():
     assert locate("hello", TEXT)[3] == "exact"
     s, e, _, how = locate(

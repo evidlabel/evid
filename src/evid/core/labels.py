@@ -243,15 +243,19 @@ def add_label(
         if key in _taken_keys(data):
             msg = f"there is already a label {key!r} in this document"
             raise ValueError(msg)
-        rec = {
-            **span,
-            "key": key,
-            "created": _now(),
-            "by": by,
-            "notes": [_note(note, by)] if note.strip() else [],
-        }
+        rec = _new_label(span, key, note, by)
         data["labels"].append(rec)
     return rec
+
+
+def _new_label(span: dict, key: str, note: str, by: str) -> dict:
+    return {
+        **span,
+        "key": key,
+        "created": _now(),
+        "by": by,
+        "notes": [_note(note, by)] if note.strip() else [],
+    }
 
 
 def _find(items: list, field: str, value: str) -> dict:
@@ -585,28 +589,34 @@ def paragraph_spans(text: str, pages) -> list[dict]:
 def autolabel(doc_dir: Path, by: str = "you") -> list[dict]:
     """One label per paragraph of the canonical text. Keys are ``lab1``, ``lab2``, ….
 
-    A paragraph that is not citable text (an unmapped glyph) is skipped.
+    A paragraph that is not citable text (an unmapped glyph) is skipped. Every
+    record goes in under one lock and one write: a big document has thousands of
+    paragraphs, and adding them one at a time rewrote and re-sorted the whole
+    ``labels.json`` for each paragraph (quadratic, minutes for a book).
     """
     import logging
 
     text, pages = ensure_text(doc_dir)
-    taken = taken_keys(doc_dir)
     made: list[dict] = []
-    seq = 0
-    for span in paragraph_spans(text, pages):
-        try:
-            _check_text(span)
-        except ValueError:
-            logging.getLogger(__name__).warning(
-                "skipped a paragraph that is not citable text"
-            )
-            continue
-        seq += 1
-        while f"lab{seq}" in taken:
+    with _locked(doc_dir) as data:
+        taken = _taken_keys(data)
+        seq = 0
+        for span in paragraph_spans(text, pages):
+            try:
+                _check_text(span)
+            except ValueError:
+                logging.getLogger(__name__).warning(
+                    "skipped a paragraph that is not citable text"
+                )
+                continue
             seq += 1
-        key = f"lab{seq}"
-        made.append(add_label(doc_dir, span, key, by=by))
-        taken.add(key)
+            while f"lab{seq}" in taken:
+                seq += 1
+            key = f"lab{seq}"
+            rec = _new_label(span, key, "", by)
+            data["labels"].append(rec)
+            taken.add(key)
+            made.append(rec)
     return made
 
 

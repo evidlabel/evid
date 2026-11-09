@@ -261,6 +261,8 @@ def test_label_reader(server, doc, app):
         {"start": start, "end": end, "note": "why"},
     )
     assert status == 200, out
+    # a save returns records only: the canonical text did not change
+    assert "text" not in out and "pages" not in out
     assert (
         out["labels"][0]["key"] == "hello"
         and out["labels"][0]["notes"][0]["text"] == "why"
@@ -269,6 +271,10 @@ def test_label_reader(server, doc, app):
         out["passes"][0]["job"] == "find dates"
         and out["passes"][0]["key"] == "p1_dates"
         and out["passes"][0]["quotes"][0]["key"] == "q1"
+    )
+    status, light = call(server, "GET", f"/api/sets/case/docs/{doc}/text?light=1")
+    assert (
+        status == 200 and "text" not in light and light["labels"][0]["key"] == "hello"
     )
     status, out = call(
         server,

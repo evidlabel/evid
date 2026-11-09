@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -57,8 +58,14 @@ def is_bad_char(c: str) -> bool:
     return c == REPLACEMENT or (ord(c) < 32 and c not in "\t\n\r")
 
 
+_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
 def has_bad_chars(text: str) -> bool:
-    return any(is_bad_char(c) for c in text)
+    # Called on the whole canonical text on every label read/edit, so scan in C
+    # instead of walking every character in Python: a 10 MB document took ~0.5 s
+    # this way and made every save feel stuck.
+    return REPLACEMENT in text or _CONTROL_RE.search(text) is not None
 
 
 def expand_unicode_ligatures(text: str) -> str:

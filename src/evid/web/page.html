@@ -587,8 +587,23 @@ function labelHtml(text, pages, labels, annotations, quotes) {
   const uniq = [...cuts].filter(x => x >= 0 && x <= n).sort((a, b) => a - b)
     .filter((x, i, all) => i === 0 || x !== all[i - 1]);
   const rank = { m: 0, a: 1, h: 2 };
-  const covering = pos => spans.filter(s => s.start <= pos && s.end > pos).sort((a, b) =>
-    (b.end - b.start) - (a.end - a.start) || rank[a.kind] - rank[b.kind] || (a.id < b.id ? -1 : 1));
+  const order = (x, y) => (y.end - y.start) - (x.end - x.start) || rank[x.kind] - rank[y.kind] || (x.id < y.id ? -1 : 1);
+  // Sweep the cuts with the spans open there. Filtering every span at every
+  // cut is quadratic in the number of labels, which made a heavily labelled
+  // passage redraw slower and slower as labels were added.
+  const byStart = spans.slice().sort((x, y) => x.start - y.start);
+  let nextSpan = 0;
+  const active = [];
+  const covering = pos => {
+    let w = 0;
+    for (let i = 0; i < active.length; i++) if (active[i].end > pos) active[w++] = active[i];
+    active.length = w;
+    while (nextSpan < byStart.length && byStart[nextSpan].start <= pos) {
+      const s = byStart[nextSpan++];
+      if (s.end > pos) active.push(s);
+    }
+    return active.slice().sort(order);
+  };
   let html = '', stack = [];
   const open = s => `<span class="mk mk-${s.kind}" data-kind="${s.kind}" data-id="${escAttr(s.id)}">`;
   for (let i = 0; i < uniq.length; i++) {
@@ -1103,7 +1118,7 @@ function onEvent(e) {
     case 'labels_updated':
       if (samePlace(e)) {
         scheduleReload(); if (S.cur === e.uuid) { refreshLabels(); renderFiles(); }
-        if (S.ed && S.ed.uuid === e.uuid && S.ed.slug === e.slug) edLoad(e.slug, e.uuid, false, true);
+        if (S.ed && S.ed.uuid === e.uuid && S.ed.slug === e.slug) edLoad(e.slug, e.uuid, false, true, true);
         status('Labels updated', 3000);
       }
       break;
@@ -2281,14 +2296,18 @@ function showText(slug, uuid, r, focus) {
   if (focus) box.focus();
   edMsg('');
 }
-async function edLoad(slug, uuid, focus, force) {
+async function edLoad(slug, uuid, focus, force, light) {
   const seq = ++edSeq;
   if (!uuid) { S.ed = null; edCur = null; const c = $('#edcaret'); if (c) c.hidden = true; edShow(false, 'Select a document to label it.'); return; }
   if (!force && S.ed && S.ed.uuid === uuid && S.ed.slug === slug) { if (focus) { $('#edbox').focus(); edPaint(); } return; }
+  // A live update changed records, not the canonical text: ask for the records
+  // alone and keep the text already on screen (a book-sized text is not resent).
+  const merge = !!(light && S.ed && S.ed.slug === slug && S.ed.uuid === uuid);
   let r;
-  try { r = await api('GET', docUrl(slug, uuid, '/text')); }
+  try { r = await api('GET', docUrl(slug, uuid, merge ? '/text?light=1' : '/text')); }
   catch (e) { if (seq === edSeq) edShow(false, e.message); return; }
   if (seq !== edSeq) return;
+  if (merge && S.ed && S.ed.slug === slug && S.ed.uuid === uuid) { r.text = S.ed.text; r.pages = S.ed.pages; }
   showText(slug, uuid, r, focus);
 }
 async function openEditor(slug, uuid) {
@@ -2437,11 +2456,21 @@ function edMenu(e, kind, id) {
 }
 async function afterWrite(r, msg) {
   if (!S.ed) return;
+  // A save returns the records, not the canonical text: it did not change, and
+  // a book-sized text would otherwise cross the wire and re-render on every click.
+  r.text = S.ed.text;
+  r.pages = S.ed.pages;
   showText(S.ed.slug, S.ed.uuid, r, !dlg.open);
   if (msg) status(msg, 3000);
   const d = S.ed.slug === S.slug && S.byUuid.get(S.ed.uuid);
-  if (d && r.labels && d.nlabels !== r.labels.length) { d.nlabels = r.labels.length; renderDocs(); }
-  if (S.ed.slug === S.slug) { scheduleReload(); if (S.cur === S.ed.uuid) refreshLabels(); }
+  if (d) {
+    d.nlabels = (r.labels || []).length;
+    d.nmachine = (r.passes || []).reduce((n, p) => n + (p.quotes || []).filter(q => !q.lost).length, 0);
+    d.nstale = (r.stale || []).length;
+    d.note = (r.document || []).flatMap(rec => (rec.notes || []).map(n => n.text || '')).filter(Boolean).join('\n');
+    renderDocs();
+  }
+  if (S.ed.slug === S.slug && S.cur === S.ed.uuid) refreshLabels();
 }
 async function addLabel() {
   if (!S.ed) return;
@@ -3068,6 +3097,10 @@ function ago(at) {
 const WHAT = { 'info.yml': 'details', 'annotations.yml': 'notes', 'label/labels.json': 'labels', pass: 'quotes', folder: 'files' };
 function onDisk(e) {
   if (!samePlace(e)) { S.setTags.delete(placeKey(e.root, e.slug)); refreshSetCounts(); return; }
+  // A save the GUI just made: afterWrite already put the new records on screen,
+  // so reloading the whole set and the full text here only repeats that work.
+  if (!e.removed.length && !e.added.length && (e.changed || []).length &&
+      e.changed.every(c => c.by === 'you')) return;
   const now = Date.now() / 1000, outside = [];
   for (const c of [...e.changed, ...e.added]) {
     if (c.by !== 'outside') continue;
@@ -3080,7 +3113,7 @@ function onDisk(e) {
   if (cur) detailFromDisk();  // only the fields that changed light up; your unsaved edits stay
   scheduleReload(true);  // the list; rows stay in place
   const labelled = f => f === 'label/labels.json' || f === 'pass';
-  if (S.ed && S.ed.slug === e.slug && e.changed.some(c => c.uuid === S.ed.uuid && (c.files || []).some(labelled))) edLoad(S.ed.slug, S.ed.uuid, false, true);
+  if (S.ed && S.ed.slug === e.slug && e.changed.some(c => c.uuid === S.ed.uuid && (c.files || []).some(labelled))) edLoad(S.ed.slug, S.ed.uuid, false, true, true);
   if (S.cur && e.changed.some(c => c.uuid === S.cur)) { renderFiles(); renderHistory(); }
   if (e.removed.some(c => c.uuid === S.cur)) status('The selected document was removed outside the app', 6000, true);
   if (outside.length) status(`${outside.length} document(s) changed outside the app`, 4000);
