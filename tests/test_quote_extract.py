@@ -47,7 +47,7 @@ def test_extract_finds_verbatim_spans(tmp_path):
     results = extract_quotes(doc, cands, min_ratio=0.6)
 
     assert all(r.matched for r in results)
-    assert [r.key for r in results] == ["1a2b:q1", "1a2b:q2"]
+    assert [r.key for r in results] == ["1a2b3c:q1", "1a2b3c:q2"]
     text = (doc / "label" / "text.txt").read_text(encoding="utf-8")
     for r in results:
         sp = r.span
@@ -64,7 +64,7 @@ def test_numbering_continues_across_passes(tmp_path):
         doc, job="a", model=None, quotes=c1, results=extract_quotes(doc, c1, 0.6)
     )
     c2 = [QuoteCandidate(candidate="committee found that the evidence")]
-    assert [r.key for r in extract_quotes(doc, c2, 0.6)] == ["1a2b:q2"]
+    assert [r.key for r in extract_quotes(doc, c2, 0.6)] == ["1a2b3c:q2"]
 
 
 def test_low_confidence_candidate_skipped(tmp_path):

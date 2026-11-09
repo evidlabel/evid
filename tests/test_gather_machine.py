@@ -50,11 +50,11 @@ def test_gather_yaml_labels_and_machine_quotes(tmp_path):
     data = yaml.safe_load(out.read_text(encoding="utf-8"))
     text = (doc / "label" / "text.txt").read_text(encoding="utf-8")
 
-    assert set(data) == {"1a2b:main", "1a2b:intro", "1a2b:q1"}
-    main = data["1a2b:main"]
+    assert set(data) == {"1a2b3c:main", "1a2b3c:intro", "1a2b3c:q1"}
+    main = data["1a2b3c:main"]
     assert main["title"] == "Test Judgment" and str(main["date"]) == "1978-06-13"
     assert main["author"] == "Ann Berg and Carl Dahl and Eva Fisk"
-    for key in ("1a2b:intro", "1a2b:q1"):
+    for key in ("1a2b3c:intro", "1a2b3c:q1"):
         item = data[key]
         a, b = map(
             int, re.fullmatch(r"chars (\d+)-(\d+)", item["serial-number"]).groups()
@@ -64,11 +64,12 @@ def test_gather_yaml_labels_and_machine_quotes(tmp_path):
         )  # verbatim: the exact slice of the canonical text
         assert item["parent"]["title"] == "Test Judgment"
     assert (
-        data["1a2b:intro"]["page-range"] == "1" and data["1a2b:q1"]["page-range"] == "2"
+        data["1a2b3c:intro"]["page-range"] == "1"
+        and data["1a2b3c:q1"]["page-range"] == "2"
     )
     assert (
-        data["1a2b:intro"]["note"] == "Why it matters."
-        and "note" not in data["1a2b:q1"]
+        data["1a2b3c:intro"]["note"] == "Why it matters."
+        and "note" not in data["1a2b3c:q1"]
     )
 
 
@@ -80,14 +81,14 @@ def test_gather_machine_quote_note(tmp_path):
     out = tmp_path / "refs.yml"
     gather_dataset(root, "demo", out)
     data = yaml.safe_load(out.read_text(encoding="utf-8"))
-    assert data["1a2b:q1"]["note"] == "Check the date."
+    assert data["1a2b3c:q1"]["note"] == "Check the date."
 
 
 def test_gather_machine_only_and_labels_only(tmp_path):
     root, _ = _make_dataset(tmp_path, labels=False)
     out = tmp_path / "m.yml"
     gather_dataset(root, "demo", out)
-    assert set(yaml.safe_load(out.read_text())) == {"1a2b:main", "1a2b:q1"}
+    assert set(yaml.safe_load(out.read_text())) == {"1a2b3c:main", "1a2b3c:q1"}
 
 
 def test_gather_bib_md_json(tmp_path):
@@ -95,7 +96,7 @@ def test_gather_bib_md_json(tmp_path):
     bib = tmp_path / "refs.bib"
     gather_dataset(root, "demo", bib)
     t = bib.read_text(encoding="utf-8")
-    assert "1a2b:q1" in t and "1a2b:intro" in t and "dismissed in its entirety" in t
+    assert "1a2b3c:q1" in t and "1a2b3c:intro" in t and "dismissed in its entirety" in t
     md = tmp_path / "refs.md"
     gather_dataset(root, "demo", md, include_keys=True)
     t = md.read_text(encoding="utf-8")
@@ -108,7 +109,8 @@ def test_gather_bib_md_json(tmp_path):
     gather_dataset(root, "demo", js)
     snip = json.loads(js.read_text())["1a2b3c4d5e6f"]["snippets"]
     assert (
-        snip["1a2b:intro"]["kind"] == "label" and snip["1a2b:q1"]["kind"] == "machine"
+        snip["1a2b3c:intro"]["kind"] == "label"
+        and snip["1a2b3c:q1"]["kind"] == "machine"
     )
 
 
@@ -141,8 +143,8 @@ def test_gather_prefixes_stay_distinct(tmp_path):
     gather_dataset(tmp_path, "demo", out)
     data = yaml.safe_load(out.read_text(encoding="utf-8"))
     prefixes = {k.split(":", 1)[0] for k in data}
-    assert len(prefixes) == 2, prefixes  # not merged under one "1a2b"
-    assert sum(len(p) > 4 for p in prefixes) == 1  # the second was widened
+    assert len(prefixes) == 2, prefixes  # not merged under one "1a2b00"
+    assert sum(len(p) > 6 for p in prefixes) == 1  # the second was widened
 
 
 def test_merge_hayagriva_dedupes_by_key(tmp_path):

@@ -246,4 +246,4 @@ def test_second_line_quote(doc_dir):
     from evid.core.quote_extract import QuoteCandidate, extract_quotes
 
     (r,) = extract_quotes(doc_dir, [QuoteCandidate(candidate="ifli")], refresh=True)
-    assert r.key == "abcd:q1" and r.span["text"] == "ifli"
+    assert r.key == "abcd12:q1" and r.span["text"] == "ifli"

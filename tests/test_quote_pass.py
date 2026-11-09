@@ -142,7 +142,7 @@ def test_extract_then_record_keeps_haya_citation_only(tmp_path):
     assert passes[0].job == "appeal outcome"
     assert passes[0].model == "grok-4.6"
     assert passes[0].results[0].matched is True
-    assert passes[0].results[0].key == "1a2b:q1"
+    assert passes[0].results[0].key == "1a2b3c:q1"
     (q,) = passes[0].found  # the quote, as a span over the canonical text
     assert q["key"] == "q1" and q["text"] in SOURCE and "job" not in q
 

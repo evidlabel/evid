@@ -148,12 +148,12 @@ def test_json_to_bib_writes_main_and_snippet(tmp_path):
     out = workdir / "label.bib"
     json_to_bib(json_file, out, exclude_note=True)
     bib = out.read_text(encoding="utf-8")
-    assert "@article{ abcd:main" in bib
+    assert "@article{ abcd12:main" in bib
     assert "title = {The Judgment}" in bib
     assert "author = {High Court}" in bib
     assert "date = {1978}" in bib
     assert "url = {https://example.com/j}" in bib
-    assert "@article{ abcd:intro" in bib
+    assert "@article{ abcd12:intro" in bib
     assert "title = {The appeal was dismissed.}" in bib
     assert "journal = {The Judgment}" in bib
     assert "nonote = {held}" in bib
@@ -182,7 +182,7 @@ def test_json_to_bib_skips_unparseable_snippet_date(tmp_path):
     )
     out = workdir / "label.bib"
     json_to_bib(json_file, out, exclude_note=True)
-    snippet = out.read_text(encoding="utf-8").split("@article{ abcd:k", 1)[1]
+    snippet = out.read_text(encoding="utf-8").split("@article{ abcd12:k", 1)[1]
     assert "date =" not in snippet
 
 
@@ -194,7 +194,7 @@ def test_json_to_bib_year_only_snippet_date(tmp_path):
     )
     out = workdir / "label.bib"
     json_to_bib(json_file, out, exclude_note=True)
-    snippet = out.read_text(encoding="utf-8").split("@article{ abcd:k", 1)[1]
+    snippet = out.read_text(encoding="utf-8").split("@article{ abcd12:k", 1)[1]
     assert "date = {1978-01-01}" in snippet
 
 
@@ -203,5 +203,5 @@ def test_json_to_bib_omits_missing_opage(tmp_path):
     json_file = _write_json(workdir, [{"key": "k", "text": "quote"}])
     out = workdir / "label.bib"
     json_to_bib(json_file, out, exclude_note=True)
-    snippet = out.read_text(encoding="utf-8").split("@article{ abcd:k", 1)[1]
+    snippet = out.read_text(encoding="utf-8").split("@article{ abcd12:k", 1)[1]
     assert "pages =" not in snippet

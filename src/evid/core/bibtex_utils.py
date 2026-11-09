@@ -13,6 +13,9 @@ from evid.models import InfoModel
 
 logger = logging.getLogger(__name__)
 
+# Leading characters of the document uuid in a cite key (`1a2b3c:main`).
+CITE_PREFIX_LEN = 6
+
 
 def replace_multiple_spaces(s):
     try:
@@ -65,7 +68,7 @@ def load_uuid_prefix(file_path: Path) -> str:
                 logger.warning(f"Validation error for {info_file}: {e}")
                 return ""
             if "uuid" in info_data:
-                return info_data["uuid"][:4]
+                return info_data["uuid"][:CITE_PREFIX_LEN]
     return ""
 
 

@@ -4,8 +4,9 @@ Since evid 0.7 the passages are spans over each document's canonical text:
 human labels from ``label/labels.json`` and machine quotes from ``pass/*.json``.
 Every export is built from those records; Typst is only used to render (the
 ``.typ`` output). The Hayagriva shape is the one labquote reads:
-``<uuid4>:main`` for the document, ``<uuid4>:<key>`` per passage with the
+``<prefix>:main`` for the document, ``<prefix>:<key>`` per passage with the
 verbatim text as ``title``, ``page-range`` and ``serial-number: "chars a-b"``.
+``prefix`` is the first ``CITE_PREFIX_LEN`` characters of the document uuid.
 """
 
 import datetime
@@ -23,6 +24,7 @@ from bibtexparser.bwriter import BibTexWriter
 from rich.console import Console
 from rich.table import Table
 
+from evid.core.bibtex_utils import CITE_PREFIX_LEN
 from evid.core.hayagriva_fields import hayagriva_author, hayagriva_date
 from evid.models import InfoModel
 from evid.services.layout import existing_set_dir
@@ -159,7 +161,7 @@ def collect(
             if not q.get("lost")
         ]
         passages.sort(key=lambda p: (p.start, p.key))
-        docs.append(DocRecords(uuid_dir, info, info.uuid[:4], passages))
+        docs.append(DocRecords(uuid_dir, info, info.uuid[:CITE_PREFIX_LEN], passages))
     return docs, legacy
 
 
@@ -264,8 +266,8 @@ def _unique_prefixes(docs: list[DocRecords]) -> list[str]:
     """One prefix per document, widened along the uuid when two would share one.
 
     labquote groups a bibliography by the text before the first ``:``, so two
-    documents with the same 4-char prefix in one file would merge into one source.
-    The later document is widened (``1a2b`` → ``1a2b9``) until it is distinct, which
+    documents with the same prefix in one file would merge into one source.
+    The later document is widened (``1a2b3c`` → ``1a2b3c4``) until it is distinct, which
     keeps a merged store safe without touching keys that do not collide.
     """
     out: list[str] = []

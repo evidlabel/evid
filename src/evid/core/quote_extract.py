@@ -9,8 +9,8 @@ directory — the only Hayagriva-format, citable output.
 ``machine.hayagriva`` is labquote-native so it groups alongside the manual
 ``label.bib`` keys for the same document:
 
-* keys are ``{uuid[:4]}:qN`` (colon-namespaced), verbatim quote in ``title:`` as a
-  literal block, plus a ``{uuid[:4]}:main`` document entry written once.
+* keys are ``{uuid[:6]}:qN`` (colon-namespaced), verbatim quote in ``title:`` as a
+  literal block, plus a ``{uuid[:6]}:main`` document entry written once.
 * writes are append-only — existing entries, comments and watermarks are preserved.
 
 Document metadata (title/author/date/url) comes from the doc's ``info.yml``; the
