@@ -163,7 +163,7 @@ def _reply(*, ok: bool, msg: str) -> None:
     sys.stdout.flush()
 
 
-def _child_env() -> dict[str, str]:
+def _subprocess_env() -> dict[str, str]:
     env = os.environ.copy()
     env.update(_THREAD_ENV)
     return env
@@ -183,7 +183,7 @@ def _popen_low_priority(cmd: list[str], stdout: int) -> subprocess.Popen:
         stdin=subprocess.PIPE,
         stdout=stdout,
         stderr=subprocess.DEVNULL,
-        env=_child_env(),
+        env=_subprocess_env(),
         start_new_session=True,
     )
 

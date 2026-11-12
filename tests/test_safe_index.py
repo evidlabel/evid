@@ -201,7 +201,7 @@ class _FakeProc:
         return 0
 
 
-def test_pool_reuses_one_child_for_a_batch(monkeypatch):
+def test_pool_reuses_one_subprocess_for_a_batch(monkeypatch):
     """N jobs go to a single spawned child (one model load, not N)."""
     from evid.vec.safe_index import IndexWorkerPool
 
@@ -228,7 +228,7 @@ def test_pool_reuses_one_child_for_a_batch(monkeypatch):
     pool.close()
 
 
-def test_pool_respawns_after_child_dies(monkeypatch):
+def test_pool_respawns_after_subprocess_dies(monkeypatch):
     """If the child exits, the next job starts a fresh one."""
     from evid.vec.safe_index import IndexWorkerPool
 
