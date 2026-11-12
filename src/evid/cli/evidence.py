@@ -122,6 +122,12 @@ def add_evidence(
                 failures += 1
                 continue
 
+            for step, what, err in ingester.errors:
+                print(
+                    f"Warning: step {step} ({what}) failed for {doc.uuid[:8]}: {err}",
+                    file=sys.stderr,
+                )
+
             if ingester.last_was_existing:
                 print(f"This document is already added in {dataset} at {doc.uuid}")
                 continue

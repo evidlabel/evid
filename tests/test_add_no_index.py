@@ -1,5 +1,6 @@
 """`doc add --no-index` skips the vector index entirely."""
 
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -37,7 +38,9 @@ def test_no_index_does_not_construct_vec_service(tmp_path, monkeypatch):
 
     from evid.services.layout import find_set_dir
 
-    docs = list((find_set_dir(db, "demo") / "docs").iterdir())
+    set_dir = find_set_dir(db, "demo")
+    assert set_dir is not None
+    docs = list((set_dir / "docs").iterdir())
     assert len(docs) == 1
     assert (docs[0] / "info.yml").exists()
     assert (docs[0] / "original.pdf").exists()
@@ -54,6 +57,7 @@ def test_indexing_runs_without_no_index(tmp_path, monkeypatch):
         def __init__(self, vec_service=None, **_kwargs):
             self.vec_service = vec_service
             self.last_was_existing = False
+            self.errors = []
             calls.append({"vec_service": vec_service})
 
         def ingest_source(self, source, evidence_set, **kwargs):
@@ -105,6 +109,52 @@ def test_expand_sources_expands_directory_to_sorted_pdfs(tmp_path):
     ]
 
 
+def _ingested_doc(tmp_path, db_name="db"):
+    pdf = tmp_path / "judgment.pdf"
+    _make_pdf(pdf)
+    db = tmp_path / db_name
+    add_evidence(db, "demo", str(pdf), no_index=True)
+
+    from evid.services.layout import find_set_dir
+
+    set_dir = find_set_dir(db, "demo")
+    assert set_dir is not None
+    docs = list((set_dir / "docs").iterdir())
+    assert len(docs) == 1
+    return pdf, db, docs[0]
+
+
+def test_a_half_ingested_document_is_redone_not_reported_as_added(tmp_path, capsys):
+    """H4: a crash between mkdir() and info.yml must not make the file un-addable."""
+    pdf, db, doc = _ingested_doc(tmp_path)
+    # What a kill between step 2 and step 3 leaves: original.pdf, no info.yml.
+    (doc / "info.yml").unlink()
+    shutil.rmtree(doc / "label")
+    capsys.readouterr()
+
+    add_evidence(db, "demo", str(pdf), no_index=True)
+
+    captured = capsys.readouterr()
+    assert "already added" not in captured.out
+    assert (doc / "info.yml").is_file()
+    text = (doc / "label" / "text.txt").read_text(encoding="utf-8")
+    assert "The committee found the evidence conclusive." in text
+    assert (doc / "original.pdf").is_file()
+
+
+def test_a_document_whose_text_extraction_never_finished_is_completed(tmp_path, capsys):
+    """H4: a retry of a document with info.yml but no label/text.txt extracts it."""
+    pdf, db, doc = _ingested_doc(tmp_path, "db2")
+    (doc / "label" / "text.txt").unlink()
+    capsys.readouterr()
+
+    add_evidence(db, "demo", str(pdf), no_index=True)
+
+    assert "already added" in capsys.readouterr().out  # still the same document
+    text = (doc / "label" / "text.txt").read_text(encoding="utf-8")
+    assert "The committee found the evidence conclusive." in text
+
+
 def test_add_evidence_batch_shares_one_index_pool(tmp_path, monkeypatch):
     """A multi-source add reuses a single IndexWorkerPool across documents."""
     pdf_a = tmp_path / "a.pdf"
@@ -118,6 +168,7 @@ def test_add_evidence_batch_shares_one_index_pool(tmp_path, monkeypatch):
         def __init__(self, vec_service=None, **_kwargs):
             self.vec_service = vec_service
             self.last_was_existing = False
+            self.errors = []
 
         def ingest_source(self, source, evidence_set, **kwargs):
             calls.append({"source": source, **kwargs})

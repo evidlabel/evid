@@ -278,14 +278,26 @@ class DocIngester:
         logger.debug("SHA-256 UUID: %s", doc_uuid)
 
         doc_dir = evidence_set.path / "docs" / doc_uuid
-        if doc_dir.exists():
+        if doc_dir.exists() and (doc_dir / "info.yml").is_file():
             logger.debug(
                 "Already ingested: %s in '%s' — skipping", doc_uuid, evidence_set.slug
             )
             self._last_was_existing = True
             from evid.core.doc_loader import load_document
 
+            self._finish_text(doc_dir, doc_uuid)
             return load_document(doc_dir, doc_uuid)
+        if doc_dir.exists():
+            # The directory name is the content hash, so a crash between mkdir()
+            # and info.yml leaves a half-document that every later ingest would
+            # report as "already added". It holds no metadata and no labels (both
+            # need info.yml/text first), so it is removed and ingested again.
+            logger.warning(
+                "Incomplete document %s in '%s' (no info.yml) — removing it and ingesting again",
+                doc_uuid,
+                evidence_set.slug,
+            )
+            shutil.rmtree(doc_dir)
 
         # ── 2. Copy PDF ───────────────────────────────────────────────────────
         p(2, n, "Copying PDF")
@@ -409,6 +421,24 @@ class DocIngester:
 
         logger.debug("Ingested %s into set '%s'", doc_uuid, evidence_set.slug)
         return doc
+
+    def _finish_text(self, doc_dir: Path, doc_uuid: str) -> None:
+        """Extract the text of a document whose step 4 never finished.
+
+        A document that has ``info.yml`` but no ``label/text.txt`` can be listed
+        and opened, but nobody can label it, and every retry reports "already
+        added". Finish the step here instead of leaving the half-document.
+        """
+        from evid.core import labels
+
+        if labels.has_text(doc_dir):
+            return
+        try:
+            labels.ensure_text(doc_dir)
+            logger.info("Extracted the missing text of %s", doc_uuid)
+        except Exception as exc:
+            logger.exception("Text extraction failed for %s", doc_uuid)
+            self._errors.append((4, "extract text", str(exc)))
 
     def index_existing(
         self,
