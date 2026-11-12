@@ -67,8 +67,20 @@ def replace(doc_dir: Path, new_pdf: Path, label_map: dict | None = None) -> dict
 
     tmp = doc_dir / (ORIGINAL + ".new")
     shutil.copyfile(new_pdf, tmp)
-    tmp.replace(doc_dir / ORIGINAL)
-    title = _pdf_title(doc_dir / ORIGINAL)
+    # Validate before anything of the old document is gone: a truncated or
+    # non-PDF handoff from `did` must not replace the only copy we have.
+    try:
+        _pdf_text(tmp)
+    except Exception as exc:
+        tmp.unlink(missing_ok=True)
+        raise ValueError(f"{new_pdf.name} is not a readable PDF: {exc}") from exc
+    title = _pdf_title(tmp)
+    original = doc_dir / ORIGINAL
+    backup = doc_dir / (ORIGINAL + ".bak")
+    had_original = original.is_file()
+    if had_original:
+        shutil.copy2(original, backup)
+    tmp.replace(original)
     if title:
         _set_info(doc_dir, title=title, label=title)
 
@@ -83,13 +95,21 @@ def replace(doc_dir: Path, new_pdf: Path, label_map: dict | None = None) -> dict
                 qp.model_dump_json(indent=2, by_alias=True) + "\n", encoding="utf-8"
             )
 
-    if labels.has_text(doc_dir):
-        counts = labels.refresh_text(doc_dir)
-        for how, n in quote_pass.reanchor_passes(doc_dir).items():
-            counts[how] = counts.get(how, 0) + n
-    else:
-        labels.ensure_text(doc_dir)
-        counts = {}
+    try:
+        if labels.has_text(doc_dir):
+            counts = labels.refresh_text(doc_dir)
+            for how, n in quote_pass.reanchor_passes(doc_dir).items():
+                counts[how] = counts.get(how, 0) + n
+        else:
+            labels.ensure_text(doc_dir)
+            counts = {}
+    except BaseException:
+        # The new file was validated, so this is unexpected; put the old PDF back
+        # so the document still opens, and let the error through.
+        if had_original:
+            shutil.copy2(backup, original)
+        raise
+    backup.unlink(missing_ok=True)
     _clear_found(doc_dir)
     stale = len(lost_records(doc_dir))
     gitops.commit_labels(doc_dir, f"evid: replace {doc_dir.name[:8]} ({stale} stale)")
@@ -113,6 +133,33 @@ def _clear_found(doc_dir: Path) -> None:
                     and text[r.get("start", 0) : r.get("end", 0)] == r["text"]
                 ):
                     r.pop("lost", None)
+
+
+def _pdf_text(pdf: Path) -> str:
+    """The PDF's plain text, read the way the label text will be read.
+
+    Raises when the file is not a PDF, is truncated (MuPDF happily "repairs" a
+    half-file and hands back an empty document), has no pages, or its text
+    cannot be extracted. :func:`replace` runs this on the handoff file *before*
+    the document's only copy is overwritten.
+    """
+    import pymupdf
+
+    from evid.core.pdf_text import LigatureResolver, page_text
+
+    with pdf.open("rb") as f:
+        head = f.read(1024)
+        f.seek(max(0, pdf.stat().st_size - 2048))
+        tail = f.read()
+    if b"%PDF-" not in head:
+        raise ValueError("no %PDF- header")
+    if b"%%EOF" not in tail:
+        raise ValueError("truncated: no %%EOF trailer")
+    with pymupdf.open(pdf) as doc:
+        if doc.page_count < 1:
+            raise ValueError("no pages")
+        resolver = LigatureResolver(doc)
+        return "".join(page_text(page, resolver) for page in doc)
 
 
 def _pdf_title(pdf: Path) -> str:

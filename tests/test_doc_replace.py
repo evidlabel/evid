@@ -125,6 +125,68 @@ def test_lost_labels_are_stale_then_repaired(doc, tmp_path):
     assert doc_replace.stale(doc.parent.parent) == []
 
 
+def test_a_corrupt_handoff_leaves_the_document_untouched(doc, tmp_path):
+    """H3: the new PDF is validated before the only copy of the old one is gone."""
+    old = (doc / "original.pdf").read_bytes()
+    before = labels.read(doc)
+    bad = tmp_path / "v2.pdf"
+    bad.write_bytes(old[: len(old) // 2])  # a truncated `did` handoff
+    with pytest.raises(ValueError, match="not a readable PDF"):
+        doc_replace.replace(doc, bad, {"[PERSON 1]": "[PERSON 4]"})
+    assert (doc / "original.pdf").read_bytes() == old
+    assert labels.read(doc) == before
+    text, _ = labels.read_text(doc)
+    assert "[PERSON 1] moved out of the flat." in text  # no mapping applied
+    assert sorted(p.name for p in doc.glob("original.pdf*")) == ["original.pdf"]
+
+
+def test_a_good_replace_leaves_no_backup_behind(doc, tmp_path):
+    new = _pdf(tmp_path / "v2.pdf", ["[PERSON 4] moved out of the flat."])
+    doc_replace.replace(doc, new, {"[PERSON 1]": "[PERSON 4]"})
+    assert sorted(p.name for p in doc.glob("original.pdf*")) == ["original.pdf"]
+    text, _ = labels.read_text(doc)
+    assert "[PERSON 4] moved out of the flat." in text
+
+
+def test_cli_replace_refuses_a_corrupt_handoff(doc, tmp_path):
+    (tmp_path / "sets" / "case-anon" / "set.yml").write_text(
+        yaml.safe_dump({"name": "case-anon", "type": "anon"})
+    )
+    old = (doc / "original.pdf").read_bytes()
+    bad = tmp_path / "v2.pdf"
+    bad.write_bytes(old[: len(old) // 2])
+    mp = tmp_path / "map.json"
+    mp.write_text("{}")
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "evid.cli.main",
+            "--db",
+            str(tmp_path),
+            "doc",
+            "replace",
+            "-s",
+            "case-anon",
+            "-u",
+            "abc123",
+            "--source",
+            str(bad),
+            "--map",
+            str(mp),
+            "-f",
+            "json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert r.returncode != 0
+    assert "not a readable PDF" in r.stderr
+    assert "Traceback" not in r.stderr
+    assert (doc / "original.pdf").read_bytes() == old
+
+
 def test_cli_replace_and_stale(doc, tmp_path):
     data_dir = tmp_path
     (data_dir / "sets" / "case-anon" / "set.yml").write_text(

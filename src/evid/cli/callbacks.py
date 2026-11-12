@@ -1303,7 +1303,7 @@ def replace_callback(
             sys.exit(f"--map {map}: {e}")
     try:
         result = replace(doc_dir, Path(source or ""), mapping)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         sys.exit(str(e))
     if format == "json":
         print(json.dumps(result, ensure_ascii=False))
