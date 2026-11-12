@@ -22,6 +22,15 @@ def _terminal(tmp_path: Path, wrap=None) -> Terminal:
     return Terminal(str(tmp_path), env, agent="", wrap=wrap)
 
 
+@pytest.fixture(autouse=True)
+def _empty_home(tmp_path, monkeypatch):
+    """Give every test its own HOME so a real default store is never masked into the argv."""
+    home = tmp_path / "home"
+    (home / ".local" / "share").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    return home
+
+
 def test_the_set_buckets_are_emptied_and_the_set_bound_back(tmp_path):
     data = tmp_path / "data"
     anon = data / "anon" / "anon_set_case"
@@ -43,6 +52,36 @@ def test_the_set_buckets_are_emptied_and_the_set_bound_back(tmp_path):
         str(anon),
     ]
     assert str(plain) not in argv  # another set is not bound back
+
+
+@pytest.mark.usefixtures("_empty_home")
+def test_every_known_store_is_masked_not_only_the_connected_one(tmp_path):
+    """H5: the sandbox must hide the other trunks and the default store, not one data_dir."""
+    default = tmp_path / "home" / ".local" / "share" / "evid"
+    (default / "anon" / "anon_set_theirs").mkdir(parents=True)
+    data = tmp_path / "case" / "evid"
+    set_dir = data / "anon" / "anon_set_case"
+    set_dir.mkdir(parents=True)
+    second = tmp_path / "second"
+    (second / "plain" / "plain_set_two").mkdir(parents=True)
+    # roots.yml names the second trunk (and the connected one, which must not double up)
+    (data / "roots.yml").write_text(f"- {second}\n- {data}\n", encoding="utf-8")
+
+    argv = sandbox.bwrap_argv(set_dir, data)
+
+    masked = [argv[i + 1] for i, word in enumerate(argv) if word == "--tmpfs"]
+    masked.remove("/tmp")  # the private scratch, not a store
+    assert masked == [
+        str((data / "anon").resolve()),
+        str((second / "plain").resolve()),
+        str((default / "anon").resolve()),
+    ]
+    assert str(second / "plain" / "plain_set_two") not in argv  # not bound back
+    assert argv[argv.index(str(set_dir)) - 1 : argv.index(str(set_dir)) + 2] == [
+        "--bind",
+        str(set_dir),
+        str(set_dir),
+    ]
 
 
 def test_the_store_is_shared_when_there_are_no_buckets(tmp_path):

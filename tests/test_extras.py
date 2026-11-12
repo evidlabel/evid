@@ -78,6 +78,7 @@ def test_add_still_indexes_when_vec_extra_present(tmp_path, monkeypatch):
         def __init__(self, vec_service=None, **_kwargs):
             self.vec_service = vec_service
             self.last_was_existing = False
+            self.errors = []
             calls.append({"vec_service": vec_service})
 
         def ingest_source(self, source, evidence_set, **kwargs):
