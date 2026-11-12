@@ -552,7 +552,7 @@ def _stub_ocr(pix, _lang):
     doc = pymupdf.open()
     page = doc.new_page(width=200, height=60)
     page.insert_text((20, 36), f"page-text {pix.width}")
-    raw = doc.tobytes(garbage=4, deflate=True, no_new_id=True, reproducible=True)
+    raw = doc.tobytes(garbage=4, deflate=True, no_new_id=True)
     doc.close()
     return raw
 

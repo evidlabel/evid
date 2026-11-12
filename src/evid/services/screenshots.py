@@ -222,12 +222,14 @@ def screenshots_to_pdf(
                 page_pdf.close()
         dest.parent.mkdir(parents=True, exist_ok=True)
         out.set_metadata({})
+        # ``reproducible`` was removed from Document.write() in PyMuPDF 1.27;
+        # ``no_new_id`` keeps the ID stable, which is what made the build
+        # reproducible, so the keyword is not replaced.
         out.save(
             str(dest),
             garbage=4,
             deflate=True,
             no_new_id=True,
-            reproducible=True,
         )
     finally:
         out.close()
@@ -347,7 +349,10 @@ def _reading_order(raw: bytes) -> bytes:
         if not changed:
             return raw
         logger.debug("OCR text rewritten into column order")
-        return doc.tobytes(garbage=4, deflate=True, no_new_id=True, reproducible=True)
+        # No ``reproducible``: PyMuPDF 1.27 removed it from write()/tobytes(),
+        # and a TypeError here would be swallowed by the except below, silently
+        # leaving the OCR text in reading order.
+        return doc.tobytes(garbage=4, deflate=True, no_new_id=True)
     except Exception:
         logger.debug("Column order left the OCR bytes unchanged", exc_info=True)
         return raw

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import logging
 
@@ -27,7 +28,7 @@ def _stub_ocr(pix, _lang: str) -> bytes:
     doc = pymupdf.open()
     page = doc.new_page(width=200, height=80)
     page.insert_text((20, 40), f"page-text {pix.width}")
-    raw = doc.tobytes(garbage=4, deflate=True, no_new_id=True, reproducible=True)
+    raw = doc.tobytes(garbage=4, deflate=True, no_new_id=True)
     doc.close()
     return raw
 
@@ -92,6 +93,45 @@ def test_two_builds_of_the_same_pages_match(tmp_path, monkeypatch):
         assert doc.page_count == 2
         assert "page-text 30" in doc[0].get_text()
         assert "page-text 80" in doc[1].get_text()
+
+
+def test_both_pdf_writes_work_with_the_installed_pymupdf(tmp_path, monkeypatch):
+    """H1: ``reproducible=`` was removed from write()/tobytes() in PyMuPDF 1.27.
+
+    Both write sites are exercised through the real library: the final save in
+    :func:`screenshots_to_pdf` (which used to raise after every page was OCR'd)
+    and the column re-order in :func:`_reading_order` (where the same keyword was
+    swallowed by a broad ``except`` and silently left the OCR reading order).
+    """
+    assert "reproducible" not in inspect.signature(pymupdf.Document.write).parameters
+    monkeypatch.setattr(shots, "ocr_pixmap", _stub_ocr)
+    first = _png(tmp_path / "one.png", 40)
+    second = _png(tmp_path / "two.png", 60)
+    out = tmp_path / "pages.pdf"
+    shots.screenshots_to_pdf([first, second], out)  # no TypeError
+    with pymupdf.open(out) as doc:
+        assert doc.page_count == 2
+        assert "page-text 40" in doc[0].get_text()
+
+    def draw(page):
+        for i, (a, b) in enumerate(
+            zip(
+                ["Alpha finds the first fact.", "Alpha continues the argument."],
+                ["Beta states a separate point.", "Beta adds the second column."],
+                strict=True,
+            )
+        ):
+            _put(page, 36, 40 + i * 20, a)
+            _put(page, 270, 40 + i * 20, b)
+
+    raw = _pdf(draw, height=120)
+    fixed = shots._reading_order(raw)  # the TypeError must not be swallowed
+    assert _lines(fixed) == [
+        "Alpha finds the first fact.",
+        "Alpha continues the argument.",
+        "Beta states a separate point.",
+        "Beta adds the second column.",
+    ]
 
 
 def test_ingest_writes_text_and_the_ocr_note(tmp_path, monkeypatch, capsys):
