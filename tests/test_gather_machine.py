@@ -2,6 +2,8 @@
 
 import json
 import re
+import subprocess
+import sys
 
 import pytest
 import yaml
@@ -145,6 +147,53 @@ def test_gather_prefixes_stay_distinct(tmp_path):
     prefixes = {k.split(":", 1)[0] for k in data}
     assert len(prefixes) == 2, prefixes  # not merged under one "1a2b00"
     assert sum(len(p) > 6 for p in prefixes) == 1  # the second was widened
+
+
+def test_a_label_keyed_main_does_not_loop_forever(tmp_path):
+    """H2: `main` is the document entry's key; the disambiguation must terminate.
+
+    The old loop tested ``p.key == "main"`` while rewriting only the candidate, so
+    the condition was true forever and ``set gather`` sat at 100 % CPU. Run it as
+    a real CLI call under a timeout: a regression hangs here instead of the suite.
+    """
+    doc = tmp_path / "sets" / "demo" / "docs" / "1a2b3c4d5e6f"
+    doc.mkdir(parents=True)
+    (doc / "info.yml").write_text(yaml.safe_dump(INFO), encoding="utf-8")
+    label_doc(
+        doc,
+        labels=[
+            {"key": "main", "text": "the holding we rely on", "page": 1},
+            {"key": "main_label", "text": "the second holding", "page": 1},
+        ],
+    )
+    out = tmp_path / "refs.json"
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "evid.cli.main",
+            "--db",
+            str(tmp_path),
+            "set",
+            "gather",
+            "demo",
+            "-o",
+            str(out),
+            "--no-regen",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    assert run.returncode == 0, run.stderr
+    data = json.loads(out.read_text(encoding="utf-8"))
+    snippets = data["1a2b3c4d5e6f"]["snippets"]
+    # the passage keyed `main` is renamed (the document entry owns <prefix>:main)
+    # and the clash with a real `main_label` label gets _2 — and it terminates.
+    assert set(snippets) == {"1a2b3c:main_label", "1a2b3c:main_label_2"}
+    assert snippets["1a2b3c:main_label"]["text"] == "the holding we rely on"
+    assert snippets["1a2b3c:main_label_2"]["text"] == "the second holding"
 
 
 def test_merge_hayagriva_dedupes_by_key(tmp_path):

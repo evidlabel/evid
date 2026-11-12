@@ -249,14 +249,21 @@ def _flat(value: str) -> str:
 
 
 def _keys(doc: DocRecords, prefix: str | None = None) -> list[tuple[str, Passage]]:
-    """Unique citation keys ``<prefix>:<key>`` (a clash gets _2, _3 …)."""
+    """Unique citation keys ``<prefix>:<key>`` (a clash gets _2, _3 …).
+
+    ``<prefix>:main`` is the document entry that :func:`to_hayagriva` writes, so a
+    passage keyed ``main`` cannot keep that name: it becomes ``<prefix>:main_label``.
+    The disambiguation below compares the candidate key only — testing ``p.key``
+    in the loop condition made a ``main`` passage spin forever.
+    """
     prefix = prefix or doc.prefix
     seen: set[str] = set()
     out = []
     for p in doc.passages:
-        key, n = f"{prefix}:{p.key}", 2
-        while key in seen or p.key == "main":
-            key, n = f"{prefix}:{p.key}_{n}", n + 1
+        base = "main_label" if p.key == "main" else p.key
+        key, n = f"{prefix}:{base}", 2
+        while key in seen:
+            key, n = f"{prefix}:{base}_{n}", n + 1
         seen.add(key)
         out.append((key, p))
     return out
