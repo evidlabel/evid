@@ -52,14 +52,20 @@ def add_evidence(
     dataset: str,
     source: str | list[str],
     label: bool = False,
-    autolabel: bool = False,
     no_index: bool = False,
+    *,
+    title: str = "",
+    authors: str = "",
+    dates: str = "",
+    url: str = "",
 ) -> None:
     """Add one or more PDFs/URLs (or a directory of PDFs) to the dataset.
 
-    A batch reuses a single ``IndexWorkerPool`` so the embedding model loads
-    once rather than once per document. Per-document failures are reported and
-    skipped in batch mode; a single source still exits on error.
+    *title* / *authors* / *dates* / *url* override the metadata read from the
+    source (only what is non-empty is written). A batch reuses a single
+    ``IndexWorkerPool`` so the embedding model loads once rather than once per
+    document. Per-document failures are reported and skipped in batch mode; a
+    single source still exits on error.
     """
     from evid import extras
     from evid.services.doc_ingester import DocIngester
@@ -134,10 +140,12 @@ def add_evidence(
 
             _print_info(doc)
 
-            if label or autolabel:
+            if label:
                 from evid.cli.label_cmd import write_paragraph_labels
 
                 write_paragraph_labels(doc.path)
+
+            _apply_metadata(doc, title=title, authors=authors, dates=dates, url=url)
     finally:
         if pool is not None:
             pool.close()
@@ -213,6 +221,19 @@ def add_screenshots(
 
     annotate_screenshot(doc.path)
     _print_info(doc)
+
+
+def _apply_metadata(doc, *, title="", authors="", dates="", url="") -> None:
+    """Overwrite the editable info.yml fields with whatever is non-empty."""
+    fields = {k: v for k, v in (("title", title), ("authors", authors), ("dates", dates), ("url", url)) if v}
+    if not fields:
+        return
+    try:
+        from evid.services.doc_ops import update_doc
+
+        update_doc(doc.path, fields)
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("Could not apply metadata to %s", doc.path)
 
 
 def _print_info(doc) -> None:

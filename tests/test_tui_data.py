@@ -104,6 +104,30 @@ def test_set_note(directory: Path, slug: str):
     assert "tirsdag" in doc.note
 
 
+def test_metadata_on_add(directory: Path, slug: str):
+    """doc-add metadata overrides are written over source-inferred values."""
+    pdf = _pdf(directory / "in" / "meta2.pdf", "Evidence with metadata override.")
+    res = data.run_add(
+        directory, slug, [str(pdf)], title="Ankerbrev", authors="SKAT", dates="2026-01-02", url="https://e.dk/x"
+    )
+    assert res[0].ok and res[0].uuid
+    doc = data.list_docs(directory, slug)[0]
+    assert doc.title == "Ankerbrev"
+    assert doc.authors == "SKAT"
+    assert doc.dates == "2026-01-02"
+    assert doc.url == "https://e.dk/x"
+
+
+def test_cli_add_evidence_applies_metadata(directory: Path, slug: str):
+    pdf = _pdf(directory / "in" / "meta3.pdf", "Another piece.")
+    from evid.cli import evidence as evidence_mod
+
+    evidence_mod.add_evidence(directory, slug, str(pdf), title="Klageskrivelse", authors="Borger X")
+    doc = data.list_docs(directory, slug)[0]
+    assert doc.title == "Klageskrivelse"
+    assert doc.authors == "Borger X"
+
+
 def test_ambiguous_uuid_not_needed_for_full_uuid(directory: Path, slug: str):
     pdf = _pdf(directory / "in" / "full.pdf")
     uuid = data.run_add(directory, slug, [str(pdf)])[0].uuid

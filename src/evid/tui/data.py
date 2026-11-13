@@ -141,6 +141,10 @@ def run_add(
     *,
     do_index: bool | None = None,
     autolabel: bool = False,
+    title: str = "",
+    authors: str = "",
+    dates: str = "",
+    url: str = "",
     on_progress: Callable[[AddResult], None] | None = None,
 ) -> list[AddResult]:
     """Add *sources* (URLs, PDF paths, directories) to *slug* as a batch.
@@ -149,6 +153,8 @@ def run_add(
     the set if missing, expands directories to their PDFs, then ingests each
     source through :class:`~evid.services.doc_ingester.DocIngester`. A single
     long-lived index child is reused across the batch (model loads once).
+    Non-empty *title* / *authors* / *dates* / *url* are written over whatever
+    the source provided, as in ``evid doc add --title …``.
 
     *on_progress* is called as each result is produced. Returns ``AddResult``
     per source, never raises for per-source failures.
@@ -207,6 +213,13 @@ def run_add(
                 else:
                     if autolabel and not ingester.last_was_existing:
                         _paragraph_labels(doc.path)
+                    _apply_metadata(
+                        doc.path,
+                        title=title,
+                        authors=authors,
+                        dates=dates,
+                        url=url,
+                    )
                     res = _result(
                         src,
                         True,
@@ -220,6 +233,21 @@ def run_add(
         if pool is not None:
             pool.close()
     return results
+
+
+def _apply_metadata(doc_dir: Path, *, title="", authors="", dates="", url="") -> None:
+    """Write non-empty editable info.yml fields over whatever the source gave."""
+    fields = {
+        k: v for k, v in (("title", title), ("authors", authors), ("dates", dates), ("url", url)) if v
+    }
+    if not fields:
+        return
+    try:
+        from evid.services.doc_ops import update_doc
+
+        update_doc(doc_dir, fields)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("Could not apply metadata to %s: %s", doc_dir, e)
 
 
 def _paragraph_labels(doc_dir: Path) -> None:

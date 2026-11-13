@@ -375,16 +375,29 @@ def merge_refs_callback(
 
 
 def add_callback(
-    db: str = None,
-    source: str | list[str] = None,
+    db: str | None = None,
+    source: str | list[str] | None = None,
     label: bool = False,
-    autolabel: bool = False,
-    dataset: str = None,
+    dataset: str | None = None,
     no_index: bool = False,
+    title: str = "",
+    authors: str = "",
+    dates: str = "",
+    url: str = "",
 ):
     """Add one or more documents (PDFs, a directory, or URLs) to a dataset."""
     dataset = _resolve_dataset(dataset, "Select dataset for adding document")
-    add_evidence(DIRECTORY, dataset, source, label, autolabel, no_index=no_index)
+    add_evidence(
+        DIRECTORY,
+        dataset,
+        source,
+        label,
+        no_index=no_index,
+        title=title,
+        authors=authors,
+        dates=dates,
+        url=url,
+    )
 
 
 def screenshot_callback(

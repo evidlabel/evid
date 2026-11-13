@@ -261,7 +261,12 @@ set_group.commands.append(
     )
 )
 
-set_group.commands.append(
+# ── export ─────────────────────────────────────────────────────────────────────
+
+export_group = group(name="export", help="Export gathered references and public catalogs")
+app.subgroups.append(export_group)
+
+export_group.commands.append(
     command(
         name="gather",
         help="Export gathered BibTeX / Markdown / JSON / Hayagriva from a set",
@@ -297,7 +302,7 @@ set_group.commands.append(
     )
 )
 
-set_group.commands.append(
+export_group.commands.append(
     command(
         name="share",
         help="Write a json.gz catalog of this set's public documents (url, tags, labels, content hashes). Documents with no http(s) URL are left out.",
@@ -313,12 +318,7 @@ set_group.commands.append(
     )
 )
 
-# ── refs ───────────────────────────────────────────────────────────────────────
-
-refs_group = group(name="refs", help="Gathered citation files")
-app.subgroups.append(refs_group)
-
-refs_group.commands.append(
+export_group.commands.append(
     command(
         name="merge",
         help="Merge gathered Hayagriva .yml files into one store (first key wins)",
@@ -353,15 +353,14 @@ doc_group.commands.append(
                 help="Label each paragraph as a span in label/",
             ),
             option(
-                flags=["-a", "--autolabel"],
-                flag=True,
-                help="Label each paragraph as a span in label/ (same as --label)",
-            ),
-            option(
                 flags=["--no-index"],
                 flag=True,
                 help="Skip building the vector index (faster, quieter; not searchable until re-indexed)",
             ),
+            option(flags=["--title"], arg_type=str, help="Document title (overrides the one read from the source)"),
+            option(flags=["--authors"], arg_type=str, help="Authors (comma-separated)"),
+            option(flags=["--dates"], arg_type=str, help="Document date"),
+            option(flags=["--url"], arg_type=str, help="Source URL, when it could not be inferred"),
         ],
     )
 )
@@ -477,13 +476,13 @@ doc_group.commands.append(
                 flags=["--from"],
                 dest="from_path",
                 arg_type=str,
-                help="quotes.json of candidate quotes (JSON, non-citable input)",
+                help="Candidate quotes.json (non-citable input). Exactly one of --from / --from-search is required.",
             ),
             option(
                 flags=["--from-search"],
                 dest="from_search",
                 arg_type=str,
-                help="Seed candidates from a vector search over the set (one of --from/--from-search). Requires extra evid[vec].",
+                help="Seed candidates from a vector search over the set (mutually exclusive with --from). Requires extra evid[vec].",
             ),
             option(
                 flags=["-n", "--n"],

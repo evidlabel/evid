@@ -174,7 +174,7 @@ def test_a_label_keyed_main_does_not_loop_forever(tmp_path):
             "evid.cli.main",
             "--db",
             str(tmp_path),
-            "set",
+            "export",
             "gather",
             "demo",
             "-o",
