@@ -62,7 +62,7 @@ workspace centred on quick addition: paste URLs / PDF paths / directories
 into the active set, then immediately tag (`t`), annotate (`n`), fix
 metadata (`m`) and open (`o`) the new documents — all without leaving the
 terminal. It reads and writes the same info.yml files as the CLI and GUI, so
-switching freely between them stays consistent. Implemented with curses (stdlib); `?` shows the keymap inside the app.
+switching freely between them stays consistent. Built with Textual; `?` shows the keymap inside the app.
 
 ```bash
 evid -d ./evid tui -s my-case

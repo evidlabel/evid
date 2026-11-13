@@ -25,6 +25,7 @@ dependencies = [
     "rapidfuzz>=3.10.0,<4",
     "mcp>=1.2,<2",
     "fonttools>=4.40",  # reading embedded fonts to expand unmapped ligature glyphs
+    "textual>=6.2.1",
 ]
 
 [project.optional-dependencies]

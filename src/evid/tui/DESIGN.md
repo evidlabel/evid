@@ -1,62 +1,52 @@
-"""evid tui — design notes.
+""""evid tui — design notes.
 
 Scope
 -----
-`evid tui` is a curses front-end whose *primary* workflow is quick addition:
+`evid tui` is a Textual front-end whose *primary* workflow is quick addition:
 paste a handful of URLs / PDF paths / directories into a set, then immediately
 curate the new documents. It deliberately stays a front-end — every write goes
 through the existing service layer, so nothing a user does in the TUI has a
 behaviour different from the equivalent `evid` command.
 
-Why curses (stdlib) instead of textual/prompt_toolkit
-------------------------------------------------------
-evid keeps its dependency surface small (the GUI is a stdlib web server; the
-GUI extra is empty). Adding Textual would pull in rich+markdown-it+nested
-deps for what is a small, focused app. curses handles the terminal work with
-zero install cost and is already required on the platforms evid targets.
+Why Textual instead of hand-rolled curses
+-----------------------------------------
+curses (stdlib) was the first cut, but Textual was the better base for the
+long term: widgets + layout + focus + CSS and a headless testing harness
+(Pilot) for free, plus `textual-serve` if we ever want the same UI in a
+browser. The added dependency is accepted — this is a maintained, active
+library (textual is the modern Python TUI framework in the FastAPI/Rich
+ecosystem), and the TUI is core, not an optional extra. The data layer stays
+in `data.py`, which remains curses- and TUI-free and is reused by the tests.
 
 Layout (workspace)
 ------------------
-    ┌ evid · <set name> (slug) · N docs ─ a add · t tag · n note · m meta · ? help ┐
-    │ / <filter box>                                  [focus: list]              │
-    │ ▸ Title of doc                      #court #dan 2026-11-01   │ title  ….   │
-    │   …                                                           │ authors …. │
-    │   …                                                           │ dates   …. │
-    │   …                                                           │ …          │
-    └────────────────────────────────────────────────────────────────────────────┘
-     j/k move · / filter · a add · t tag · n note · m meta · o open · q quit
-
-Panes
-- Left: the set's documents, newest first, filterable by substring; each row
-  shows selection cursor, title, tag chips, added date.
-- Right: detail of the selected document — the editable info.yml fields, its
-  tags, its note and its on-disk path.
+Header ── filter ── list (62%) | detail (38%) ── footer
+List rows: title · tag chips · added date. Detail: the editable info.yml
+fields, tags, note and on-disk path for the highlighted row.
 
 Screens
-- Set picker (`s`): choose / create the active set (skipped when -s given).
-- Workspace: list + detail above.
-- Add dialog (`a`): multi-line text area for sources; optional auto-applied
-  tag and toggles for indexing and paragraph labels; streams per-document
-  ✓/✗ results, then returns to the workspace with the batch at the top.
-- Prompt: a single-line value dialog shared by tag / note / metadata edits.
-- Help overlay (`?`).
+- Set picker (ModalScreen): choose / create the active set (skipped when `-s`
+  is given).
+- Workspace (MainScreen): list + detail above.
+- Add dialog (`a`, ModalScreen): multi-line TextArea for sources, toggles for
+  indexing and paragraph labels, streams per-document ✓/✗ results through a
+  worker (non-blocking), then returns the batch.
+- Prompt: single-line value dialog shared by tag / note / metadata edits.
+- Metadata editor: four labelled inputs (title / authors / dates / url).
+- Help overlay.
 
 Keymap (workspace)
 ------------------
     a          add documents (batch dialog)
-    /          filter the document list by substring
-    j/k · ↓/↑  move through the list
-    g · G      top / bottom of the list
-    t          assign a tag to the selected document
-    T          remove a tag from the selected document
-    n          set / edit the document's note (whole-document annotation)
-    m          edit metadata (title / authors / dates / url)
-    o · Enter  open the source (folder or viewer through open_external)
-    Tab        move focus between the list and the detail
+    / · j/k    filter · move through the list
+    t / T      tag / untag the selected document
+    n          set / edit the document's note
+    m          edit metadata
+    o · enter  open the source (folder or viewer through open_external)
     s          switch evidence set
     r          refresh the list from disk
     ?          keymap help
-    q · Ctrl+C quit
+    q · ctrl+c quit
 
 Decision notes
 --------------
@@ -67,4 +57,8 @@ Decision notes
   add dialog.
 - Unsaved state never exists: tag / note / metadata actions write immediately
   (and report failures), so quitting is always safe and q is a hard exit.
+- UI work happens on the Textual thread; the add batch runs in a thread worker
+  and posts progress back with `call_from_thread`, so ingestion never blocks
+  the interface. Tests drive the app headlessly with `app.run_test()` + Pilot.
 """
+

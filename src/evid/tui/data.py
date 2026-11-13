@@ -24,6 +24,13 @@ logger = logging.getLogger(__name__)
 EDITABLE = ("title", "authors", "dates", "url")
 
 
+def index_default() -> bool:
+    """Whether indexing should be on by default (honours ``evid[vec]``)."""
+    from evid import extras
+
+    return extras.has_vec()
+
+
 def resolve_directory(db: str | None) -> Path:
     """Return the data directory the same way evid.cli.main resolves it."""
     if db is not None:

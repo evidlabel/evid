@@ -107,7 +107,6 @@ def test_doc_add_has_metadata_flags_and_no_alias():
 
 def test_help_is_an_agent_surface(capsys):
     """--help is what an agent reads; the removed alias must not show there."""
-    from evid.tui import ui  # ensure package importable
     sys.argv = ["evid", "doc", "add", "--help"]
     with pytest.raises(SystemExit):
         m.main()
