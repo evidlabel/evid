@@ -44,6 +44,7 @@ from evid.cli.callbacks import (
     tag_remove_callback,
     tag_show_callback,
     track_callback,
+    tui_callback,
     update_callback,
 )
 from evid.cli.label_cmd import (
@@ -171,6 +172,19 @@ app.commands.append(
                 flag=True,
                 help="Run the Agent pane's terminals without bubblewrap: they can read every evidence set",
             ),
+        ],
+    )
+)
+
+# ── tui ───────────────────────────────────────────────────────────────────────
+
+app.commands.append(
+    command(
+        name="tui",
+        help="Terminal interface centred on quick document addition: paste URLs / PDF paths, then tag, annotate and fix metadata without leaving the keyboard",
+        callback=tui_callback,
+        options=[
+            _DATASET_OPTION,
         ],
     )
 )

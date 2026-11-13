@@ -1225,6 +1225,13 @@ def gui_callback(
     )
 
 
+def tui_callback(db: str | None = None, dataset: str | None = None):
+    """Launch the terminal TUI (keyboard workspace centred on quick addition)."""
+    from evid.tui import app as tui_app
+
+    sys.exit(tui_app.run(db=db, dataset=dataset))
+
+
 def update_callback(db: str = None):
     """Update configuration file."""
     config_path = Path.home() / ".evidrc"

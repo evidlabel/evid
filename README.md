@@ -55,6 +55,19 @@ evid -d ./evid set create my-case
 evid -d ./evid doc add paper.pdf -s my-case
 ```
 
+### TUI
+
+`evid tui` (`evid tui -s my-case` to pick the set up front) is a keyboard
+workspace centred on quick addition: paste URLs / PDF paths / directories
+into the active set, then immediately tag (`t`), annotate (`n`), fix
+metadata (`m`) and open (`o`) the new documents — all without leaving the
+terminal. It reads and writes the same info.yml files as the CLI and GUI, so
+switching freely between them stays consistent. Implemented with curses (stdlib); `?` shows the keymap inside the app.
+
+```bash
+evid -d ./evid tui -s my-case
+```
+
 ### GUI
 
 `evid gui` serves the GUI on `127.0.0.1` (loopback only) and shows it in the `evid-app` window, or in your web browser when `evid-app` is not installed (`--browser` forces the browser). Closing the window quits. A second `evid gui` for the same data dir brings the running one forward.
