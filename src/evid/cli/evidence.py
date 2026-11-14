@@ -225,7 +225,16 @@ def add_screenshots(
 
 def _apply_metadata(doc, *, title="", authors="", dates="", url="") -> None:
     """Overwrite the editable info.yml fields with whatever is non-empty."""
-    fields = {k: v for k, v in (("title", title), ("authors", authors), ("dates", dates), ("url", url)) if v}
+    fields = {
+        k: v
+        for k, v in (
+            ("title", title),
+            ("authors", authors),
+            ("dates", dates),
+            ("url", url),
+        )
+        if v
+    }
     if not fields:
         return
     try:

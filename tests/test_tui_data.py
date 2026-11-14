@@ -93,7 +93,9 @@ def test_assign_and_remove_tag(directory: Path, slug: str):
     assert any(t.endswith(".court") for t in tags)
     ok2, _ = data.remove_tag(directory, uuid, "court")
     assert ok2
-    assert not any(t.endswith(".court") for t in data.list_docs(directory, slug)[0].tags)
+    assert not any(
+        t.endswith(".court") for t in data.list_docs(directory, slug)[0].tags
+    )
 
 
 def test_set_note(directory: Path, slug: str):
@@ -108,7 +110,13 @@ def test_metadata_on_add(directory: Path, slug: str):
     """doc-add metadata overrides are written over source-inferred values."""
     pdf = _pdf(directory / "in" / "meta2.pdf", "Evidence with metadata override.")
     res = data.run_add(
-        directory, slug, [str(pdf)], title="Ankerbrev", authors="SKAT", dates="2026-01-02", url="https://e.dk/x"
+        directory,
+        slug,
+        [str(pdf)],
+        title="Ankerbrev",
+        authors="SKAT",
+        dates="2026-01-02",
+        url="https://e.dk/x",
     )
     assert res[0].ok and res[0].uuid
     doc = data.list_docs(directory, slug)[0]
@@ -122,7 +130,9 @@ def test_cli_add_evidence_applies_metadata(directory: Path, slug: str):
     pdf = _pdf(directory / "in" / "meta3.pdf", "Another piece.")
     from evid.cli import evidence as evidence_mod
 
-    evidence_mod.add_evidence(directory, slug, str(pdf), title="Klageskrivelse", authors="Borger X")
+    evidence_mod.add_evidence(
+        directory, slug, str(pdf), title="Klageskrivelse", authors="Borger X"
+    )
     doc = data.list_docs(directory, slug)[0]
     assert doc.title == "Klageskrivelse"
     assert doc.authors == "Borger X"

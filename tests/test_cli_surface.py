@@ -25,11 +25,11 @@ import sys
 
 import pytest
 
-from evid.cli import main as m
 from evid.cli import callbacks
-
+from evid.cli import main as m
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _all_commands(node=None, path=()):
     """Yield (path_tokens, command_obj) for every leaf command in the tree."""
@@ -48,6 +48,7 @@ def _find(group: str, cmd: str):
 
 # ── the tree binds (regression guard for the reported failure) ───────────────
 
+
 def test_full_tree_validates_bindings():
     """build_parser() runs treeparse._validate over EVERY command; a callback
     param typed against a version-drifted option (e.g. flags resolved to str)
@@ -62,6 +63,7 @@ def test_every_command_has_a_registered_callback():
 
 # ── uniform shallow depth ────────────────────────────────────────────────────
 
+
 def test_tree_is_shallow_and_uniform():
     depths = {len(path) - 1 for path, _ in _all_commands()}  # tokens after 'evid'
     # group-backed leaves are evid <group> <verb> (depth 2); root commands are 1
@@ -71,22 +73,28 @@ def test_tree_is_shallow_and_uniform():
 
 # ── no duplicate-behavior aliases ────────────────────────────────────────────
 
+
 def test_no_duplicate_behaviour_aliases():
     for path, cmd in _all_commands():
-        helps = [o.help for o in getattr(cmd, "options", []) if getattr(o, "help", None)]
+        helps = [
+            o.help for o in getattr(cmd, "options", []) if getattr(o, "help", None)
+        ]
         for h in helps:
-            assert "same as" not in h.lower(), (
-                "{} has a duplicate alias ('{}')".format(" ".join(path), h)
+            assert "same as" not in h.lower(), "{} has a duplicate alias ('{}')".format(
+                " ".join(path), h
             )
         # identical help on two options is a duplicate in disguise
         seen = set()
         for o in getattr(cmd, "options", []):
             if getattr(o, "help", None):
-                assert o.help not in seen, "{} repeats help: {}".format(" ".join(path), o.help)
+                assert o.help not in seen, "{} repeats help: {}".format(
+                    " ".join(path), o.help
+                )
                 seen.add(o.help)
 
 
 # ── export group owns every export verb ──────────────────────────────────────
+
 
 def test_export_group_owns_bibtex_export_verbs():
     grp = next(g for g in m.app.subgroups if g.name == "export")
@@ -98,10 +106,19 @@ def test_export_group_owns_bibtex_export_verbs():
 
 # ── doc add: metadata vocabulary, alias removed ──────────────────────────────
 
+
 def test_doc_add_has_metadata_flags_and_no_alias():
     add = _find("doc", "add")
     flags = {f for o in add.options for f in o.flags}
-    assert {"--title", "--authors", "--dates", "--url", "-l", "--label", "--no-index"} <= flags
+    assert {
+        "--title",
+        "--authors",
+        "--dates",
+        "--url",
+        "-l",
+        "--label",
+        "--no-index",
+    } <= flags
     assert not (flags & {"-a", "--autolabel"}), "-a/--autolabel must not reappear"
 
 
@@ -117,6 +134,7 @@ def test_help_is_an_agent_surface(capsys):
 
 # ── -j JSON schema (the headline agent affordance) ───────────────────────────
 
+
 def test_json_schema_dumps_and_reflects_export(capsys):
     sys.argv = ["evid", "-j"]
     with pytest.raises(SystemExit):
@@ -131,9 +149,10 @@ def test_json_schema_dumps_and_reflects_export(capsys):
 
 # ── doc quote enforces exactly one seed ──────────────────────────────────────
 
+
 def test_quote_requires_exactly_one_seed(monkeypatch):
     # _resolve_dataset would prompt; stub it so we reach the guard deterministically.
-    monkeypatch.setattr(callbacks, "_resolve_dataset", lambda *a, **k: "demo")
+    monkeypatch.setattr(callbacks, "_resolve_dataset", lambda *_args, **_kwargs: "demo")
     with pytest.raises(SystemExit) as e:
         callbacks.quote_callback(dataset=None)
     assert "exactly one" in str(e.value).lower()
