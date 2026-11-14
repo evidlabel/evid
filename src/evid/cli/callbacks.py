@@ -1239,10 +1239,18 @@ def gui_callback(
 
 
 def tui_callback(db: str | None = None, dataset: str | None = None):
-    """Launch the terminal TUI (keyboard workspace centred on quick addition)."""
+    """Launch the terminal TUI (keyboard workspace centred on quick addition).
+
+    Uses :data:`DIRECTORY`, which ``main()`` resolves from ``-d/--db``,
+    ``EVID_DB`` or the config file (including the legacy ``evidmgr`` dir). The
+    treeparse ``db`` parameter is only the option's display default
+    (``~/.local/share/evid``), so trusting it would open an empty directory and
+    hide every set the CLI itself can see.
+    """
     from evid.tui import app as tui_app
 
-    sys.exit(tui_app.run(db=db, dataset=dataset))
+    directory = str(DIRECTORY) if DIRECTORY is not None else db
+    sys.exit(tui_app.run(db=directory, dataset=dataset))
 
 
 def update_callback(db: str = None):

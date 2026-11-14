@@ -8,9 +8,9 @@ or exits, so callers (the TUI) control all output.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
 
 from evid.cli.evidence import _expand_sources
 from evid.config import EvidConfig
@@ -41,6 +41,7 @@ def resolve_directory(db: str | None) -> Path:
 # --------------------------------------------------------------------------
 # Loading
 # --------------------------------------------------------------------------
+
 
 @dataclass
 class DocRow:
@@ -95,8 +96,137 @@ def list_docs(directory: Path, slug: str) -> list[DocRow]:
             )
         )
     # Newest first by time_added, then directory mtime.
-    rows.sort(key=lambda r: (r.time_added or "", str(r.dir.stat().st_mtime)), reverse=True)
+    rows.sort(
+        key=lambda r: (r.time_added or "", str(r.dir.stat().st_mtime)), reverse=True
+    )
     return rows
+
+
+@dataclass
+class ParaRow:
+    """One paragraph of a document's canonical text, with the keys labelling it."""
+
+    number: int
+    start: int
+    end: int
+    text: str
+    page: int | None = None
+    keys: list[str] = field(default_factory=list)
+
+
+def list_paragraphs(doc_dir: Path) -> list[ParaRow]:
+    """Paragraphs of *doc_dir*, labelled with the keys that begin inside them.
+
+    The canonical text is extracted on first use into ``label/text.txt`` (the
+    same file ``evid label`` reads and writes), so the TUI can label a document
+    without shelling out. Returns [] when the document has no readable text.
+    """
+    from evid.core.labels import ensure_text, paragraph_spans, read
+
+    try:
+        text, pages = ensure_text(doc_dir)
+    except (FileNotFoundError, ValueError) as e:
+        logger.warning("Could not read text for %s: %s", doc_dir.name, e)
+        return []
+
+    labels = read(doc_dir).get("labels") or []
+    rows: list[ParaRow] = []
+    for number, span in enumerate(paragraph_spans(text, pages), start=1):
+        keys = [
+            rec["key"]
+            for rec in labels
+            if rec.get("key") and span["start"] <= rec.get("start", -1) < span["end"]
+        ]
+        rows.append(
+            ParaRow(
+                number=number,
+                start=span["start"],
+                end=span["end"],
+                text=span["text"],
+                page=span.get("page"),
+                keys=keys,
+            )
+        )
+    return rows
+
+
+def suggest_key(doc_dir: Path, text: str) -> str:
+    """A key for *text* that no label in *doc_dir* uses yet."""
+    from evid.core.labels import suggest_key as suggest
+    from evid.core.labels import taken_keys
+
+    return suggest(text, taken_keys(doc_dir))
+
+
+def label_paragraph(doc_dir: Path, start: int, end: int, key: str) -> tuple[bool, str]:
+    """Write one label over ``text[start:end]``; (True, msg) on success."""
+    from evid.core.labels import add_label, span_at
+
+    try:
+        rec = add_label(doc_dir, span_at(doc_dir, start, end), key)
+    except (ValueError, KeyError) as e:
+        return False, str(e)
+    note = _commit_labels(doc_dir, f"+{rec['key']}")
+    return True, f"Labelled ¶ as '{rec['key']}'." + note
+
+
+def unlabel(doc_dir: Path, key: str) -> tuple[bool, str]:
+    """Remove label *key* from *doc_dir*; (True, msg) on success."""
+    from evid.core.labels import remove_label
+
+    try:
+        remove_label(doc_dir, key)
+    except KeyError as e:
+        return False, str(e)
+    note = _commit_labels(doc_dir, f"-{key}")
+    return True, f"Removed label '{key}'." + note
+
+
+def export_labels(directory: Path, slug: str) -> str:
+    """All saved labels in the active set, in the GUI's clipboard YAML format."""
+    from evid.core.labels import label_entries
+    from evid.core.prompt import labels_to_yaml
+
+    return labels_to_yaml(
+        [
+            (
+                {
+                    "uuid": doc.uuid,
+                    "title": doc.title,
+                    "authors": doc.authors,
+                    "url": doc.url,
+                },
+                label_entries(doc.dir),
+            )
+            for doc in list_docs(directory, slug)
+        ]
+    )
+
+
+def _commit_labels(doc_dir: Path, delta: str) -> str:
+    """Commit ``label/`` when the set is a git repo, as ``evid label`` does."""
+    from evid.cli.label_cmd import commit_doc_labels
+    from evid.core.bibtex_utils import load_title
+
+    try:
+        commit_doc_labels(
+            doc_dir, f"label: {load_title(doc_dir / 'info.yml')} ({delta})"
+        )
+    except Exception as e:  # pragma: no cover - git trouble must not lose the write
+        logger.warning("Could not commit labels for %s: %s", doc_dir.name, e)
+        return f" (not committed: {e})"
+    return ""
+
+
+def create_set(directory: Path, name: str) -> tuple[str, str]:
+    """Create a normal evidence set; returns ``(slug, message)`` (slug '' on failure)."""
+    try:
+        ev_set = SetManager(directory).create_set(name, "normal")
+    except FileExistsError:
+        return "", f"Set '{name}' already exists."
+    except Exception as e:  # pragma: no cover - defensive
+        return "", f"Failed to create set: {e}"
+    return ev_set.slug, f"Created set '{ev_set.slug}'."
 
 
 def _read_info(doc_dir: Path) -> dict | None:
@@ -132,6 +262,7 @@ def _tag_list(v) -> list[str]:
 # --------------------------------------------------------------------------
 # Quick addition
 # --------------------------------------------------------------------------
+
 
 @dataclass
 class AddResult:
@@ -215,7 +346,10 @@ def run_add(
                 )
                 if ingester.last_was_existing:
                     res = _result(
-                        src, True, f"Already present in '{slug}' at {doc.uuid}", doc.uuid
+                        src,
+                        True,
+                        f"Already present in '{slug}' at {doc.uuid}",
+                        doc.uuid,
                     )
                 else:
                     if autolabel and not ingester.last_was_existing:
@@ -245,7 +379,14 @@ def run_add(
 def _apply_metadata(doc_dir: Path, *, title="", authors="", dates="", url="") -> None:
     """Write non-empty editable info.yml fields over whatever the source gave."""
     fields = {
-        k: v for k, v in (("title", title), ("authors", authors), ("dates", dates), ("url", url)) if v
+        k: v
+        for k, v in (
+            ("title", title),
+            ("authors", authors),
+            ("dates", dates),
+            ("url", url),
+        )
+        if v
     }
     if not fields:
         return
@@ -274,6 +415,7 @@ def _result(source: str, ok: bool, message: str, uuid: str = "") -> AddResult:
 # --------------------------------------------------------------------------
 # Curation mutations
 # --------------------------------------------------------------------------
+
 
 def assign_tag(directory: Path, uuid: str, tag: str) -> tuple[bool, str]:
     """Add *tag* to *uuid*; namespaced like the CLI. (True, msg) on success."""
@@ -308,7 +450,9 @@ def known_tags(directory: Path, slug: str) -> list[str]:
         return []
 
 
-def update_metadata(directory: Path, uuid: str, fields: dict[str, str]) -> tuple[bool, str]:
+def update_metadata(
+    directory: Path, uuid: str, fields: dict[str, str]
+) -> tuple[bool, str]:
     """Write editable info.yml fields (title/authors/dates/url) for *uuid*."""
     doc_dir = uuid_dir(directory, uuid)
     if doc_dir is None:
@@ -335,7 +479,10 @@ def set_note(directory: Path, uuid: str, text: str) -> tuple[bool, str]:
 
 def _clear_notes(doc_dir: Path) -> None:
     try:
-        from evid.core.labels import clear_document_annotations, adopt_legacy_document_note
+        from evid.core.labels import (
+            adopt_legacy_document_note,
+            clear_document_annotations,
+        )
 
         adopt_legacy_document_note(doc_dir)
         clear_document_annotations(doc_dir)

@@ -181,7 +181,7 @@ app.commands.append(
 app.commands.append(
     command(
         name="tui",
-        help="Terminal interface centred on quick document addition: paste URLs / PDF paths, then tag, annotate and fix metadata without leaving the keyboard",
+        help="Ingest documents, label paragraphs, copy labels as YAML, and exit",
         callback=tui_callback,
         options=[
             _DATASET_OPTION,
@@ -263,7 +263,9 @@ set_group.commands.append(
 
 # ── export ─────────────────────────────────────────────────────────────────────
 
-export_group = group(name="export", help="Export gathered references and public catalogs")
+export_group = group(
+    name="export", help="Export gathered references and public catalogs"
+)
 app.subgroups.append(export_group)
 
 export_group.commands.append(
@@ -357,10 +359,18 @@ doc_group.commands.append(
                 flag=True,
                 help="Skip building the vector index (faster, quieter; not searchable until re-indexed)",
             ),
-            option(flags=["--title"], arg_type=str, help="Document title (overrides the one read from the source)"),
+            option(
+                flags=["--title"],
+                arg_type=str,
+                help="Document title (overrides the one read from the source)",
+            ),
             option(flags=["--authors"], arg_type=str, help="Authors (comma-separated)"),
             option(flags=["--dates"], arg_type=str, help="Document date"),
-            option(flags=["--url"], arg_type=str, help="Source URL, when it could not be inferred"),
+            option(
+                flags=["--url"],
+                arg_type=str,
+                help="Source URL, when it could not be inferred",
+            ),
         ],
     )
 )

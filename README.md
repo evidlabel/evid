@@ -57,12 +57,20 @@ evid -d ./evid doc add paper.pdf -s my-case
 
 ### TUI
 
-`evid tui` (`evid tui -s my-case` to pick the set up front) is a keyboard
-workspace centred on quick addition: paste URLs / PDF paths / directories
-into the active set, then immediately tag (`t`), annotate (`n`), fix
-metadata (`m`) and open (`o`) the new documents — all without leaving the
-terminal. It reads and writes the same info.yml files as the CLI and GUI, so
-switching freely between them stays consistent. Built with Textual; `?` shows the keymap inside the app.
+`evid tui` follows **ingest → label → copy labels → exit**. Paste a URL,
+PDF path or folder into the ingest bar and press Enter. The new document opens
+in the paragraph reader; select a passage and press `Ctrl+L` to name it, as in
+the Tauri app. `Alt+↑` / `Alt+↓` moves between documents without leaving the labeller.
+Labels save immediately. Press `c` to copy **all saved labels in the active
+set** as YAML (quotes, keys and document references), then `q` to exit.
+
+Use the compact set selector to switch existing sets, or launch with
+`-s my-case` to ingest into a new one. An empty library starts with `inbox`.
+`a` focuses ingest, Escape returns to documents, and `L` removes a label.
+Tab and the visible buttons also work; Ctrl+W / Ctrl+Q exit from a text field.
+Ingest runs without vector indexing. Copy uses the terminal's OSC 52 clipboard
+support, which must be enabled in your terminal. The CLI and GUI share the
+same saved documents and labels.
 
 ```bash
 evid -d ./evid tui -s my-case
