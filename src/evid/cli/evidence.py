@@ -76,6 +76,11 @@ def add_evidence(
     sources = _expand_sources(list(sources))
     if not sources:
         sys.exit("No documents to add.")
+    if len(sources) > 1 and (url or title):
+        sys.exit(
+            f"--url / --title describe one document; {len(sources)} were given. "
+            "Add them one at a time."
+        )
 
     sm = SetManager(directory)
     try:
@@ -106,6 +111,10 @@ def add_evidence(
                 doc = ingester.ingest_source(
                     src,
                     evidence_set,
+                    title=title,
+                    authors=authors,
+                    dates=dates,
+                    url=url,
                     do_index=do_index,
                     pool=pool,
                 )
@@ -136,6 +145,10 @@ def add_evidence(
 
             if ingester.last_was_existing:
                 print(f"This document is already added in {dataset} at {doc.uuid}")
+                # Explicit metadata still lands: a re-run of an ingest script
+                # backfills url/authors/dates on documents it added before.
+                _apply_metadata(doc, title=title, authors=authors, dates=dates, url=url)
+                _warn_no_url(doc)
                 continue
 
             _print_info(doc)
@@ -144,8 +157,7 @@ def add_evidence(
                 from evid.cli.label_cmd import write_paragraph_labels
 
                 write_paragraph_labels(doc.path)
-
-            _apply_metadata(doc, title=title, authors=authors, dates=dates, url=url)
+            _warn_no_url(doc)
     finally:
         if pool is not None:
             pool.close()
@@ -224,7 +236,10 @@ def add_screenshots(
 
 
 def _apply_metadata(doc, *, title="", authors="", dates="", url="") -> None:
-    """Overwrite the editable info.yml fields with whatever is non-empty."""
+    """Overwrite the editable info.yml fields with whatever is non-empty.
+
+    Prints each field that changed.
+    """
     fields = {
         k: v
         for k, v in (
@@ -237,12 +252,47 @@ def _apply_metadata(doc, *, title="", authors="", dates="", url="") -> None:
     }
     if not fields:
         return
-    try:
-        from evid.services.doc_ops import update_doc
+    changes = set_doc_meta(doc.path, fields)
+    for key, (before, after) in changes.items():
+        print(f"  {key}: {before!r} -> {after!r}")
 
-        update_doc(doc.path, fields)
-    except Exception:  # pragma: no cover - defensive
-        logger.exception("Could not apply metadata to %s", doc.path)
+
+def set_doc_meta(doc_dir: Path, fields: dict[str, str]) -> dict[str, tuple[str, str]]:
+    """Write *fields* to info.yml; return ``{field: (before, after)}`` for changes.
+
+    Commits ``info.yml`` when git already tracks it. Shared by ``doc add`` (on a
+    document that was already there) and ``doc meta``.
+    """
+    from evid.core.gitops import commit_info
+    from evid.services.doc_ops import get_doc, update_doc
+
+    before = get_doc(doc_dir)
+    after = update_doc(doc_dir, fields)
+    changes = {
+        k: (before.get(k, ""), after.get(k, ""))
+        for k in fields
+        if before.get(k, "") != after.get(k, "")
+    }
+    if changes:
+        commit_info(doc_dir, f"meta: {doc_dir.name[:8]} ({', '.join(changes)})")
+    return changes
+
+
+def _warn_no_url(doc) -> None:
+    """Say on stderr when a document has no source URL: gather cites it without one."""
+    from evid.services.doc_ops import get_doc
+
+    try:
+        url = get_doc(doc.path).get("url", "")
+    except Exception:
+        logger.exception("Could not read info.yml for %s", doc.uuid)
+        return
+    if not url:
+        print(
+            f"warning: {doc.uuid[:8]} has no source URL; pass --url, or set it with "
+            f"`evid doc meta -u {doc.uuid} --url <url>`",
+            file=sys.stderr,
+        )
 
 
 def _print_info(doc) -> None:
@@ -298,6 +348,12 @@ def select_evidence(
     documents = get_evidence_list(directory, dataset)
     if not documents:
         sys.exit("No documents found in dataset.")
+    from evid.cli.dataset import require_tty
+
+    require_tty(
+        prompt_message,
+        f"Pass -u/--uuid (list them with `evid doc list -s {dataset}`).",
+    )
 
     console = Console()
     table = Table(title=prompt_message)

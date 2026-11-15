@@ -25,7 +25,11 @@ from rich.console import Console
 from rich.table import Table
 
 from evid.core.bibtex_utils import CITE_PREFIX_LEN
-from evid.core.hayagriva_fields import hayagriva_author, hayagriva_date
+from evid.core.hayagriva_fields import (
+    hayagriva_author,
+    hayagriva_author_field,
+    hayagriva_date,
+)
 from evid.models import InfoModel
 from evid.services.layout import existing_set_dir
 
@@ -305,7 +309,7 @@ def to_hayagriva(docs: list[DocRecords]) -> str:
             continue
         info = doc.info
         author, date, url = (
-            hayagriva_author(info.authors),
+            hayagriva_author_field(info.authors),
             hayagriva_date(info.dates),
             info.url or None,
         )
@@ -517,7 +521,37 @@ def _print_gather_stats(
     )
     if legacy:
         table.add_row("Not migrated (label.typ)", str(len(legacy)))
+    missing = missing_provenance(docs)
+    for field, uuids in missing.items():
+        table.add_row(f"No {field}", f"[yellow]{len(uuids)}[/yellow]")
     Console().print(table)
+    for field, uuids in missing.items():
+        logger.warning(
+            "no %s on %s (set it with `evid doc meta -u <uuid> --%s …`)",
+            field,
+            ", ".join(uuids),
+            _META_FLAG[field],
+        )
+
+
+_META_FLAG = {"url": "url", "author": "authors", "date": "dates"}
+
+
+def missing_provenance(docs: list[DocRecords]) -> dict[str, list[str]]:
+    """uuid8s of the documents with passages that lack a url, author or date.
+
+    Only documents that will be cited count. Their references would print without
+    the field, which nobody notices until the bibliography is read.
+    """
+    cited = [d for d in docs if d.passages]
+    out = {
+        "url": [d.info.uuid[:8] for d in cited if not d.info.url],
+        "author": [
+            d.info.uuid[:8] for d in cited if not hayagriva_author(d.info.authors)
+        ],
+        "date": [d.info.uuid[:8] for d in cited if not hayagriva_date(d.info.dates)],
+    }
+    return {k: v for k, v in out.items() if v}
 
 
 def _compile_with_fix(typ_file: Path, bib_file: Path, max_retries: int = 30) -> bool:

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import shutil
 import tempfile
 import uuid
@@ -57,6 +58,24 @@ class ResolvedSource:
     temp_dir: object | None = None  # tempfile.TemporaryDirectory | None
 
 
+ORIGIN_XATTR = "user.xdg.origin.url"
+
+
+def origin_url(path: Path) -> str:
+    """The URL a browser (or ``wget --xattr``) saved *path* from, or "".
+
+    Firefox, Chrome and wget write it as the ``user.xdg.origin.url`` extended
+    attribute on Linux. A file without it, a filesystem without xattrs, or a
+    platform without ``os.getxattr`` gives "".
+    """
+    try:
+        raw = os.getxattr(path, ORIGIN_XATTR)
+    except (OSError, AttributeError):
+        return ""
+    url = raw.decode("utf-8", errors="replace").strip()
+    return url if url.startswith(("http://", "https://")) else ""
+
+
 def resolve_source(source: str) -> ResolvedSource:
     """Resolve a local PDF path or HTTP(S) URL to a local PDF for ingest.
 
@@ -78,6 +97,7 @@ def resolve_source(source: str) -> ResolvedSource:
             raise ValueError(msg)
         return ResolvedSource(
             pdf_path=file_path,
+            source_url=origin_url(file_path),
             original_name=file_path.name,
         )
 
@@ -210,12 +230,14 @@ class DocIngester:
         tags: list[str] | None = None,
         do_index: bool = True,
         pool: object | None = None,
+        url: str = "",
     ) -> Document:
         """Resolve *source* (path or URL) and run the full ingest pipeline.
 
-        Caller-supplied *title* / *authors* / *dates* / *label* override both
-        URL-derived hints and PDF-extracted metadata. *pool* is an optional
-        long-lived ``IndexWorkerPool`` reused across a batch.
+        Caller-supplied *title* / *authors* / *dates* / *label* / *url* override
+        both URL-derived hints and PDF-extracted metadata. *url* is the source a
+        downloaded file came from; info.yml is written with it from the start.
+        *pool* is an optional long-lived ``IndexWorkerPool`` reused across a batch.
         """
         resolved = resolve_source(source)
         return self.ingest(
@@ -226,7 +248,7 @@ class DocIngester:
             authors=authors or resolved.authors,
             dates=dates or resolved.dates,
             tags=tags,
-            source_url=resolved.source_url,
+            source_url=url or resolved.source_url,
             temp_dir=resolved.temp_dir,
             do_index=do_index,
             pool=pool,

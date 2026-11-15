@@ -19,6 +19,16 @@ from evid.services.set_manager import SetManager
 logger = logging.getLogger(__name__)
 
 
+def require_tty(what: str, hint: str) -> None:
+    """Exit with *hint* instead of prompting when stdin is not a terminal.
+
+    Cron jobs, scripts and agents have no one to answer ``input()``: it would
+    raise EOFError deep in a prompt, or block. Say what to pass instead.
+    """
+    if not sys.stdin.isatty():
+        sys.exit(f"{what}: stdin is not a terminal, so evid cannot ask. {hint}")
+
+
 # ---------------------------------------------------------------------------
 # Path helpers — all callers use these instead of raw path arithmetic
 # ---------------------------------------------------------------------------
@@ -96,7 +106,10 @@ def select_dataset(
     try:
         ev_sets = SetManager(directory).list_sets()
     except Exception:
+        logger.exception("Could not list datasets in %s", directory)
         ev_sets = []
+    slugs = ", ".join(s.slug for s in ev_sets) or "none yet"
+    require_tty(prompt_message, f"Pass -s/--dataset <slug> (sets: {slugs}).")
 
     if not ev_sets:
         if not allow_create:

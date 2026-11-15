@@ -62,3 +62,18 @@ def commit_labels(doc_dir: Path, message: str) -> str | None:
     """Commit the document's ``label/`` and ``pass/`` folders."""
     doc_dir = Path(doc_dir)
     return commit_paths([doc_dir / "label", doc_dir / "pass"], message)
+
+
+def commit_info(doc_dir: Path, message: str) -> str | None:
+    """Commit the document's ``info.yml``, only when git already tracks it.
+
+    ``doc add`` does not commit a new document, so an untracked ``info.yml`` is
+    left for the user's own commit of the whole folder.
+    """
+    info = Path(doc_dir) / "info.yml"
+    top = work_tree(info) if info.exists() else None
+    if top is None:
+        return None
+    if _git(top, "ls-files", "--error-unmatch", "--", str(info.resolve())).returncode:
+        return None
+    return commit_paths([info], message)

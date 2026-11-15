@@ -212,6 +212,9 @@ def _print_text_results(
 def create_callback(db: str = None, dataset: str = None, type: str = "normal"):
     """Create a new dataset."""
     if not dataset:
+        from evid.cli.dataset import require_tty
+
+        require_tty("set create", "Pass -s/--dataset <name>.")
         dataset = input("Enter new dataset name: ").strip()
         if not dataset:
             sys.exit("No dataset name provided.")
@@ -778,6 +781,68 @@ def note_callback(
             continue
         print(f"{key}:")
         _print_note_blocks([note])
+
+
+def meta_callback(
+    db: str = None,
+    dataset: str = None,
+    uuid: str = None,
+    title: str | None = None,
+    authors: str | None = None,
+    dates: str | None = None,
+    url: str | None = None,
+    format: str = "table",
+):
+    """Show a document's info.yml metadata, or set title/authors/dates/url.
+
+    A field flag given as "" clears that field (a wrong PDF-metadata author).
+    gather reads info.yml, so the next export carries the change.
+    """
+    from evid.cli.evidence import set_doc_meta
+    from evid.services.doc_ops import get_doc
+
+    dataset = _resolve_dataset(dataset, "Select dataset", allow_create=False)
+    if not uuid:
+        uuid = select_evidence(DIRECTORY, dataset, "Select document")
+    doc_dir = docs_dir(DIRECTORY, dataset) / uuid
+    if not (doc_dir / "info.yml").is_file():
+        sys.exit(f"No document {uuid!r} in '{dataset}'.")
+    fields = {
+        k: v
+        for k, v in (
+            ("title", title),
+            ("authors", authors),
+            ("dates", dates),
+            ("url", url),
+        )
+        if v is not None
+    }
+    if fields:
+        changes = set_doc_meta(doc_dir, fields)
+        if format == "json":
+            out = {k: {"before": b, "after": a} for k, (b, a) in changes.items()}
+            print(json.dumps(out, ensure_ascii=False, indent=2))
+            return
+        if not changes:
+            print("No change.")
+        for key, (before, after) in changes.items():
+            print(f"{key}: {before!r} -> {after!r}")
+        return
+    info = get_doc(doc_dir)
+    shown = ("uuid", "title", "authors", "dates", "url", "label", "tags")
+    if format == "json":
+        print(
+            json.dumps(
+                {k: info.get(k, "") for k in shown}, ensure_ascii=False, indent=2
+            )
+        )
+        return
+    table = Table(title=f"meta: {dataset}/{uuid[:8]}", show_header=False)
+    table.add_column("", style="dim")
+    table.add_column("")
+    for k in shown:
+        table.add_row(k, str(info.get(k, "")) or "[red]—[/red]")
+    Console().print(table)
 
 
 def notes_callback(

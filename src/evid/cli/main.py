@@ -24,6 +24,7 @@ from evid.cli.callbacks import (
     list_docs_callback,
     mcp_callback,
     merge_refs_callback,
+    meta_callback,
     migrate_labels_callback,
     note_callback,
     notes_callback,
@@ -445,6 +446,27 @@ doc_group.commands.append(
                 flag=True,
                 help="On a file, remove its note. On the document, remove whole-document annotations (keyed labels stay)",
             ),
+        ],
+    )
+)
+
+doc_group.commands.append(
+    command(
+        name="meta",
+        help='Show a document\'s metadata (info.yml), or set its title/authors/dates/url; "" clears a field',
+        callback=meta_callback,
+        options=[
+            _DATASET_OPTION,
+            option(flags=["-u", "--uuid"], arg_type=str, help="Document UUID"),
+            option(flags=["--title"], arg_type=str, help="Document title"),
+            option(
+                flags=["--authors"],
+                arg_type=str,
+                help="Authors (comma-separated people; {Org, Name} keeps one name whole)",
+            ),
+            option(flags=["--dates"], arg_type=str, help="Document date (YYYY-MM-DD)"),
+            option(flags=["--url"], arg_type=str, help="Source URL"),
+            _FORMAT_OPTION,
         ],
     )
 )

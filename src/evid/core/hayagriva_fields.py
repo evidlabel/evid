@@ -7,6 +7,9 @@
   Hayagriva as one "Last, First, Suffix" name ("too many parts"). It is written
   as ``A B and C D and E F``, which Hayagriva parses and labquote shows as
   "A & B" / "A et al.". A single ``Last, First`` stays as it is.
+  An organisation whose name has a comma is written in braces in info.yml
+  (``{Institut for Menneskerettigheder, Danmark}``): it is kept as one name,
+  braces removed. Several may be listed: ``{A, B}, {C}``.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 _ISO = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")
 _DMY = re.compile(r"^(\d{1,2})[-./](\d{1,2})[-./](\d{4})$")
+_BRACED = re.compile(r"\{([^{}]*)\}")
 _YMD = re.compile(r"^(\d{4})[./](\d{1,2})[./](\d{1,2})$")
 
 
@@ -41,6 +45,29 @@ def hayagriva_date(value: object) -> str | None:
     return None
 
 
+def braced_names(value: object) -> list[str]:
+    """The names in ``{A, B}, {C}`` when *value* is only braced names, else []."""
+    s = " ".join(str(value or "").split())
+    if not s.startswith("{"):
+        return []
+    names = [n.strip() for n in _BRACED.findall(s) if n.strip()]
+    return names if names and _BRACED.sub("", s).strip(" ,;") == "" else []
+
+
+def hayagriva_author_field(value: object) -> str | dict | list | None:
+    """The ``author`` value for a Hayagriva YAML entry.
+
+    Braced organisations become person dicts (``{name: …}``), which Hayagriva
+    never splits at a comma and labquote reads by ``name``. Anything else is
+    :func:`hayagriva_author`.
+    """
+    orgs = braced_names(value)
+    if orgs:
+        people = [{"name": n} for n in orgs]
+        return people[0] if len(people) == 1 else people
+    return hayagriva_author(value)
+
+
 def hayagriva_author(value: object) -> str | None:
     """Authors as Hayagriva reads them (see the module docstring)."""
     if value is None:
@@ -51,6 +78,9 @@ def hayagriva_author(value: object) -> str | None:
     s = " ".join(str(value).split())
     if not s:
         return None
+    orgs = braced_names(s)
+    if orgs:
+        return " and ".join(orgs)
     parts = [p.strip() for p in s.split(",") if p.strip()]
     several_people = len(parts) > 2 or (
         len(parts) == 2 and all(" " in p for p in parts)
